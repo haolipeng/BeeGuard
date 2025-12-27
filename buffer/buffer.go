@@ -12,17 +12,9 @@ var (
 	buf               = [8192]*proto.EncodedRecord{}
 	offset            = 0
 	ErrbufferOverflow = errors.New("buffer overflow")
-	hook              func(interface{}) interface{}
 )
 
-func SetTransmissionHook(fn func(interface{}) interface{}) {
-	hook = fn
-}
-
 func WriteEncodedRecord(rec *proto.EncodedRecord) (err error) {
-	if hook != nil {
-		rec = hook(rec).(*proto.EncodedRecord)
-	}
 	mu.Lock()
 	if offset < len(buf) {
 		buf[offset] = rec

@@ -125,6 +125,7 @@ func (p *Plugin) ReceiveData() (rec *proto.EncodedRecord, err error) {
 	return
 }
 
+// 向任务队列中投递任务
 func (p *Plugin) SendTask(task proto.Task) (err error) {
 	select {
 	case p.taskCh <- task:
