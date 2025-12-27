@@ -26,25 +26,19 @@ func (p *Plugin) Shutdown() {
 	if p.IsExited() {
 		return
 	}
-	if p.SugaredLogger != nil {
-		p.Info("plugin is running, will shutdown it")
-	}
+
+	p.Info("plugin is running, will shutdown it")
+
 	p.tx.Close()
 	p.rx.Close()
 	select {
 	case <-time.After(time.Second * 30):
-		if p.SugaredLogger != nil {
-			p.Warn("because of plugin exit's timeout, will kill it")
-		}
+		p.Warn("because of plugin exit's timeout, will kill it")
 		syscall.Kill(-p.cmd.Process.Pid, syscall.SIGKILL)
 		<-p.done
-		if p.SugaredLogger != nil {
-			p.Info("plugin has been killed")
-		}
+		p.Info("plugin has been killed")
 	case <-p.done:
-		if p.SugaredLogger != nil {
-			p.Info("plugin has been shutdown gracefully")
-		}
+		p.Info("plugin has been shutdown gracefully")
 	}
 }
 
@@ -57,6 +51,7 @@ func Load(ctx context.Context, config proto.Config) (plg *Plugin, err error) {
 			err = ErrDuplicatePlugin
 			return
 		}
+		//插件版本不同，关闭旧版本
 		if loadedPlg.Config.Version != config.Version && loadedPlg.cmd.ProcessState == nil {
 			loadedPlg.Infof("because of the different plugin's version,the previous version will be shutdown...")
 			loadedPlg.Shutdown()
@@ -152,9 +147,9 @@ func Load(ctx context.Context, config proto.Config) (plg *Plugin, err error) {
 	// 协程1: 等待插件进程退出
 	go func() {
 		defer plg.wg.Done()
-		if plg.SugaredLogger != nil {
-			defer plg.Info("gorountine of waiting plugin's process will exit")
-		}
+		defer plg.Info("gorountine of waiting plugin's process will exit")
+
+		//等待进程退出
 		err = cmd.Wait()
 		rx_r.Close()
 		tx_w.Close()
@@ -163,6 +158,7 @@ func Load(ctx context.Context, config proto.Config) (plg *Plugin, err error) {
 		} else {
 			plg.Infof("plugin has exited with code %d", cmd.ProcessState.ExitCode())
 		}
+		//关闭插件done通道
 		close(plg.done)
 	}()
 
@@ -175,15 +171,12 @@ func Load(ctx context.Context, config proto.Config) (plg *Plugin, err error) {
 			rec, err := plg.ReceiveData()
 			if err != nil {
 				if errors.Is(err, bufio.ErrBufferFull) {
-					if plg.SugaredLogger != nil {
-						plg.Warn("when receiving data, buffer is full, skip this record")
-					}
+					plg.Warn("when receiving data, buffer is full, skip this record")
 					continue
 				} else if !(errors.Is(err, io.EOF) || errors.Is(err, io.ErrClosedPipe) || errors.Is(err, os.ErrClosed)) {
-					if plg.SugaredLogger != nil {
-						plg.Error("when receiving data, an error occurred: ", err)
-					}
+					plg.Error("when receiving data, an error occurred: ", err)
 				} else {
+					plg.Error("when receiving data, meet unexpected error: ", err)
 					break
 				}
 			}
@@ -194,21 +187,19 @@ func Load(ctx context.Context, config proto.Config) (plg *Plugin, err error) {
 	// 协程3: 发送任务给插件
 	go func() {
 		defer plg.wg.Done()
-		if plg.SugaredLogger != nil {
-			defer plg.Info("gorountine of sending task to plugin will exit")
-		}
+		defer plg.Info("gorountine of sending task to plugin will exit")
+
 		for {
 			select {
 			case <-plg.done:
+				plg.Info("plugin's done channel has been closed, will exit")
 				return
-			case task := <-plg.taskCh:
+			case task := <-plg.taskCh: //任务通道有任务
 				s := task.Size()
-				var dst = make([]byte, 4+s)
-				_, err = task.MarshalToSizedBuffer(dst[4:])
+				var dst = make([]byte, 4+s)                 //分配缓冲区，前四个字节保存长度
+				_, err = task.MarshalToSizedBuffer(dst[4:]) //将任务序列化到缓冲区
 				if err != nil {
-					if plg.SugaredLogger != nil {
-						plg.Errorf("when marshaling a task, an error occurred: %v, ignored this task: %+v", err, task)
-					}
+					plg.Errorf("when marshaling a task, an error occurred: %v, ignored this task: %+v", err, task)
 					continue
 				}
 				binary.LittleEndian.PutUint32(dst[:4], uint32(s))
@@ -216,9 +207,7 @@ func Load(ctx context.Context, config proto.Config) (plg *Plugin, err error) {
 				n, err = plg.tx.Write(dst)
 				if err != nil {
 					if !errors.Is(err, os.ErrClosed) {
-						if plg.SugaredLogger != nil {
-							plg.Error("when sending task, an error occurred: ", err)
-						}
+						plg.Error("when sending task, an error occurred: ", err)
 					}
 					return
 				}
