@@ -3,10 +3,11 @@ package main
 import (
 	"time"
 
-	"github.com/bytedance/Elkeid/plugins/collector/engine"
-	"github.com/bytedance/Elkeid/plugins/collector/process"
-	plugins "github.com/bytedance/plugins"
-	"github.com/mitchellh/mapstructure"
+	businessplugins "business_plugins/lib"
+
+	"github.com/go-viper/mapstructure/v2"
+	"gitlab.myinterest.top/security/agent/business_plugins/collector/engine"
+	"gitlab.myinterest.top/security/agent/business_plugins/collector/process"
 	"go.uber.org/zap"
 )
 
@@ -19,7 +20,7 @@ func (h ProcessHandler) DataType() int {
 	return 5050
 }
 
-func (h *ProcessHandler) Handle(c *plugins.Client, cache *engine.Cache, seq string) {
+func (h *ProcessHandler) Handle(c *businessplugins.Client, cache *engine.Cache, seq string) {
 	procs, err := process.Processes(false)
 	if err != nil {
 		zap.S().Error(err)
@@ -39,10 +40,10 @@ func (h *ProcessHandler) Handle(c *plugins.Client, cache *engine.Cache, seq stri
 				continue
 			}
 			ns, _ := p.Namespaces()
-			rec := &plugins.Record{
+			rec := &businessplugins.Record{
 				DataType:  int32(h.DataType()),
 				Timestamp: time.Now().Unix(),
-				Data: &plugins.Payload{
+				Data: &businessplugins.Payload{
 					Fields: make(map[string]string, 40),
 				},
 			}

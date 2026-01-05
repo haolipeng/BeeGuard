@@ -12,9 +12,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/bytedance/Elkeid/plugins/collector/utils"
 	"github.com/shirou/gopsutil/v3/host"
 	"github.com/tklauser/go-sysconf"
+	"gitlab.myinterest.top/security/agent/business_plugins/collector/utils"
 )
 
 const (
