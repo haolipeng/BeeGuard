@@ -45,6 +45,7 @@ type Process struct {
 	cmdline string
 	comm    string
 }
+
 type ProcessStat struct {
 	Comm      string `mapstructure:"comm"`
 	State     string `mapstructure:"state"`
@@ -53,6 +54,7 @@ type ProcessStat struct {
 	Sid       string `mapstructure:"sid"`
 	StartTime string `mapstructure:"start_time"`
 }
+
 type ProcessStatus struct {
 	Umask      string `mapstructure:"umask"`
 	TracerPid  string `mapstructure:"tcpid"`
@@ -72,6 +74,7 @@ type ProcessStatus struct {
 	NsPgid     string `mapstructure:"nspgid"`
 	NsSid      string `mapstructure:"nssid"`
 }
+
 type ProcessNamespace struct {
 	Diff   string `mapstructure:"dns"`
 	Cgroup string `mapstructure:"cns"`
