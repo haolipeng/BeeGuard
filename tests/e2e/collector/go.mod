@@ -2,7 +2,7 @@ module gitlab.myinterest.top/security/agent/test_collector
 
 go 1.25
 
-replace business_plugins/lib => ../business_plugins/lib
+replace business_plugins/lib => ../../../business_plugins/lib
 
 require (
 	business_plugins/lib v0.0.0
@@ -15,4 +15,4 @@ require (
 	go.uber.org/multierr v1.10.0 // indirect
 )
 
-replace gitlab.myinterest.top/security/agent => ../
+replace gitlab.myinterest.top/security/agent => ../../../
