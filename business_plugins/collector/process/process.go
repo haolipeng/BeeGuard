@@ -88,6 +88,7 @@ type ProcessNamespace struct {
 }
 
 func PnsDiffWithRpns(pns string) bool { return pns != rpns }
+
 func Processes(wk bool) (procs []Process, err error) {
 	var entries []fs.DirEntry
 	entries, err = os.ReadDir("/proc")
@@ -108,6 +109,7 @@ func Processes(wk bool) (procs []Process, err error) {
 	}
 	return
 }
+
 func NewProcess(pid string) (p *Process, err error) {
 	_, err = os.Stat(filepath.Join("/proc", pid))
 	if err != nil {
@@ -116,9 +118,11 @@ func NewProcess(pid string) (p *Process, err error) {
 	p = &Process{pid: pid}
 	return
 }
+
 func (p *Process) Pid() string {
 	return p.pid
 }
+
 func (p *Process) Stat() (s ProcessStat, err error) {
 	var stat []byte
 	stat, err = os.ReadFile(filepath.Join("/proc", p.pid, "stat"))
@@ -140,6 +144,7 @@ func (p *Process) Stat() (s ProcessStat, err error) {
 	}
 	return
 }
+
 func (p *Process) Status() (s ProcessStatus, err error) {
 	var status []byte
 	status, err = os.ReadFile(filepath.Join("/proc", p.pid, "status"))
@@ -196,6 +201,7 @@ func (p *Process) Status() (s ProcessStatus, err error) {
 	}
 	return
 }
+
 func (p *Process) Cmdline() (ret string, err error) {
 	if p.cmdline != "" {
 		ret = p.cmdline
@@ -213,6 +219,7 @@ func (p *Process) Cmdline() (ret string, err error) {
 	p.cmdline = ret
 	return
 }
+
 func (p *Process) Exe() (ret string, err error) {
 	if p.exe != "" {
 		return p.exe, nil
@@ -222,6 +229,7 @@ func (p *Process) Exe() (ret string, err error) {
 	p.exe = ret
 	return
 }
+
 func (p *Process) ExeHash() (ret string, err error) {
 	var exe string
 	exe, err = p.Exe()
@@ -230,6 +238,7 @@ func (p *Process) ExeHash() (ret string, err error) {
 	}
 	return utils.GetHash(exe, filepath.Join("/proc", p.pid, "exe"))
 }
+
 func (p *Process) ExeChecksum() (ret string, err error) {
 	var exe string
 	exe, err = p.Exe()
@@ -238,6 +247,7 @@ func (p *Process) ExeChecksum() (ret string, err error) {
 	}
 	return utils.GetMd5(exe, filepath.Join("/proc", p.pid, "exe"))
 }
+
 func (p *Process) Comm() (ret string, err error) {
 	var d []byte
 	d, err = os.ReadFile(filepath.Join("/proc", p.pid, "comm"))
@@ -248,11 +258,13 @@ func (p *Process) Comm() (ret string, err error) {
 	p.comm = ret
 	return
 }
+
 func (p *Process) Cwd() (ret string, err error) {
 	ret, err = os.Readlink(filepath.Join("/proc", p.pid, "cwd"))
 	ret = strings.TrimSpace(ret)
 	return
 }
+
 func (p *Process) Namespaces() (n ProcessNamespace, err error) {
 	_, err = os.Stat(filepath.Join("/proc", p.pid, "ns"))
 	if err != nil {
@@ -293,6 +305,7 @@ func (p *Process) Namespaces() (n ProcessNamespace, err error) {
 	}
 	return
 }
+
 func (p *Process) Namespace(n string) (ret string, err error) {
 	switch n {
 	case "cgroup", "ipc", "mnt", "net", "pid", "user", "uts":
@@ -331,6 +344,7 @@ func (p *Process) Fds() (ret []string, err error) {
 	}
 	return
 }
+
 func (p *Process) Envs() (ret map[string]string, err error) {
 	ret = make(map[string]string, 10)
 	var f *os.File
