@@ -65,15 +65,49 @@ vet:
 	$(GO) vet ./...
 	@echo "Vet complete"
 
+# 运行单元测试
+.PHONY: test
+test:
+	@echo "Running unit tests..."
+	$(GO) test ./... -v
+	@echo "Tests complete"
+
+# 运行 E2E 测试 - Baseline
+.PHONY: test-e2e-baseline
+test-e2e-baseline:
+	@echo "Running Baseline E2E tests..."
+	@cd tests/e2e/baseline && ./test.sh
+
+# 运行 E2E 测试 - Collector
+.PHONY: test-e2e-collector
+test-e2e-collector:
+	@echo "Running Collector E2E tests..."
+	@cd tests/e2e/collector && ./test.sh
+
+# 运行所有 E2E 测试
+.PHONY: test-e2e
+test-e2e: test-e2e-baseline test-e2e-collector
+	@echo "All E2E tests complete"
+
+# 运行所有测试（单元测试 + E2E 测试）
+.PHONY: test-all
+test-all: test test-e2e
+	@echo "All tests complete"
+
 # 显示帮助信息
 .PHONY: help
 help:
 	@echo "Agent Makefile Commands:"
-	@echo "  make build    - Build agent binary"
-	@echo "  make clean    - Clean build artifacts"
-	@echo "  make run      - Build and run agent"
-	@echo "  make deps     - Download and tidy dependencies"
-	@echo "  make install  - Install agent to /usr/local/bin"
-	@echo "  make fmt      - Format Go code"
-	@echo "  make vet      - Run go vet"
-	@echo "  make help     - Show this help message"
+	@echo "  make build              - Build agent binary"
+	@echo "  make clean              - Clean build artifacts"
+	@echo "  make run                - Build and run agent"
+	@echo "  make deps               - Download and tidy dependencies"
+	@echo "  make install            - Install agent to /usr/local/bin"
+	@echo "  make fmt                - Format Go code"
+	@echo "  make vet                - Run go vet"
+	@echo "  make test               - Run unit tests"
+	@echo "  make test-e2e-baseline  - Run Baseline E2E tests"
+	@echo "  make test-e2e-collector - Run Collector E2E tests"
+	@echo "  make test-e2e           - Run all E2E tests"
+	@echo "  make test-all           - Run all tests (unit + E2E)"
+	@echo "  make help               - Show this help message"
