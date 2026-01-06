@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/signal"
@@ -18,6 +19,26 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
+// jsonWriter JSON 文件写入器
+type jsonWriter struct {
+	file *os.File
+	enc  *json.Encoder
+	mu   sync.Mutex
+}
+
+// 配置：是否将记录写入 JSON 文件
+var (
+	// enableJSONOutput 控制是否将接收到的记录写入 JSON 文件
+	// 设置为 true 启用 JSON 文件输出，设置为 false 禁用
+	enableJSONOutput = true
+
+	// jsonOutputFile 指定 JSON 输出文件的路径
+	jsonOutputFile = "collector_records.json"
+
+	// jsonWriterInst JSON 文件写入器实例
+	jsonWriterInst *jsonWriter
+)
+
 func main() {
 	// 初始化 logger
 	config := zap.NewDevelopmentConfig()
@@ -28,6 +49,19 @@ func main() {
 
 	fmt.Println("=== Collector Plugin Test ===")
 	fmt.Println("Starting test agent...")
+
+	// 初始化 JSON 文件写入器（如果启用）
+	if enableJSONOutput {
+		var err error
+		jsonWriterInst, err = newJSONWriter(jsonOutputFile)
+		if err != nil {
+			zap.S().Warnf("Failed to initialize JSON writer: %v, JSON output disabled", err)
+			enableJSONOutput = false
+		} else {
+			zap.S().Infof("JSON output enabled, writing to: %s", jsonOutputFile)
+			defer jsonWriterInst.Close()
+		}
+	}
 
 	wg := &sync.WaitGroup{}
 	zap.S().Info("++++++++++++++++++++++++++++++running++++++++++++++++++++++++++++++")
@@ -74,6 +108,10 @@ func main() {
 				records := buffer.ReadEncodedRecords()
 				for _, rec := range records {
 					printRecord(rec)
+					// 如果启用 JSON 输出，将记录写入文件
+					if enableJSONOutput && jsonWriterInst != nil {
+						writeRecordToJSON(rec)
+					}
 				}
 			}
 		}
@@ -161,7 +199,8 @@ func printRecord(rec *proto.EncodedRecord) {
 				if nsPid, ok := payload.Fields["pns"]; ok {
 					fmt.Printf("Namespace PID: %s\n", nsPid)
 				}
-				fmt.Println("====================================\n")
+				fmt.Println("====================================")
+				fmt.Println()
 			}
 		}
 	} else if rec.DataType == 5100 {
@@ -177,9 +216,106 @@ func printRecord(rec *proto.EncodedRecord) {
 				fmt.Printf("Status: %s\n", payload.Fields["status"])
 				fmt.Printf("Token: %s\n", payload.Fields["token"])
 				fmt.Printf("Message: %s\n", payload.Fields["msg"])
-				fmt.Println("================================\n")
+				fmt.Println("================================")
+				fmt.Println()
 			}
 		}
 	}
 	zap.S().Info("========================")
+}
+
+// newJSONWriter 创建新的 JSON 文件写入器
+func newJSONWriter(filename string) (*jsonWriter, error) {
+	file, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open JSON file: %w", err)
+	}
+
+	// 写入 JSON 数组的开始标记（如果是新文件）
+	stat, err := file.Stat()
+	if err != nil {
+		file.Close()
+		return nil, fmt.Errorf("failed to stat file: %w", err)
+	}
+
+	// 如果文件为空，写入数组开始标记
+	if stat.Size() == 0 {
+		if _, err := file.WriteString("[\n"); err != nil {
+			file.Close()
+			return nil, fmt.Errorf("failed to write array start: %w", err)
+		}
+	}
+
+	return &jsonWriter{
+		file: file,
+		enc:  json.NewEncoder(file),
+	}, nil
+}
+
+// Close 关闭 JSON 文件写入器
+func (jw *jsonWriter) Close() error {
+	jw.mu.Lock()
+	defer jw.mu.Unlock()
+
+	if jw.file == nil {
+		return nil
+	}
+
+	// 写入数组结束标记
+	if _, err := jw.file.WriteString("\n]"); err != nil {
+		jw.file.Close()
+		jw.file = nil
+		return err
+	}
+
+	err := jw.file.Close()
+	jw.file = nil
+	return err
+}
+
+// writeRecordToJSON 将记录写入 JSON 文件
+func writeRecordToJSON(rec *proto.EncodedRecord) {
+	if jsonWriterInst == nil {
+		return
+	}
+
+	jsonWriterInst.mu.Lock()
+	defer jsonWriterInst.mu.Unlock()
+
+	// 构建 JSON 记录结构
+	record := map[string]interface{}{
+		"data_type": rec.DataType,
+		"timestamp": rec.Timestamp,
+	}
+
+	// 解析 Payload（如果存在）
+	if len(rec.Data) > 0 {
+		payload := &businessplugins.Payload{}
+		if err := payload.Unmarshal(rec.Data); err == nil {
+			record["data"] = payload.Fields
+		} else {
+			// 如果解析失败，将原始数据作为 base64 字符串存储
+			record["data_raw"] = fmt.Sprintf("%x", rec.Data)
+		}
+	}
+
+	// 检查文件位置，如果不是第一个记录，需要添加逗号
+	stat, err := jsonWriterInst.file.Stat()
+	if err == nil && stat.Size() > 2 { // 大于 "[\n" 的长度
+		if _, err := jsonWriterInst.file.WriteString(",\n"); err != nil {
+			zap.S().Errorf("Failed to write comma separator: %v", err)
+			return
+		}
+	}
+
+	// 写入 JSON 记录
+	if err := jsonWriterInst.enc.Encode(record); err != nil {
+		zap.S().Errorf("Failed to encode record to JSON: %v", err)
+		return
+	}
+
+	// 刷新缓冲区，确保数据写入磁盘
+	if err := jsonWriterInst.file.Sync(); err != nil {
+		zap.S().Warnf("Failed to sync JSON file: %v", err)
+	}
 }
