@@ -117,12 +117,14 @@ func main() {
 		}
 	}()
 
-	// 发送测试任务（触发进程采集和端口采集）
+	// 发送测试任务（触发进程采集、端口采集和内核模块采集）
 	go func() {
 		time.Sleep(time.Second * 3)
 		sendProcessTask()
 		time.Sleep(time.Second * 2)
 		sendPortTask()
+		time.Sleep(time.Second * 2)
+		sendKmodTask()
 	}()
 
 	// 信号处理
@@ -199,6 +201,33 @@ func sendPortTask() {
 	}
 }
 
+// sendKmodTask 发送内核模块采集任务给 collector 插件
+func sendKmodTask() {
+	//获取collector插件的实例
+	plg, ok := plugin.Get("collector")
+	if !ok {
+		zap.S().Error("collector plugin not found")
+		return
+	}
+
+	// collector 插件使用 DataType 5062 来触发内核模块采集
+	// 根据 collector/kmod.go，DataType 是 5062
+	task := proto.Task{
+		DataType:   5062, // 内核模块采集的数据类型
+		ObjectName: "kmod",
+		Data:       "", // collector 插件会自动采集，不需要额外数据
+		Token:      "test-kmod-token-" + fmt.Sprintf("%d", time.Now().Unix()),
+	}
+
+	//发送任务给collector插件
+	err := plg.SendTask(task)
+	if err != nil {
+		zap.S().Errorf("failed to send kmod task: %v", err)
+	} else {
+		zap.S().Info("kmod collection task sent successfully to collector plugin")
+	}
+}
+
 // printRecord 打印接收到的记录
 func printRecord(rec *proto.EncodedRecord) {
 	zap.S().Infof("=== Received Record ===")
@@ -270,6 +299,28 @@ func printRecord(rec *proto.EncodedRecord) {
 				fmt.Printf("UID: %s (%s)\n", payload.Fields["uid"], payload.Fields["username"])
 				fmt.Printf("Inode: %s\n", payload.Fields["inode"])
 				fmt.Println("=================================")
+				fmt.Println()
+			}
+		}
+	} else if rec.DataType == 5062 {
+		// 内核模块数据的数据类型是 5062
+		zap.S().Infof("Data length: %d bytes", len(rec.Data))
+
+		// 解析 protobuf Payload
+		if len(rec.Data) > 0 {
+			payload := &businessplugins.Payload{}
+			err := payload.Unmarshal(rec.Data)
+			if err != nil {
+				zap.S().Errorf("Failed to unmarshal payload: %v", err)
+			} else {
+				fmt.Println("\n========== Kernel Module Record ==========")
+				fmt.Printf("Name: %s\n", payload.Fields["name"])
+				fmt.Printf("Size: %s bytes\n", payload.Fields["size"])
+				fmt.Printf("RefCount: %s\n", payload.Fields["refcount"])
+				fmt.Printf("Used By: %s\n", payload.Fields["used_by"])
+				fmt.Printf("State: %s\n", payload.Fields["state"])
+				fmt.Printf("Address: %s\n", payload.Fields["addr"])
+				fmt.Println("==========================================")
 				fmt.Println()
 			}
 		}
