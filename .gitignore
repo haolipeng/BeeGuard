@@ -1,0 +1,46 @@
+# 编译生成的可执行文件
+business_plugins/collector/collector
+tests/e2e/collector/test_collector
+
+# Go 编译文件
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# 测试二进制文件
+*.test
+
+# 输出目录
+*.out
+
+# Go 工作空间文件
+go.work
+
+# 依赖目录（如果需要）
+vendor/
+
+# IDE 配置文件
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 日志文件
+*.log
+
+# 临时文件
+*.tmp
+*.temp
+
+# JSON 输出文件（测试生成）
+*.json
+
+# macOS
+.DS_Store
+
+# Linux
+*~
+

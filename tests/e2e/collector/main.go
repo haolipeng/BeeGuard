@@ -117,10 +117,12 @@ func main() {
 		}
 	}()
 
-	// 发送测试任务（触发进程采集）
+	// 发送测试任务（触发进程采集和端口采集）
 	go func() {
 		time.Sleep(time.Second * 3)
 		sendProcessTask()
+		time.Sleep(time.Second * 2)
+		sendPortTask()
 	}()
 
 	// 信号处理
@@ -170,6 +172,33 @@ func sendProcessTask() {
 	}
 }
 
+// sendPortTask 发送端口采集任务给 collector 插件
+func sendPortTask() {
+	//获取collector插件的实例
+	plg, ok := plugin.Get("collector")
+	if !ok {
+		zap.S().Error("collector plugin not found")
+		return
+	}
+
+	// collector 插件使用 DataType 5051 来触发端口采集
+	// 根据 collector/port.go，DataType 是 5051
+	task := proto.Task{
+		DataType:   5051, // 端口采集的数据类型
+		ObjectName: "port",
+		Data:       "", // collector 插件会自动采集，不需要额外数据
+		Token:      "test-port-token-" + fmt.Sprintf("%d", time.Now().Unix()),
+	}
+
+	//发送任务给collector插件
+	err := plg.SendTask(task)
+	if err != nil {
+		zap.S().Errorf("failed to send port task: %v", err)
+	} else {
+		zap.S().Info("port collection task sent successfully to collector plugin")
+	}
+}
+
 // printRecord 打印接收到的记录
 func printRecord(rec *proto.EncodedRecord) {
 	zap.S().Infof("=== Received Record ===")
@@ -200,6 +229,47 @@ func printRecord(rec *proto.EncodedRecord) {
 					fmt.Printf("Namespace PID: %s\n", nsPid)
 				}
 				fmt.Println("====================================")
+				fmt.Println()
+			}
+		}
+	} else if rec.DataType == 5051 {
+		// 端口数据的数据类型是 5051
+		zap.S().Infof("Data length: %d bytes", len(rec.Data))
+
+		// 解析 protobuf Payload
+		if len(rec.Data) > 0 {
+			payload := &businessplugins.Payload{}
+			err := payload.Unmarshal(rec.Data)
+			if err != nil {
+				zap.S().Errorf("Failed to unmarshal payload: %v", err)
+			} else {
+				fmt.Println("\n========== Port Record ==========")
+				fmt.Printf("Protocol: %s", payload.Fields["protocol"])
+				if payload.Fields["protocol"] == "6" {
+					fmt.Print(" (TCP)")
+				} else if payload.Fields["protocol"] == "17" {
+					fmt.Print(" (UDP)")
+				}
+				fmt.Println()
+				fmt.Printf("Family: %s", payload.Fields["family"])
+				if payload.Fields["family"] == "2" {
+					fmt.Print(" (IPv4)")
+				} else if payload.Fields["family"] == "10" {
+					fmt.Print(" (IPv6)")
+				}
+				fmt.Println()
+				fmt.Printf("Local:  %s:%s\n", payload.Fields["sip"], payload.Fields["sport"])
+				fmt.Printf("Remote: %s:%s\n", payload.Fields["dip"], payload.Fields["dport"])
+				fmt.Printf("State: %s", payload.Fields["state"])
+				if payload.Fields["state"] == "10" {
+					fmt.Print(" (LISTEN)")
+				} else if payload.Fields["state"] == "7" {
+					fmt.Print(" (UDP)")
+				}
+				fmt.Println()
+				fmt.Printf("UID: %s (%s)\n", payload.Fields["uid"], payload.Fields["username"])
+				fmt.Printf("Inode: %s\n", payload.Fields["inode"])
+				fmt.Println("=================================")
 				fmt.Println()
 			}
 		}
