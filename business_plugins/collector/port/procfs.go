@@ -53,22 +53,24 @@ func procNet(family, proto uint8) (ret []*Port, err error) {
 	var f1, f2 string
 
 	// 根据协议确定文件名
-	if proto == unix.IPPROTO_UDP {
+	switch proto {
+	case unix.IPPROTO_UDP:
 		f1 = "udp"
-	} else if proto == unix.IPPROTO_TCP {
+	case unix.IPPROTO_TCP:
 		f1 = "tcp"
-	} else {
+	default:
 		err = fmt.Errorf("unsupported protocol %d", proto)
 		return
 	}
 
 	// 根据地址族确定文件名后缀
 	// 注意：Linux 系统中，IPv4 的文件名就是 tcp/udp（没有后缀），IPv6 的文件名是 tcp6/udp6
-	if family == unix.AF_INET {
+	switch family {
+	case unix.AF_INET:
 		f2 = "" // IPv4: /proc/net/tcp 或 /proc/net/udp（无后缀）
-	} else if family == unix.AF_INET6 {
+	case unix.AF_INET6:
 		f2 = "6" // IPv6: /proc/net/tcp6 或 /proc/net/udp6
-	} else {
+	default:
 		err = fmt.Errorf("unsupported family %d", family)
 		return
 	}
@@ -92,8 +94,8 @@ func procNet(family, proto uint8) (ret []*Port, err error) {
 			line := r.Text()
 			hdr[1] = "local_address" // 本地地址（IP:端口）
 			hdr[2] = "rem_address"   // 远程地址（IP:端口）
-			hdr[3] = "st"             // 状态（state）
-			hdr[7] = "uid"            // 用户 ID
+			hdr[3] = "st"            // 状态（state）
+			hdr[7] = "uid"           // 用户 ID
 
 			// 查找 "inode" 字段的位置（在 "uid" 之后）
 			uidIndex := strings.Index(line, "uid")
@@ -197,4 +199,3 @@ func procNet(family, proto uint8) (ret []*Port, err error) {
 
 	return
 }
-

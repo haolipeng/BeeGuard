@@ -2,7 +2,11 @@ package port
 
 import (
 	"strconv"
+	"strings"
+	"time"
 
+	mapset "github.com/deckarep/golang-set/v2"
+	"gitlab.myinterest.top/security/agent/business_plugins/collector/process"
 	"golang.org/x/sys/unix"
 )
 
@@ -12,13 +16,13 @@ var (
 )
 
 // Port 端口信息结构体
-// 第一次移植：只包含从 /proc/net/ 文件获取的基本信息
+// 从 /proc/net/ 文件获取的基本信息
 type Port struct {
 	// 网络层信息（从 inet socket 获取）
 	Family   string `mapstructure:"family"`   // IP 地址族：2=IPv4, 10=IPv6
-	Protocol string `mapstructure:"protocol"`  // 协议：6=TCP, 17=UDP
-	State    string `mapstructure:"state"`     // 端口状态：TCP 10=LISTEN, UDP 7=UDP
-	Sport    string `mapstructure:"sport"`     // 源端口（本地端口）
+	Protocol string `mapstructure:"protocol"` // 协议：6=TCP, 17=UDP
+	State    string `mapstructure:"state"`    // 端口状态：TCP 10=LISTEN, UDP 7=UDP
+	Sport    string `mapstructure:"sport"`    // 源端口（本地端口）
 	Dport    string `mapstructure:"dport"`    // 目标端口（远程端口，通常为0）
 	Sip      string `mapstructure:"sip"`      // 源 IP 地址（本地 IP）
 	Dip      string `mapstructure:"dip"`      // 目标 IP 地址（远程 IP，通常为0.0.0.0）
@@ -26,21 +30,29 @@ type Port struct {
 	Inode    string `mapstructure:"inode"`    // Socket inode 号（用于关联进程）
 	Username string `mapstructure:"username"` // 用户名（从 UID 获取）
 
-	// 进程信息（第二次移植时添加）
-	// Pid     string `mapstructure:"pid"`
-	// Exe     string `mapstructure:"exe"`
-	// Comm    string `mapstructure:"comm"`
-	// Cmdline string `mapstructure:"cmdline"`
-	// Psm     string `mapstructure:"psm"`
-	// PodName string `mapstructure:"pod_name"`
+	// 进程信息
+	Pid     string `mapstructure:"pid"`
+	Exe     string `mapstructure:"exe"`
+	Comm    string `mapstructure:"comm"`
+	Cmdline string `mapstructure:"cmdline"`
+	Psm     string `mapstructure:"psm"`
+	PodName string `mapstructure:"pod_name"`
 }
 
 // ListeningPorts 获取所有监听端口信息
-// 第一次移植：只使用 procfs 方法（读取 /proc/net/ 文件）
+// 使用 procfs 方法（读取 /proc/net/ 文件）
+// 使用 Set 去重，使用 Map 以 inode 为 key 存储端口信息
+// 通过进程文件描述符关联进程信息
 func ListeningPorts() (ret []*Port, err error) {
+	// 使用 Set 去重，避免重复端口（基于 Sport）
+	set := mapset.NewSet[string]()
+	// 使用 Map 存储端口信息，key 为 inode（用于后续进程关联）
+	pm := map[string]*Port{}
+
 	// 遍历所有协议（TCP 和 UDP）
 	for _, proto := range scanProto {
 		sp := strconv.Itoa(int(proto))
+
 		// 遍历所有地址族（IPv4 和 IPv6）
 		for _, family := range scanFamily {
 			// 使用 procfs 方法读取端口信息
@@ -50,15 +62,74 @@ func ListeningPorts() (ret []*Port, err error) {
 				// 如果读取失败，继续尝试下一个
 				continue
 			}
-			// 将获取到的端口信息添加到结果中
+
+			// 处理获取到的端口信息
 			for _, p := range ps {
 				// 设置协议和地址族信息
 				p.Protocol = sp
 				p.Family = strconv.Itoa(int(family))
-				ret = append(ret, p)
+
+				// 去重：如果该端口（Sport）已经处理过，跳过
+				if !set.Contains(p.Sport) {
+					// 以 inode 为 key 存储到 Map 中
+					pm[p.Inode] = p
+					// 标记该端口已处理
+					set.Add(p.Sport)
+				}
 			}
 		}
 	}
+
+	// 关联进程信息：遍历所有进程，通过文件描述符匹配 inode
+	procs, err := process.Processes(false)
+	if err == nil {
+		for _, p := range procs {
+			time.Sleep(process.TraversalInterval)
+			fds, err := p.Fds()
+			if err != nil {
+				continue
+			}
+			// 遍历进程的文件描述符
+			for _, fd := range fds {
+				// 查找 socket 文件描述符（格式：socket:[inode]）
+				if strings.HasPrefix(fd, "socket:[") && strings.HasSuffix(fd, "]") {
+					// 提取 inode（去掉 "socket:[" 前缀和 "]" 后缀）
+					inode := fd[8 : len(fd)-1]
+					// 如果该 inode 对应的端口存在，关联进程信息
+					if port, ok := pm[inode]; ok {
+						port.Pid = p.Pid()
+						port.Exe, _ = p.Exe()
+						port.Cmdline, _ = p.Cmdline()
+						port.Comm, _ = p.Comm()
+						// 从进程环境变量提取容器/K8s 信息
+						if envs, err := p.Envs(); err == nil {
+							// 提取 PodName
+							if podName, ok := envs["POD_NAME"]; ok {
+								port.PodName = podName
+							} else if podName, ok := envs["MY_POD_NAME"]; ok {
+								port.PodName = podName
+							}
+							// 提取 Psm
+							if psm, ok := envs["LOAD_SERVICE_PSM"]; ok {
+								port.Psm = psm
+							} else if psm, ok := envs["TCE_PSM"]; ok {
+								port.Psm = psm
+							} else if psm, ok := envs["RUNTIME_PSM"]; ok {
+								port.Psm = psm
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// 只返回有进程关联的端口
+	for _, v := range pm {
+		if v.Pid != "" {
+			ret = append(ret, v)
+		}
+	}
+
 	return
 }
-
