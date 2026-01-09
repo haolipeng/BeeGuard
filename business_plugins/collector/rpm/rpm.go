@@ -116,6 +116,7 @@ type GenericMetadataPageHeader struct {
 	Flags         uint32   /* 48-51: Flags: unique to each AM. */
 	UniqueFileID  [19]byte /* 52-71: Unique file ID. */
 }
+
 type HashMetadataPage struct {
 	GenericMetadataPageHeader
 	MaxBucket   uint32 /* 72-75: ID of Maximum bucket in use */
@@ -126,6 +127,7 @@ type HashMetadataPage struct {
 	CharKeyHash uint32 /* 92-95: Value of hash(CHARKEY) */
 	// don't care about the rest...
 }
+
 type HashPageHeader struct {
 	LSN            [8]byte /* 00-07: LSN. */
 	PageNo         uint32  /* 08-11: Current page number. */
@@ -136,22 +138,26 @@ type HashPageHeader struct {
 	TreeLevel      uint8   /*    24: Btree tree level. */
 	PageType       uint8   /*    25: Page type. */
 }
+
 type HashOffPageEntry struct {
 	PageType uint8   /*    0: Page type. */
 	Unused   [3]byte /* 01-03: Padding, unused. */
 	PageNo   uint32  /* 04-07: Offpage page number. */
 	Length   uint32  /* 08-11: Total length of item. */
 }
+
 type RPMEntryInfo struct {
 	Tag    int32  /*!< Tag identifier. */
 	Type   uint32 /*!< Tag data type. */
 	Offset int32  /*!< Offset into data segment (ondisk only). */
 	Count  uint32 /*!< Number of tag elements. */
 }
+
 type FileInfo struct {
 	Path   string
 	Digest string
 }
+
 type Package struct {
 	Epoch           int32
 	Name            string
@@ -170,6 +176,7 @@ type Database struct {
 	metadata HashMetadataPage
 	f        *os.File
 }
+
 type WalkFunc func(p Package)
 
 func (db *Database) WalkPackages(f WalkFunc) (err error) {
@@ -383,6 +390,7 @@ func (db *Database) WalkPackages(f WalkFunc) (err error) {
 func (db *Database) Close() {
 	db.f.Close()
 }
+
 func decodeStringArray(dt []byte) (ret []string) {
 	elements := strings.Split(string(dt), "\x00")
 	if len(elements) > 0 && elements[len(elements)-1] == "" {
@@ -390,6 +398,7 @@ func decodeStringArray(dt []byte) (ret []string) {
 	}
 	return elements
 }
+
 func decodeInt32Array(dt []byte) (ret []int32) {
 	r := bytes.NewReader(dt)
 	for {
@@ -402,6 +411,7 @@ func decodeInt32Array(dt []byte) (ret []int32) {
 	}
 	return
 }
+
 func joinFiles(dirNames, baseNames, digests []string, dirIndexes []int32) []FileInfo {
 	files := []FileInfo{}
 	if len(dirNames) == 0 || len(baseNames) == 0 || len(dirIndexes) == 0 ||
@@ -419,6 +429,7 @@ func joinFiles(dirNames, baseNames, digests []string, dirIndexes []int32) []File
 	}
 	return files
 }
+
 func OpenDatabase() (db *Database, err error) {
 	var f *os.File
 	f, err = os.Open("/var/lib/rpm/Packages")
