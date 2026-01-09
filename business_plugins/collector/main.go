@@ -40,6 +40,7 @@ func main() {
 	e.AddHandler(time.Hour, &PortHandler{})
 	e.AddHandler(time.Hour, &KmodHandler{})
 	e.AddHandler(time.Hour*6, &ServiceHandler{})
+	e.AddHandler(time.Hour*6, &SoftwareHandler{})
 
 	//运行engine引擎
 	e.Run()
