@@ -42,8 +42,8 @@ func (h *SoftwareHandler) DataType() int {
 
 // Software 软件信息结构体
 type Software struct {
-	Name             string `mapstructure:"name"`
-	Version          string `mapstructure:"sversion"`
+	Name             string `mapstructure:"name"`     //名称
+	Version          string `mapstructure:"sversion"` //版本
 	Type             string `mapstructure:"type"`
 	Source           string `mapstructure:"source"`
 	Status           string `mapstructure:"status"`
@@ -171,6 +171,7 @@ func (h *SoftwareHandler) Handle(c *businessplugins.Client, cache *engine.Cache,
 		}
 		f.Close()
 	}
+
 	// 扫描 rpm 包（RedHat/CentOS）
 	if db, err := rpm.OpenDatabase(); err == nil {
 		db.WalkPackages(func(p rpm.Package) {
@@ -190,6 +191,7 @@ func (h *SoftwareHandler) Handle(c *businessplugins.Client, cache *engine.Cache,
 			})
 		})
 	}
+
 	// 扫描 PyPI 包（Python）
 	dirs := mapset.NewSet[string]()
 	godirwalk.Walk("/usr", &godirwalk.Options{
