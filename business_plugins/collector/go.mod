@@ -6,6 +6,7 @@ replace business_plugins/lib => ../lib
 
 require (
 	business_plugins/lib v0.0.0-00010101000000-000000000000
+	github.com/GehirnInc/crypt v0.0.0-20230320061759-8cc1b52080c5
 	github.com/deckarep/golang-set/v2 v2.8.0
 	github.com/go-logr/zapr v1.3.0
 	github.com/go-viper/mapstructure/v2 v2.4.0

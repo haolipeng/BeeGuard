@@ -44,13 +44,13 @@ func (h *SoftwareHandler) DataType() int {
 type Software struct {
 	Name             string `mapstructure:"name"`     //名称
 	Version          string `mapstructure:"sversion"` //版本
-	Type             string `mapstructure:"type"`
-	Source           string `mapstructure:"source"`
-	Status           string `mapstructure:"status"`
-	Vendor           string `mapstructure:"vendor"`
+	Type             string `mapstructure:"type"`     //类型
+	Source           string `mapstructure:"source"`   //来源
+	Status           string `mapstructure:"status"`   //状态
+	Vendor           string `mapstructure:"vendor"`   //厂商
 	ComponentVersion string `mapstructure:"component_version"`
-	Pid              string `mapstructure:"pid"`
-	PodName          string `mapstructure:"pod_name"`
+	Pid              string `mapstructure:"pid"`      //进程pid
+	PodName          string `mapstructure:"pod_name"` //pod名称
 	Psm              string `mapstructure:"psm"`
 	PackageSeq       string `mapstructure:"package_seq"`
 }
