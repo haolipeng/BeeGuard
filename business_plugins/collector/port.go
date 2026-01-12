@@ -12,7 +12,6 @@ import (
 )
 
 // PortHandler 端口采集处理器
-// 第一次移植：只使用 procfs 方法，不包含进程关联功能
 type PortHandler struct{}
 
 func (h PortHandler) Name() string {

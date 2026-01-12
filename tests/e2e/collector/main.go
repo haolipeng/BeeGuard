@@ -117,7 +117,7 @@ func main() {
 		}
 	}()
 
-	// 发送测试任务（触发进程采集、端口采集和内核模块采集）
+	// 发送测试任务（触发进程采集、端口采集、内核模块采集和软件采集）
 	go func() {
 		time.Sleep(time.Second * 3)
 		sendProcessTask()
@@ -125,6 +125,8 @@ func main() {
 		sendPortTask()
 		time.Sleep(time.Second * 2)
 		sendKmodTask()
+		time.Sleep(time.Second * 2)
+		sendSoftwareTask()
 	}()
 
 	// 信号处理
@@ -228,6 +230,31 @@ func sendKmodTask() {
 	}
 }
 
+// sendSoftwareTask 发送软件采集任务给 collector 插件
+func sendSoftwareTask() {
+	plg, ok := plugin.Get("collector")
+	if !ok {
+		zap.S().Error("collector plugin not found")
+		return
+	}
+
+	// collector 插件使用 DataType 5055 来触发软件采集
+	// 根据 collector/software.go，DataType 是 5055
+	task := proto.Task{
+		DataType:   5055, // 软件采集的数据类型
+		ObjectName: "software",
+		Data:       "", // collector 插件会自动采集，不需要额外数据
+		Token:      "test-software-token-" + fmt.Sprintf("%d", time.Now().Unix()),
+	}
+
+	err := plg.SendTask(task)
+	if err != nil {
+		zap.S().Errorf("failed to send software task: %v", err)
+	} else {
+		zap.S().Info("software collection task sent successfully to collector plugin")
+	}
+}
+
 // printRecord 打印接收到的记录
 func printRecord(rec *proto.EncodedRecord) {
 	zap.S().Infof("=== Received Record ===")
@@ -321,6 +348,60 @@ func printRecord(rec *proto.EncodedRecord) {
 				fmt.Printf("State: %s\n", payload.Fields["state"])
 				fmt.Printf("Address: %s\n", payload.Fields["addr"])
 				fmt.Println("==========================================")
+				fmt.Println()
+			}
+		}
+	} else if rec.DataType == 5055 {
+		// 软件数据的数据类型是 5055
+		zap.S().Infof("Data length: %d bytes", len(rec.Data))
+
+		// 解析 protobuf Payload
+		if len(rec.Data) > 0 {
+			payload := &businessplugins.Payload{}
+			err := payload.Unmarshal(rec.Data)
+			if err != nil {
+				zap.S().Errorf("Failed to unmarshal payload: %v", err)
+			} else {
+				fmt.Println("\n========== Software Record ==========")
+				fmt.Printf("Name: %s\n", payload.Fields["name"])
+				fmt.Printf("Version: %s\n", payload.Fields["sversion"])
+				fmt.Printf("Type: %s", payload.Fields["type"])
+				switch payload.Fields["type"] {
+				case "dpkg":
+					fmt.Print(" (Debian/Ubuntu)")
+				case "rpm":
+					fmt.Print(" (RedHat/CentOS)")
+				case "pypi":
+					fmt.Print(" (Python)")
+				case "jar":
+					fmt.Print(" (Java)")
+				}
+				fmt.Println()
+				if payload.Fields["source"] != "" {
+					fmt.Printf("Source: %s\n", payload.Fields["source"])
+				}
+				if payload.Fields["status"] != "" {
+					fmt.Printf("Status: %s\n", payload.Fields["status"])
+				}
+				if payload.Fields["vendor"] != "" {
+					fmt.Printf("Vendor: %s\n", payload.Fields["vendor"])
+				}
+				if payload.Fields["component_version"] != "" {
+					fmt.Printf("Component Version: %s\n", payload.Fields["component_version"])
+				}
+				if payload.Fields["pid"] != "" {
+					fmt.Printf("PID: %s\n", payload.Fields["pid"])
+				}
+				if payload.Fields["pod_name"] != "" {
+					fmt.Printf("Pod Name: %s\n", payload.Fields["pod_name"])
+				}
+				if payload.Fields["psm"] != "" {
+					fmt.Printf("PSM: %s\n", payload.Fields["psm"])
+				}
+				if payload.Fields["path"] != "" {
+					fmt.Printf("Path: %s\n", payload.Fields["path"])
+				}
+				fmt.Println("====================================")
 				fmt.Println()
 			}
 		}
