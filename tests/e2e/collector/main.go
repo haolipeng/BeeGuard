@@ -117,16 +117,22 @@ func main() {
 		}
 	}()
 
-	// 发送测试任务（触发进程采集、端口采集、内核模块采集和软件采集）
+	// 发送测试任务（触发进程采集、端口采集、内核模块采集、软件采集和用户采集）
 	go func() {
-		time.Sleep(time.Second * 3)
-		sendProcessTask()
+		/*
+			time.Sleep(time.Second * 3)
+			sendProcessTask()
+			time.Sleep(time.Second * 2)
+			sendPortTask()
+			time.Sleep(time.Second * 2)
+			sendKmodTask()
+			time.Sleep(time.Second * 2)
+			sendSoftwareTask()
+		*/
 		time.Sleep(time.Second * 2)
-		sendPortTask()
-		time.Sleep(time.Second * 2)
-		sendKmodTask()
-		time.Sleep(time.Second * 2)
-		sendSoftwareTask()
+		sendUserTask()
+		//time.Sleep(time.Second * 2)
+		//sendEnvSuspiciousTask()
 	}()
 
 	// 信号处理
@@ -255,15 +261,65 @@ func sendSoftwareTask() {
 	}
 }
 
+// sendUserTask 发送用户采集任务给 collector 插件
+func sendUserTask() {
+	plg, ok := plugin.Get("collector")
+	if !ok {
+		zap.S().Error("collector plugin not found")
+		return
+	}
+
+	// collector 插件使用 DataType 5052 来触发用户采集
+	// 根据 collector/user.go，DataType 是 5052
+	task := proto.Task{
+		DataType:   5052, // 用户采集的数据类型
+		ObjectName: "user",
+		Data:       "", // collector 插件会自动采集，不需要额外数据
+		Token:      "test-user-token-" + fmt.Sprintf("%d", time.Now().Unix()),
+	}
+
+	err := plg.SendTask(task)
+	if err != nil {
+		zap.S().Errorf("failed to send user task: %v", err)
+	} else {
+		zap.S().Info("user collection task sent successfully to collector plugin")
+	}
+}
+
+// sendEnvSuspiciousTask 发送可疑环境变量检测任务给 collector 插件
+func sendEnvSuspiciousTask() {
+	plg, ok := plugin.Get("collector")
+	if !ok {
+		zap.S().Error("collector plugin not found")
+		return
+	}
+
+	// collector 插件使用 DataType 5056 来触发可疑环境变量检测
+	// 根据 collector/env_suspicious.go，DataType 是 5056
+	task := proto.Task{
+		DataType:   5056, // 可疑环境变量检测的数据类型
+		ObjectName: "env_suspicious",
+		Data:       "", // collector 插件会自动采集，不需要额外数据
+		Token:      "test-env-suspicious-token-" + fmt.Sprintf("%d", time.Now().Unix()),
+	}
+
+	err := plg.SendTask(task)
+	if err != nil {
+		zap.S().Errorf("failed to send env_suspicious task: %v", err)
+	} else {
+		zap.S().Info("env_suspicious collection task sent successfully to collector plugin")
+	}
+}
+
 // printRecord 打印接收到的记录
 func printRecord(rec *proto.EncodedRecord) {
-	zap.S().Infof("=== Received Record ===")
-	zap.S().Infof("DataType: %d", rec.DataType)
-	zap.S().Infof("Timestamp: %d", rec.Timestamp)
+	//zap.S().Infof("=== Received Record ===")
+	//zap.S().Infof("DataType: %d", rec.DataType)
+	//zap.S().Infof("Timestamp: %d", rec.Timestamp)
 
 	// 进程数据的数据类型是 5050
 	if rec.DataType == 5050 {
-		zap.S().Infof("Data length: %d bytes", len(rec.Data))
+		//zap.S().Infof("Data length: %d bytes", len(rec.Data))
 
 		// 解析 protobuf Payload
 		if len(rec.Data) > 0 {
@@ -403,6 +459,119 @@ func printRecord(rec *proto.EncodedRecord) {
 				}
 				fmt.Println("====================================")
 				fmt.Println()
+			}
+		}
+	} else if rec.DataType == 5052 {
+		// 用户数据的数据类型是 5052
+		zap.S().Infof("Data length: %d bytes", len(rec.Data))
+
+		// 解析 protobuf Payload
+		if len(rec.Data) > 0 {
+			payload := &businessplugins.Payload{}
+			err := payload.Unmarshal(rec.Data)
+			if err != nil {
+				zap.S().Errorf("Failed to unmarshal payload: %v", err)
+			} else {
+				fmt.Println("\n========== User Record ==========")
+				fmt.Printf("Username: %s\n", payload.Fields["username"])
+				fmt.Printf("UID: %s\n", payload.Fields["uid"])
+				fmt.Printf("GID: %s", payload.Fields["gid"])
+				if payload.Fields["groupname"] != "" {
+					fmt.Printf(" (%s)", payload.Fields["groupname"])
+				}
+				fmt.Println()
+				if payload.Fields["info"] != "" {
+					fmt.Printf("Info: %s\n", payload.Fields["info"])
+				}
+				fmt.Printf("Home: %s\n", payload.Fields["home"])
+				fmt.Printf("Shell: %s\n", payload.Fields["shell"])
+				if payload.Fields["password"] != "" && payload.Fields["password"] != "x" {
+					fmt.Printf("Password: %s\n", payload.Fields["password"])
+				}
+				if payload.Fields["last_login_time"] != "" {
+					fmt.Printf("Last Login Time: %s\n", payload.Fields["last_login_time"])
+				}
+				if payload.Fields["last_login_ip"] != "" {
+					fmt.Printf("Last Login IP: %s\n", payload.Fields["last_login_ip"])
+				}
+				if payload.Fields["weak_password"] != "" {
+					fmt.Printf("Weak Password: %s", payload.Fields["weak_password"])
+					if payload.Fields["weak_password"] == "true" && payload.Fields["weak_password_content"] != "" {
+						fmt.Printf(" (%s)", payload.Fields["weak_password_content"])
+					}
+					fmt.Println()
+				}
+				// 账号类型标识
+				if payload.Fields["is_root"] == "true" {
+					fmt.Printf("Account Type: ROOT\n")
+				}
+				if payload.Fields["is_sudo"] == "true" {
+					fmt.Printf("Account Type: SUDO\n")
+				}
+				if payload.Fields["sudoers"] != "" {
+					fmt.Printf("Sudoers: %s\n", payload.Fields["sudoers"])
+				}
+				// 密码过期信息
+				if payload.Fields["password_last_change"] != "" {
+					fmt.Printf("Password Last Change: %s\n", payload.Fields["password_last_change"])
+				}
+				if payload.Fields["password_max_days"] != "" {
+					fmt.Printf("Password Max Days: %s\n", payload.Fields["password_max_days"])
+				}
+				if payload.Fields["password_warn_days"] != "" {
+					fmt.Printf("Password Warn Days: %s\n", payload.Fields["password_warn_days"])
+				}
+				if payload.Fields["password_expire_date"] != "" && payload.Fields["password_expire_date"] != "0" {
+					fmt.Printf("Password Expire Date: %s\n", payload.Fields["password_expire_date"])
+				}
+				if payload.Fields["password_remain_days"] != "" {
+					fmt.Printf("Password Remain Days: %s\n", payload.Fields["password_remain_days"])
+				}
+				if payload.Fields["is_expired"] == "true" {
+					fmt.Printf("⚠️  Password Status: EXPIRED\n")
+				} else if payload.Fields["is_expiring_soon"] == "true" {
+					fmt.Printf("⚠️  Password Status: EXPIRING SOON\n")
+				}
+				fmt.Println("=================================")
+				fmt.Println()
+			}
+		}
+	} else if rec.DataType == 5056 {
+		// 可疑环境变量数据的数据类型是 5056
+		zap.S().Infof("Data length: %d bytes", len(rec.Data))
+
+		// 解析 protobuf Payload
+		if len(rec.Data) > 0 {
+			payload := &businessplugins.Payload{}
+			err := payload.Unmarshal(rec.Data)
+			if err != nil {
+				zap.S().Errorf("Failed to unmarshal payload: %v", err)
+			} else {
+				// 检查是否是汇总记录（没有可疑项时）
+				if payload.Fields["suspicious_count"] == "0" {
+					fmt.Println("\n========== Environment Suspicious Detection Summary ==========")
+					fmt.Printf("Total Environment Variables: %s\n", payload.Fields["total_envs"])
+					fmt.Printf("Suspicious Count: %s\n", payload.Fields["suspicious_count"])
+					fmt.Println("No suspicious environment variables found.")
+					fmt.Println("==============================================================")
+					fmt.Println()
+				} else {
+					fmt.Println("\n========== Suspicious Environment Variable Record ==========")
+					fmt.Printf("Variable Name: %s\n", payload.Fields["var_name"])
+					fmt.Printf("Variable Value: %s\n", payload.Fields["var_value"])
+					fmt.Printf("Suspicious Reasons: %s\n", payload.Fields["suspicious_reasons"])
+					if payload.Fields["source"] != "" {
+						fmt.Printf("Source: %s\n", payload.Fields["source"])
+					}
+					if payload.Fields["total_envs"] != "" {
+						fmt.Printf("Total Envs: %s\n", payload.Fields["total_envs"])
+					}
+					if payload.Fields["suspicious_count"] != "" {
+						fmt.Printf("Suspicious Count: %s\n", payload.Fields["suspicious_count"])
+					}
+					fmt.Println("============================================================")
+					fmt.Println()
+				}
 			}
 		}
 	} else if rec.DataType == 5100 {
