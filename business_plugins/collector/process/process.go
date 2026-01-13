@@ -91,12 +91,15 @@ func PnsDiffWithRpns(pns string) bool { return pns != rpns }
 
 func Processes(wk bool) (procs []Process, err error) {
 	var entries []fs.DirEntry
+	//1. 遍历/proc目录下的所有条目
 	entries, err = os.ReadDir("/proc")
 	if err != nil {
 		return
 	}
 	for _, e := range entries {
+		//2. 尝试将目录名转为数字，此数字就是进程pid
 		if _, err := strconv.ParseInt(e.Name(), 10, 32); err == nil {
+			//wk:检查进程有效性，wk=true则直接添加到列表中
 			if wk {
 				procs = append(procs, Process{pid: e.Name()})
 			} else {
@@ -123,6 +126,7 @@ func (p *Process) Pid() string {
 	return p.pid
 }
 
+// 获取进程统计信息
 func (p *Process) Stat() (s ProcessStat, err error) {
 	var stat []byte
 	stat, err = os.ReadFile(filepath.Join("/proc", p.pid, "stat"))
@@ -145,6 +149,7 @@ func (p *Process) Stat() (s ProcessStat, err error) {
 	return
 }
 
+// 获取进程状态信息
 func (p *Process) Status() (s ProcessStatus, err error) {
 	var status []byte
 	status, err = os.ReadFile(filepath.Join("/proc", p.pid, "status"))
@@ -202,6 +207,7 @@ func (p *Process) Status() (s ProcessStatus, err error) {
 	return
 }
 
+// 获取进程的命令行参数
 func (p *Process) Cmdline() (ret string, err error) {
 	if p.cmdline != "" {
 		ret = p.cmdline
@@ -220,6 +226,7 @@ func (p *Process) Cmdline() (ret string, err error) {
 	return
 }
 
+// 获取进程的可执行文件路径
 func (p *Process) Exe() (ret string, err error) {
 	if p.exe != "" {
 		return p.exe, nil
@@ -248,6 +255,7 @@ func (p *Process) ExeChecksum() (ret string, err error) {
 	return utils.GetMd5(exe, filepath.Join("/proc", p.pid, "exe"))
 }
 
+// 获取进程名称
 func (p *Process) Comm() (ret string, err error) {
 	var d []byte
 	d, err = os.ReadFile(filepath.Join("/proc", p.pid, "comm"))
@@ -259,6 +267,7 @@ func (p *Process) Comm() (ret string, err error) {
 	return
 }
 
+// 获取进程的当前工作目录
 func (p *Process) Cwd() (ret string, err error) {
 	ret, err = os.Readlink(filepath.Join("/proc", p.pid, "cwd"))
 	ret = strings.TrimSpace(ret)
