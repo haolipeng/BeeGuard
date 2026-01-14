@@ -120,17 +120,20 @@ func main() {
 	// 发送测试任务（触发进程采集、端口采集、内核模块采集、软件采集和用户采集）
 	go func() {
 		/*
-			time.Sleep(time.Second * 3)
-			sendProcessTask()
+				time.Sleep(time.Second * 3)
+				sendProcessTask()
+				time.Sleep(time.Second * 2)
+				sendPortTask()
+				time.Sleep(time.Second * 2)
+				sendKmodTask()
+				time.Sleep(time.Second * 2)
+				sendSoftwareTask()
+
 			time.Sleep(time.Second * 2)
-			sendPortTask()
-			time.Sleep(time.Second * 2)
-			sendKmodTask()
-			time.Sleep(time.Second * 2)
-			sendSoftwareTask()
+			sendUserTask()
 		*/
 		time.Sleep(time.Second * 2)
-		sendUserTask()
+		sendContainerTask()
 		//time.Sleep(time.Second * 2)
 		//sendEnvSuspiciousTask()
 	}()
@@ -157,158 +160,65 @@ func main() {
 	fmt.Println("Test completed.")
 }
 
-// sendProcessTask 发送进程采集任务给 collector 插件
-func sendProcessTask() {
+// sendCollectorTask 发送采集任务给 collector 插件的通用函数
+// dataType: 任务的数据类型
+// objectName: 对象名称（如 "process", "port" 等）
+// taskName: 任务名称（用于日志消息，如 "process", "port" 等）
+func sendCollectorTask(dataType int32, objectName, taskName string) {
 	plg, ok := plugin.Get("collector")
 	if !ok {
 		zap.S().Error("collector plugin not found")
 		return
 	}
 
-	// collector 插件使用 DataType 5050 来触发进程采集
-	// 根据 collector/process.go，DataType 是 5050
 	task := proto.Task{
-		DataType:   5050, // 进程采集的数据类型
-		ObjectName: "process",
+		DataType:   dataType,
+		ObjectName: objectName,
 		Data:       "", // collector 插件会自动采集，不需要额外数据
-		Token:      "test-process-token-" + fmt.Sprintf("%d", time.Now().Unix()),
+		Token:      fmt.Sprintf("test-%s-token-%d", taskName, time.Now().Unix()),
 	}
 
 	err := plg.SendTask(task)
 	if err != nil {
-		zap.S().Errorf("failed to send task: %v", err)
+		zap.S().Errorf("failed to send %s task: %v", taskName, err)
 	} else {
-		zap.S().Info("process collection task sent successfully to collector plugin")
+		zap.S().Infof("%s collection task sent successfully to collector plugin", taskName)
 	}
+}
+
+// sendProcessTask 发送进程采集任务给 collector 插件
+func sendProcessTask() {
+	sendCollectorTask(5050, "process", "process")
 }
 
 // sendPortTask 发送端口采集任务给 collector 插件
 func sendPortTask() {
-	//获取collector插件的实例
-	plg, ok := plugin.Get("collector")
-	if !ok {
-		zap.S().Error("collector plugin not found")
-		return
-	}
-
-	// collector 插件使用 DataType 5051 来触发端口采集
-	// 根据 collector/port.go，DataType 是 5051
-	task := proto.Task{
-		DataType:   5051, // 端口采集的数据类型
-		ObjectName: "port",
-		Data:       "", // collector 插件会自动采集，不需要额外数据
-		Token:      "test-port-token-" + fmt.Sprintf("%d", time.Now().Unix()),
-	}
-
-	//发送任务给collector插件
-	err := plg.SendTask(task)
-	if err != nil {
-		zap.S().Errorf("failed to send port task: %v", err)
-	} else {
-		zap.S().Info("port collection task sent successfully to collector plugin")
-	}
+	sendCollectorTask(5051, "port", "port")
 }
 
 // sendKmodTask 发送内核模块采集任务给 collector 插件
 func sendKmodTask() {
-	//获取collector插件的实例
-	plg, ok := plugin.Get("collector")
-	if !ok {
-		zap.S().Error("collector plugin not found")
-		return
-	}
-
-	// collector 插件使用 DataType 5062 来触发内核模块采集
-	// 根据 collector/kmod.go，DataType 是 5062
-	task := proto.Task{
-		DataType:   5062, // 内核模块采集的数据类型
-		ObjectName: "kmod",
-		Data:       "", // collector 插件会自动采集，不需要额外数据
-		Token:      "test-kmod-token-" + fmt.Sprintf("%d", time.Now().Unix()),
-	}
-
-	//发送任务给collector插件
-	err := plg.SendTask(task)
-	if err != nil {
-		zap.S().Errorf("failed to send kmod task: %v", err)
-	} else {
-		zap.S().Info("kmod collection task sent successfully to collector plugin")
-	}
+	sendCollectorTask(5062, "kmod", "kmod")
 }
 
 // sendSoftwareTask 发送软件采集任务给 collector 插件
 func sendSoftwareTask() {
-	plg, ok := plugin.Get("collector")
-	if !ok {
-		zap.S().Error("collector plugin not found")
-		return
-	}
-
-	// collector 插件使用 DataType 5055 来触发软件采集
-	// 根据 collector/software.go，DataType 是 5055
-	task := proto.Task{
-		DataType:   5055, // 软件采集的数据类型
-		ObjectName: "software",
-		Data:       "", // collector 插件会自动采集，不需要额外数据
-		Token:      "test-software-token-" + fmt.Sprintf("%d", time.Now().Unix()),
-	}
-
-	err := plg.SendTask(task)
-	if err != nil {
-		zap.S().Errorf("failed to send software task: %v", err)
-	} else {
-		zap.S().Info("software collection task sent successfully to collector plugin")
-	}
+	sendCollectorTask(5055, "software", "software")
 }
 
 // sendUserTask 发送用户采集任务给 collector 插件
 func sendUserTask() {
-	plg, ok := plugin.Get("collector")
-	if !ok {
-		zap.S().Error("collector plugin not found")
-		return
-	}
+	sendCollectorTask(5052, "user", "user")
+}
 
-	// collector 插件使用 DataType 5052 来触发用户采集
-	// 根据 collector/user.go，DataType 是 5052
-	task := proto.Task{
-		DataType:   5052, // 用户采集的数据类型
-		ObjectName: "user",
-		Data:       "", // collector 插件会自动采集，不需要额外数据
-		Token:      "test-user-token-" + fmt.Sprintf("%d", time.Now().Unix()),
-	}
-
-	err := plg.SendTask(task)
-	if err != nil {
-		zap.S().Errorf("failed to send user task: %v", err)
-	} else {
-		zap.S().Info("user collection task sent successfully to collector plugin")
-	}
+// sendContainerTask 发送容器采集任务给 collector 插件
+func sendContainerTask() {
+	sendCollectorTask(5056, "container", "container")
 }
 
 // sendEnvSuspiciousTask 发送可疑环境变量检测任务给 collector 插件
 func sendEnvSuspiciousTask() {
-	plg, ok := plugin.Get("collector")
-	if !ok {
-		zap.S().Error("collector plugin not found")
-		return
-	}
-
-	// collector 插件使用 DataType 5056 来触发可疑环境变量检测
-	// 根据 collector/env_suspicious.go，DataType 是 5056
-	task := proto.Task{
-		DataType:   5056, // 可疑环境变量检测的数据类型
-		ObjectName: "env_suspicious",
-		Data:       "", // collector 插件会自动采集，不需要额外数据
-		Token:      "test-env-suspicious-token-" + fmt.Sprintf("%d", time.Now().Unix()),
-	}
-
-	err := plg.SendTask(task)
-	if err != nil {
-		zap.S().Errorf("failed to send env_suspicious task: %v", err)
-	} else {
-		zap.S().Info("env_suspicious collection task sent successfully to collector plugin")
-	}
+	sendCollectorTask(5057, "env_suspicious", "env_suspicious")
 }
 
 // printRecord 打印接收到的记录
@@ -537,7 +447,38 @@ func printRecord(rec *proto.EncodedRecord) {
 			}
 		}
 	} else if rec.DataType == 5056 {
-		// 可疑环境变量数据的数据类型是 5056
+		// 容器数据的数据类型是 5056
+		//zap.S().Infof("Data length: %d bytes", len(rec.Data))
+
+		// 解析 protobuf Payload
+		if len(rec.Data) > 0 {
+			payload := &businessplugins.Payload{}
+			err := payload.Unmarshal(rec.Data)
+			if err != nil {
+				zap.S().Errorf("Failed to unmarshal payload: %v", err)
+			} else {
+				fmt.Println("\n========== Container Record ==========")
+				fmt.Printf("Container ID: %s\n", payload.Fields["id"])
+				fmt.Printf("Container Name: %s\n", payload.Fields["name"])
+				fmt.Printf("State: %s\n", payload.Fields["state"])
+				fmt.Printf("Image ID: %s\n", payload.Fields["image_id"])
+				fmt.Printf("Image Name: %s\n", payload.Fields["image_name"])
+				if payload.Fields["pid"] != "" {
+					fmt.Printf("PID: %s\n", payload.Fields["pid"])
+				}
+				if payload.Fields["pns"] != "" {
+					fmt.Printf("PNS: %s\n", payload.Fields["pns"])
+				}
+				fmt.Printf("Runtime: %s\n", payload.Fields["runtime"])
+				if payload.Fields["create_time"] != "" {
+					fmt.Printf("Create Time: %s\n", payload.Fields["create_time"])
+				}
+				fmt.Println("=====================================")
+				fmt.Println()
+			}
+		}
+	} else if rec.DataType == 5057 {
+		// 可疑环境变量数据的数据类型是 5057
 		zap.S().Infof("Data length: %d bytes", len(rec.Data))
 
 		// 解析 protobuf Payload

@@ -23,7 +23,7 @@ func (h *EnvSuspiciousHandler) Name() string {
 }
 
 func (h *EnvSuspiciousHandler) DataType() int {
-	return 5056 // 可疑环境变量检测的数据类型
+	return 5057 // 可疑环境变量检测的数据类型
 }
 
 // 可疑环境变量的特征模式
