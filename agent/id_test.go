@@ -1,6 +1,8 @@
 package agent
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -11,7 +13,6 @@ func TestGenerateIDFromDMIAndMAC(t *testing.T) {
 	if !ok {
 		t.Log("Failed to generate Agent ID from DMI and MAC")
 		t.Log("This is normal if running in a VM without valid hardware info")
-		// 不直接失败，因为某些环境可能没有有效的硬件信息
 		return
 	}
 
@@ -20,12 +21,10 @@ func TestGenerateIDFromDMIAndMAC(t *testing.T) {
 		return
 	}
 
-	// 验证生成的 ID 是有效的 UUID 格式
-	if len(id) != 36 { // UUID 格式: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx (36 字符)
+	if len(id) != 36 {
 		t.Errorf("Generated ID length is invalid: got %d, expected 36", len(id))
 	}
 
-	// 验证 UUID 格式（简单检查：包含 4 个连字符）
 	hyphenCount := 0
 	for _, c := range id {
 		if c == '-' {
@@ -40,7 +39,6 @@ func TestGenerateIDFromDMIAndMAC(t *testing.T) {
 }
 
 // TestGenerateIDFromDMIAndMAC_Consistency 测试 ID 生成的一致性
-// 在相同硬件环境下，应该生成相同的 ID
 func TestGenerateIDFromDMIAndMAC_Consistency(t *testing.T) {
 	id1, ok1 := GenerateIDFromDMIAndMAC()
 	id2, ok2 := GenerateIDFromDMIAndMAC()
@@ -57,13 +55,11 @@ func TestGenerateIDFromDMIAndMAC_Consistency(t *testing.T) {
 
 // TestFromIDFile 测试文件读取辅助函数
 func TestFromIDFile(t *testing.T) {
-	// 测试读取不存在的文件
 	_, err := fromIDFile("/nonexistent/file")
 	if err == nil {
 		t.Error("Expected error when reading nonexistent file")
 	}
 
-	// 测试读取存在的文件（如果 /etc/hostname 存在）
 	hostname, err := fromIDFile("/etc/hostname")
 	if err == nil {
 		if len(hostname) == 0 {
@@ -115,5 +111,124 @@ func TestIsInvalidProductName(t *testing.T) {
 		if result != tc.expected {
 			t.Errorf("isInvalidProductName(%q) = %v, expected %v", string(tc.name), result, tc.expected)
 		}
+	}
+}
+
+// TestGenerateIDFromMachineID 测试基于 machine-id 生成 Agent ID（回退方案）
+func TestGenerateIDFromMachineID(t *testing.T) {
+	id := GenerateIDFromMachineID("")
+	if id == "" {
+		t.Error("Generated ID should not be empty")
+	}
+
+	if len(id) != 36 {
+		t.Errorf("Generated ID length is invalid: got %d, expected 36", len(id))
+	}
+
+	t.Logf("Generated ID from machine-id: %s", id)
+}
+
+// TestGenerateIDFromMachineID_WithWorkingDir 测试使用本地持久化的 machine-id
+func TestGenerateIDFromMachineID_WithWorkingDir(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	id := GenerateIDFromMachineID(tmpDir)
+	if id == "" {
+		t.Error("Generated ID should not be empty")
+	}
+
+	if len(id) != 36 {
+		t.Errorf("Generated ID length is invalid: got %d, expected 36", len(id))
+	}
+
+	t.Logf("Generated ID with working dir: %s", id)
+}
+
+// TestGenerateIDFromMachineID_Consistency 测试 ID 生成的一致性
+func TestGenerateIDFromMachineID_Consistency(t *testing.T) {
+	id1 := GenerateIDFromMachineID("")
+	id2 := GenerateIDFromMachineID("")
+
+	if id1 == "" || id2 == "" {
+		t.Error("Generated IDs should not be empty")
+	}
+
+	t.Logf("First ID: %s", id1)
+	t.Logf("Second ID: %s", id2)
+
+	if _, err := os.ReadFile("/etc/machine-id"); err == nil {
+		if id1 != id2 {
+			t.Errorf("ID generation should be consistent when machine-id exists: first=%s, second=%s", id1, id2)
+		}
+	}
+}
+
+// TestFromUUIDFile 测试 UUID 文件读取函数
+func TestFromUUIDFile(t *testing.T) {
+	_, err := fromUUIDFile("/nonexistent/file")
+	if err == nil {
+		t.Error("Expected error when reading nonexistent file")
+	}
+
+	mid, err := fromUUIDFile("/etc/machine-id")
+	if err == nil {
+		if mid.String() == "" {
+			t.Error("Expected non-empty UUID from /etc/machine-id")
+		}
+		t.Logf("Successfully read UUID from /etc/machine-id: %s", mid.String())
+	} else {
+		t.Logf("/etc/machine-id is not a valid UUID format (this is normal): %v", err)
+	}
+}
+
+// TestPersistID 测试 Agent ID 持久化功能
+func TestPersistID(t *testing.T) {
+	tmpDir := t.TempDir()
+	testID := "12345678-1234-1234-1234-123456789abc"
+
+	err := PersistID(tmpDir, testID)
+	if err != nil {
+		t.Fatalf("Failed to persist ID: %v", err)
+	}
+
+	idFile := filepath.Join(tmpDir, "machine-id")
+	if _, err := os.Stat(idFile); os.IsNotExist(err) {
+		t.Error("ID file was not created")
+	}
+
+	content, err := os.ReadFile(idFile)
+	if err != nil {
+		t.Fatalf("Failed to read ID file: %v", err)
+	}
+	if string(content) != testID {
+		t.Errorf("ID file content mismatch: got %s, expected %s", string(content), testID)
+	}
+
+	info, err := os.Stat(idFile)
+	if err != nil {
+		t.Fatalf("Failed to stat ID file: %v", err)
+	}
+	mode := info.Mode().Perm()
+	expectedMode := os.FileMode(0600)
+	if mode != expectedMode {
+		t.Errorf("ID file permissions mismatch: got %o, expected %o", mode, expectedMode)
+	}
+
+	t.Logf("Successfully persisted ID to %s with permissions %o", idFile, mode)
+}
+
+// TestPersistID_ErrorCases 测试错误情况
+func TestPersistID_ErrorCases(t *testing.T) {
+	tmpDir := t.TempDir()
+	testID := "12345678-1234-1234-1234-123456789abc"
+
+	err := PersistID("", testID)
+	if err == nil {
+		t.Error("Expected error when working directory is empty")
+	}
+
+	err = PersistID(tmpDir, "")
+	if err == nil {
+		t.Error("Expected error when ID is empty")
 	}
 }
