@@ -4,12 +4,12 @@ import (
 	"bytes"
 	"errors"
 	"os"
+	"path/filepath"
 
 	"github.com/google/uuid"
 )
 
 // fromIDFile 从文件中读取 ID 信息
-// 返回读取到的字节数组，如果文件不存在或内容太短则返回错误
 func fromIDFile(file string) (id []byte, err error) {
 	id, err = os.ReadFile(file)
 	if err != nil {
@@ -62,16 +62,24 @@ func isInvalidProductName(name []byte) bool {
 	return false
 }
 
+// fromUUIDFile 从文件中读取 UUID 格式的 ID
+func fromUUIDFile(file string) (id uuid.UUID, err error) {
+	var idBytes []byte
+	idBytes, err = os.ReadFile(file)
+	if err != nil {
+		return
+	}
+	id, err = uuid.ParseBytes(bytes.TrimSpace(idBytes))
+	return
+}
+
 // GenerateIDFromDMIAndMAC 基于 DMI 信息和 MAC 地址生成 Agent ID
-// 返回生成的 ID 和是否成功生成
-// 如果硬件信息不足或无效，返回空字符串和 false
 func GenerateIDFromDMIAndMAC() (string, bool) {
 	source := []byte{}
 
 	// 1. 读取产品 UUID（DMI）
 	pdid, err := fromIDFile("/sys/class/dmi/id/product_uuid")
 	if err == nil {
-		// 检查是否为无效的 UUID
 		pdidStr := string(pdid)
 		if !isInvalidProductUUID(pdidStr) {
 			source = append(source, pdid...)
@@ -103,4 +111,53 @@ func GenerateIDFromDMIAndMAC() (string, bool) {
 	// 6. 基于多个硬件信息源生成唯一 ID（使用 SHA1）
 	id := uuid.NewSHA1(uuid.NameSpaceOID, source)
 	return id.String(), true
+}
+
+// GenerateIDFromMachineID 基于 machine-id 生成 Agent ID（回退方案）
+func GenerateIDFromMachineID(workingDir string) string {
+	// 1. 尝试读取系统 machine-id 文件（标准 UUID 格式）
+	mid, err := fromUUIDFile("/etc/machine-id")
+	if err == nil {
+		return mid.String()
+	}
+
+	// 2. 如果格式不符合标准，基于文件内容生成 ID
+	source, err2 := fromIDFile("/etc/machine-id")
+	if err2 == nil {
+		id := uuid.NewSHA1(uuid.NameSpaceOID, source)
+		return id.String()
+	}
+
+	// 3. 尝试读取本地持久化的 machine-id 文件
+	if workingDir != "" {
+		localMachineID := workingDir + "/machine-id"
+		mid, err = fromUUIDFile(localMachineID)
+		if err == nil {
+			return mid.String()
+		}
+	}
+
+	// 4. 最后回退：生成全新的 UUID
+	return uuid.New().String()
+}
+
+// PersistID 将 Agent ID 持久化到文件
+func PersistID(workingDir, id string) error {
+	if workingDir == "" {
+		return errors.New("working directory cannot be empty")
+	}
+	if id == "" {
+		return errors.New("agent ID cannot be empty")
+	}
+
+	if err := os.MkdirAll(workingDir, 0755); err != nil {
+		return err
+	}
+
+	idFile := filepath.Join(workingDir, "machine-id")
+	if err := os.WriteFile(idFile, []byte(id), 0600); err != nil {
+		return err
+	}
+
+	return nil
 }
