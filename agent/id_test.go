@@ -183,10 +183,22 @@ func TestFromUUIDFile(t *testing.T) {
 
 // TestPersistID 测试 Agent ID 持久化功能
 func TestPersistID(t *testing.T) {
+	// 保存当前工作目录
+	originalDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Failed to get current directory: %v", err)
+	}
+
+	// 切换到临时目录（因为 PersistID 使用相对路径）
 	tmpDir := t.TempDir()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("Failed to change directory: %v", err)
+	}
+	defer os.Chdir(originalDir) // 测试结束后恢复
+
 	testID := "12345678-1234-1234-1234-123456789abc"
 
-	err := PersistID(tmpDir, testID)
+	err = PersistID("", testID)
 	if err != nil {
 		t.Fatalf("Failed to persist ID: %v", err)
 	}
@@ -219,14 +231,26 @@ func TestPersistID(t *testing.T) {
 
 // TestPersistID_ErrorCases 测试错误情况
 func TestPersistID_ErrorCases(t *testing.T) {
-	tmpDir := t.TempDir()
-	testID := "12345678-1234-1234-1234-123456789abc"
-
-	err := PersistID("", testID)
-	if err == nil {
-		t.Error("Expected error when working directory is empty")
+	// 保存当前工作目录
+	originalDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Failed to get current directory: %v", err)
 	}
 
+	// 切换到临时目录
+	tmpDir := t.TempDir()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("Failed to change directory: %v", err)
+	}
+	defer os.Chdir(originalDir) // 测试结束后恢复
+
+	// 测试空 ID（现在 workingDir 参数不再使用，但仍保留以保持 API 兼容性）
+	err = PersistID("", "")
+	if err == nil {
+		t.Error("Expected error when ID is empty")
+	}
+
+	// 测试空 ID（使用非空 workingDir，但实际不使用）
 	err = PersistID(tmpDir, "")
 	if err == nil {
 		t.Error("Expected error when ID is empty")

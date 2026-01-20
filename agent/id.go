@@ -2,11 +2,28 @@ package agent
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"os"
-	"path/filepath"
 
 	"github.com/google/uuid"
+)
+
+var (
+	// Context 全局 context，用于协调各模块退出
+	Context, Cancel = context.WithCancel(context.Background())
+
+	// ID Agent ID
+	ID = ""
+
+	// WorkingDirectory 工作目录
+	WorkingDirectory, _ = os.Getwd()
+
+	// Product 产品名称
+	Product string = "cloudsec-agent"
+
+	// Version 版本号
+	Version string
 )
 
 // fromIDFile 从文件中读取 ID 信息
@@ -129,12 +146,9 @@ func GenerateIDFromMachineID(workingDir string) string {
 	}
 
 	// 3. 尝试读取本地持久化的 machine-id 文件
-	if workingDir != "" {
-		localMachineID := workingDir + "/machine-id"
-		mid, err = fromUUIDFile(localMachineID)
-		if err == nil {
-			return mid.String()
-		}
+	mid, err = fromUUIDFile("machine-id")
+	if err == nil {
+		return mid.String()
 	}
 
 	// 4. 最后回退：生成全新的 UUID
@@ -143,21 +157,37 @@ func GenerateIDFromMachineID(workingDir string) string {
 
 // PersistID 将 Agent ID 持久化到文件
 func PersistID(workingDir, id string) error {
-	if workingDir == "" {
-		return errors.New("working directory cannot be empty")
-	}
 	if id == "" {
 		return errors.New("agent ID cannot be empty")
 	}
 
-	if err := os.MkdirAll(workingDir, 0755); err != nil {
-		return err
-	}
-
-	idFile := filepath.Join(workingDir, "machine-id")
-	if err := os.WriteFile(idFile, []byte(id), 0600); err != nil {
+	if err := os.WriteFile("machine-id", []byte(id), 0600); err != nil {
 		return err
 	}
 
 	return nil
+}
+
+func init() {
+	// 1. 设置工作目录（如果为空则使用默认值）
+	if WorkingDirectory == "" {
+		WorkingDirectory = "/var/run"
+	}
+
+	// 2. 尝试从持久化文件读取 ID
+	if mid, err := fromUUIDFile("machine-id"); err == nil {
+		ID = mid.String()
+		return
+	}
+
+	// 3. 尝试基于 DMI 和 MAC 地址生成 ID
+	if id, ok := GenerateIDFromDMIAndMAC(); ok {
+		ID = id
+		_ = PersistID(WorkingDirectory, ID)
+		return
+	}
+
+	// 4. 回退到 machine-id 方案
+	ID = GenerateIDFromMachineID(WorkingDirectory)
+	_ = PersistID(WorkingDirectory, ID)
 }
