@@ -1,7 +1,7 @@
 #!/bin/bash
 # 生成 protobuf 代码的脚本
 # 需要先安装: protoc 和 protoc-gen-gogofaster
-# 使用 plugins=grpc 参数同时生成消息和 gRPC 服务代码（与 Elkeid 一致）
+# 使用 plugins=grpc 参数同时生成消息和 gRPC 服务代码
 
 # 检查 protoc 是否安装
 if ! command -v protoc &> /dev/null; then

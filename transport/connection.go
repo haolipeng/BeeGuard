@@ -26,13 +26,13 @@ var (
 	dialOptions = []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()), // 无 TLS 加密
 		grpc.WithStatsHandler(&DefaultStatsHandler),              // 流量统计
-		grpc.WithBlock(),                                         // 阻塞直到连接建立
+		grpc.WithBlock(), // 阻塞直到连接建立
 	}
 
 	// ErrMaxRetryExceeded 超过最大重试次数错误
 	ErrMaxRetryExceeded = errors.New("max retry count exceeded")
 
-	// ErrNoConnection 无连接错误
+	// ErrNoConnection 无可用连接错误
 	ErrNoConnection = errors.New("no connection available")
 
 	// ErrServerNotConfigured 服务器地址未配置错误
@@ -101,22 +101,18 @@ func GetConnection(ctx context.Context) (*grpc.ClientConn, error) {
 		return nil, ErrServerNotConfigured
 	}
 
-	// 检查是否超过最大重试次数
+	// 当前尝试次数超过最大重试次数
 	currentRetries := atomic.LoadInt32(&retries)
 	maxRetries := int32(cfg.RetryMaxCount)
 	if maxRetries > 0 && currentRetries >= maxRetries {
-		slog.Error("max retry count exceeded",
-			slog.Int("current_retries", int(currentRetries)),
-			slog.Int("max_retries", int(maxRetries)))
+		slog.Error("max retry count exceeded", slog.Int("current_retries", int(currentRetries)), slog.Int("max_retries", int(maxRetries)))
 		return nil, fmt.Errorf("%w: %d/%d", ErrMaxRetryExceeded, currentRetries, maxRetries)
 	}
 
 	// 重试间隔等待
 	retryInterval := time.Duration(cfg.RetryInterval) * time.Second
 	if retryInterval > 0 && currentRetries > 0 {
-		slog.Debug("waiting before retry",
-			slog.Int("retry", int(currentRetries)),
-			slog.Duration("interval", retryInterval))
+		slog.Debug("waiting before retry", slog.Int("retry", int(currentRetries)), slog.Duration("interval", retryInterval))
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
@@ -130,10 +126,7 @@ func GetConnection(ctx context.Context) (*grpc.ClientConn, error) {
 		connectTimeout = defaultDialTimeout
 	}
 
-	slog.Info("dialing server",
-		slog.String("server", cfg.Server),
-		slog.Int("retry", int(currentRetries)),
-		slog.Duration("timeout", connectTimeout))
+	slog.Info("dialing server", slog.String("server", cfg.Server), slog.Int("retry", int(currentRetries)), slog.Duration("timeout", connectTimeout))
 
 	dialCtx, cancel := context.WithTimeout(ctx, connectTimeout)
 	defer cancel()
@@ -141,15 +134,12 @@ func GetConnection(ctx context.Context) (*grpc.ClientConn, error) {
 	newConn, err := grpc.DialContext(dialCtx, cfg.Server, dialOptions...)
 	if err != nil {
 		atomic.AddInt32(&retries, 1)
-		slog.Error("failed to dial server",
-			slog.String("server", cfg.Server),
-			slog.Int("retry", int(currentRetries+1)),
-			slog.String("error", err.Error()))
+		slog.Error("failed to dial server", slog.String("server", cfg.Server), slog.Int("retry", int(currentRetries+1)), slog.String("error", err.Error()))
 		return nil, fmt.Errorf("failed to dial %s (retry %d/%d): %w",
 			cfg.Server, currentRetries+1, maxRetries, err)
 	}
 
-	// 连接成功
+	// 连接成功,重置重试计数
 	conn.Store(newConn)
 	atomic.StoreInt32(&retries, 0)
 	slog.Info("connected to server", slog.String("server", cfg.Server))
@@ -201,8 +191,7 @@ func ResetRetries() {
 func ForceReconnect(ctx context.Context) (*grpc.ClientConn, error) {
 	slog.Info("forcing reconnection")
 	if err := CloseConnection(); err != nil {
-		slog.Warn("error closing connection during force reconnect",
-			slog.String("error", err.Error()))
+		slog.Warn("error closing connection during force reconnect", slog.String("error", err.Error()))
 	}
 	ResetRetries()
 	return GetConnection(ctx)
