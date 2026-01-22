@@ -2,7 +2,6 @@ package transport
 
 import (
 	"context"
-	"log/slog"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -12,6 +11,8 @@ import (
 	"gitlab.myinterest.top/security/agent/host"
 	"gitlab.myinterest.top/security/agent/plugin"
 	"gitlab.myinterest.top/security/agent/proto"
+
+	"go.uber.org/zap"
 )
 
 var (
@@ -34,7 +35,7 @@ func GetState(now time.Time) (txTPS, rxTPS float64) {
 // StartTransfer 启动传输守护进程
 func StartTransfer(ctx context.Context, wg *sync.WaitGroup) {
 	defer wg.Done()
-	slog.Info("transfer daemon startup")
+	zap.S().Info("transfer daemon startup")
 	retries := 0
 	subWg := &sync.WaitGroup{}
 	defer subWg.Wait()
@@ -43,10 +44,10 @@ func StartTransfer(ctx context.Context, wg *sync.WaitGroup) {
 		conn, err := GetConnection(ctx)
 		if err != nil {
 			if retries > 5 {
-				slog.Error("transfer will shutdown because of no available connections", slog.String("error", err.Error()))
+				zap.S().Errorw("transfer will shutdown because of no available connections", "error", err.Error())
 				return
 			}
-			slog.Warn("wait to get next connection", slog.Int("retry", retries), slog.String("error", err.Error()))
+			zap.S().Warnw("wait to get next connection", "retry", retries, "error", err.Error())
 			select {
 			case <-ctx.Done():
 				return
@@ -56,12 +57,12 @@ func StartTransfer(ctx context.Context, wg *sync.WaitGroup) {
 			}
 		}
 
-		slog.Info("get connection successfully")
+		zap.S().Info("get connection successfully")
 		retries = 0
 		subCtx, cancel := context.WithCancel(ctx)
 		client, err := proto.NewTransferClient(conn).Transfer(subCtx)
 		if err != nil {
-			slog.Error("failed to create transfer client", slog.String("error", err.Error()))
+			zap.S().Errorw("failed to create transfer client", "error", err.Error())
 			cancel()
 			select {
 			case <-ctx.Done():
@@ -80,7 +81,7 @@ func StartTransfer(ctx context.Context, wg *sync.WaitGroup) {
 		subWg.Wait()
 		cancel()
 
-		slog.Info("transfer has been canceled, wait next try to transfer")
+		zap.S().Info("transfer has been canceled, wait next try to transfer")
 		select {
 		case <-ctx.Done():
 			return
@@ -92,10 +93,10 @@ func StartTransfer(ctx context.Context, wg *sync.WaitGroup) {
 // handleSend 处理数据发送
 func handleSend(ctx context.Context, wg *sync.WaitGroup, client proto.Transfer_TransferClient) {
 	defer wg.Done()
-	defer slog.Info("send handler will exit")
+	defer zap.S().Info("send handler will exit")
 	defer client.CloseSend()
 
-	slog.Info("send handler running")
+	zap.S().Info("send handler running")
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
@@ -105,9 +106,7 @@ func handleSend(ctx context.Context, wg *sync.WaitGroup, client proto.Transfer_T
 			return
 		case <-ticker.C:
 			recs := buffer.ReadEncodedRecords()
-			if len(recs) == 0 {
-				continue
-			}
+			// 即使没有 records 也发送心跳包（包含 agent 元信息）
 
 			// 获取主机信息
 			hostname := ""
@@ -131,13 +130,16 @@ func handleSend(ctx context.Context, wg *sync.WaitGroup, client proto.Transfer_T
 
 			err := client.Send(pkg)
 			if err != nil {
-				slog.Error("failed to send data", slog.String("error", err.Error()))
+				zap.S().Errorw("failed to send data", "error", err.Error())
 				return
 			}
 
-			atomic.AddUint64(&txCnt, uint64(len(recs)))
-			for _, rec := range recs {
-				buffer.PutEncodedRecord(rec)
+			// 统计和回收 records
+			if len(recs) > 0 {
+				atomic.AddUint64(&txCnt, uint64(len(recs)))
+				for _, rec := range recs {
+					buffer.PutEncodedRecord(rec)
+				}
 			}
 		}
 	}
@@ -146,28 +148,29 @@ func handleSend(ctx context.Context, wg *sync.WaitGroup, client proto.Transfer_T
 // handleReceive 处理命令接收
 func handleReceive(ctx context.Context, wg *sync.WaitGroup, client proto.Transfer_TransferClient) {
 	defer wg.Done()
-	defer slog.Info("receive handler will exit")
+	defer zap.S().Info("receive handler will exit")
 
-	slog.Info("receive handler running")
+	zap.S().Info("receive handler running")
 	for {
-		cmd, err := client.Recv()
+		cmd, err := client.Recv() //阻塞等待服务端命令
 		if err != nil {
-			slog.Error("failed to receive command", slog.String("error", err.Error()))
+			//such as grpc server close the connection
+			zap.S().Errorw("failed to receive command", "error", err.Error())
 			return
 		}
 
-		slog.Info("received command")
+		zap.S().Info("received command")
 		atomic.AddUint64(&rxCnt, 1)
 
 		// 处理任务命令
 		if cmd.Task != nil {
 			// Agent 自身的任务
 			if cmd.Task.ObjectName == agent.Product {
-				// 当前无具体 Agent 任务，只处理关闭命令
+				// 当前无具体 Agent 任务，所以只处理关闭agent命令
 				if cmd.Task.DataType == 1060 {
-					slog.Info("will shutdown agent")
+					zap.S().Info("will shutdown agent")
 					agent.Cancel()
-					slog.Info("shutdown agent successfully")
+					zap.S().Info("shutdown agent successfully")
 					return
 				}
 			} else {
@@ -179,7 +182,7 @@ func handleReceive(ctx context.Context, wg *sync.WaitGroup, client proto.Transfe
 						plg.Error("send task to plugin failed: " + err.Error())
 					}
 				} else {
-					slog.Error("can't find plugin", slog.String("plugin", cmd.Task.ObjectName))
+					zap.S().Errorw("can't find plugin", "plugin", cmd.Task.ObjectName)
 				}
 			}
 			continue
@@ -192,11 +195,11 @@ func handleReceive(ctx context.Context, wg *sync.WaitGroup, client proto.Transfe
 			cfgs[config.Name] = config
 		}
 
-		// 同步插件配置（排除 Agent 自身）
+		// 同步插件配置，调用plugin.Sync()函数
 		delete(cfgs, agent.Product)
 		err = plugin.Sync(cfgs)
 		if err != nil {
-			slog.Error("failed to sync plugin configs", slog.String("error", err.Error()))
+			zap.S().Errorw("failed to sync plugin configs", "error", err.Error())
 		}
 	}
 }

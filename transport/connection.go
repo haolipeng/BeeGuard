@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"sync/atomic"
 	"time"
 
 	"gitlab.myinterest.top/security/agent/config"
 
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
@@ -60,7 +60,7 @@ func GetConnection(ctx context.Context) (*grpc.ClientConn, error) {
 			// 连接就绪，检查重试计数
 			// 超过阈值时强制重连，防止长时间使用同一连接
 			if atomic.AddInt32(&retries, 1) > maxRetryBeforeReconnect {
-				slog.Debug("forcing reconnect after max retries on ready connection")
+				zap.S().Debug("forcing reconnect after max retries on ready connection")
 				c.Close()
 			} else {
 				return c, nil
@@ -70,7 +70,7 @@ func GetConnection(ctx context.Context) (*grpc.ClientConn, error) {
 			// 连接空闲，检查重试计数
 			// 超过阈值时强制重连
 			if atomic.AddInt32(&retries, 1) > maxRetryBeforeReconnect {
-				slog.Debug("forcing reconnect after max retries on idle connection")
+				zap.S().Debug("forcing reconnect after max retries on idle connection")
 				c.Close()
 			} else {
 				return c, nil
@@ -78,17 +78,17 @@ func GetConnection(ctx context.Context) (*grpc.ClientConn, error) {
 
 		case connectivity.Connecting:
 			// 正在连接中，直接关闭并重新建立
-			slog.Debug("connection is connecting, closing to retry")
+			zap.S().Debug("connection is connecting, closing to retry")
 			c.Close()
 
 		case connectivity.TransientFailure:
 			// 临时失败，关闭连接并重新建立
-			slog.Debug("connection in transient failure, closing")
+			zap.S().Debug("connection in transient failure, closing")
 			c.Close()
 
 		case connectivity.Shutdown:
 			// 连接已关闭
-			slog.Debug("connection is shutdown")
+			zap.S().Debug("connection is shutdown")
 		}
 	}
 
@@ -105,14 +105,14 @@ func GetConnection(ctx context.Context) (*grpc.ClientConn, error) {
 	currentRetries := atomic.LoadInt32(&retries)
 	maxRetries := int32(cfg.RetryMaxCount)
 	if maxRetries > 0 && currentRetries >= maxRetries {
-		slog.Error("max retry count exceeded", slog.Int("current_retries", int(currentRetries)), slog.Int("max_retries", int(maxRetries)))
+		zap.S().Errorw("max retry count exceeded", "current_retries", currentRetries, "max_retries", maxRetries)
 		return nil, fmt.Errorf("%w: %d/%d", ErrMaxRetryExceeded, currentRetries, maxRetries)
 	}
 
 	// 重试间隔等待
 	retryInterval := time.Duration(cfg.RetryInterval) * time.Second
 	if retryInterval > 0 && currentRetries > 0 {
-		slog.Debug("waiting before retry", slog.Int("retry", int(currentRetries)), slog.Duration("interval", retryInterval))
+		zap.S().Debugw("waiting before retry", "retry", currentRetries, "interval", retryInterval)
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
@@ -126,7 +126,7 @@ func GetConnection(ctx context.Context) (*grpc.ClientConn, error) {
 		connectTimeout = defaultDialTimeout
 	}
 
-	slog.Info("dialing server", slog.String("server", cfg.Server), slog.Int("retry", int(currentRetries)), slog.Duration("timeout", connectTimeout))
+	zap.S().Infow("dialing server", "server", cfg.Server, "retry", currentRetries, "timeout", connectTimeout)
 
 	dialCtx, cancel := context.WithTimeout(ctx, connectTimeout)
 	defer cancel()
@@ -134,7 +134,7 @@ func GetConnection(ctx context.Context) (*grpc.ClientConn, error) {
 	newConn, err := grpc.DialContext(dialCtx, cfg.Server, dialOptions...)
 	if err != nil {
 		atomic.AddInt32(&retries, 1)
-		slog.Error("failed to dial server", slog.String("server", cfg.Server), slog.Int("retry", int(currentRetries+1)), slog.String("error", err.Error()))
+		zap.S().Errorw("failed to dial server", "server", cfg.Server, "retry", currentRetries+1, "error", err.Error())
 		return nil, fmt.Errorf("failed to dial %s (retry %d/%d): %w",
 			cfg.Server, currentRetries+1, maxRetries, err)
 	}
@@ -142,7 +142,7 @@ func GetConnection(ctx context.Context) (*grpc.ClientConn, error) {
 	// 连接成功,重置重试计数
 	conn.Store(newConn)
 	atomic.StoreInt32(&retries, 0)
-	slog.Info("connected to server", slog.String("server", cfg.Server))
+	zap.S().Infow("connected to server", "server", cfg.Server)
 
 	return newConn, nil
 }
@@ -152,7 +152,7 @@ func CloseConnection() error {
 	c, ok := conn.Load().(*grpc.ClientConn)
 	if ok && c != nil {
 		conn.Store((*grpc.ClientConn)(nil))
-		slog.Info("closing connection")
+		zap.S().Info("closing connection")
 		return c.Close()
 	}
 	return nil
@@ -189,9 +189,9 @@ func ResetRetries() {
 // ForceReconnect 强制重新连接
 // 关闭现有连接并建立新连接
 func ForceReconnect(ctx context.Context) (*grpc.ClientConn, error) {
-	slog.Info("forcing reconnection")
+	zap.S().Info("forcing reconnection")
 	if err := CloseConnection(); err != nil {
-		slog.Warn("error closing connection during force reconnect", slog.String("error", err.Error()))
+		zap.S().Warnw("error closing connection during force reconnect", "error", err.Error())
 	}
 	ResetRetries()
 	return GetConnection(ctx)
