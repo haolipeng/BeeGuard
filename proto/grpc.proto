@@ -1,0 +1,64 @@
+syntax = "proto3";
+option go_package = "proto";
+package grpc;
+
+// PackagedData Agent 发送给 Server 的数据包
+message PackagedData {
+  repeated EncodedRecord records = 1;  // 编码后的数据记录列表
+  string agent_id = 2;                  // Agent 唯一标识符
+  repeated string ipv4 = 3;             // IPv4 地址列表
+  string hostname = 4;                  // 主机名
+  string version = 5;                   // Agent 版本号
+  string product = 6;                   // 产品名称
+}
+
+// EncodedRecord 编码后的记录（用于传输）
+message EncodedRecord {
+  int32 data_type = 1;   // 数据类型
+  int64 timestamp = 2;   // 时间戳
+  bytes data = 3;        // 序列化后的数据
+}
+
+// Record 未编码的记录（Agent 内部使用）
+message Record {
+  int32 data_type = 1;   // 数据类型
+  int64 timestamp = 2;   // 时间戳
+  Payload data = 3;      // 结构化的数据负载
+}
+
+// Payload 数据负载（键值对格式）
+message Payload {
+  map<string, string> fields = 1;  // 字段映射
+}
+
+// Command Server 下发给 Agent 的命令
+message Command {
+  int32 ctrl = 1;              // 控制字段
+  Task task = 2;               // 任务（可选）
+  repeated Config configs = 3; // 插件配置列表（可选）
+}
+
+// Task 任务结构
+message Task {
+  int32 data_type = 1;    // 任务数据类型
+  string object_name = 2; // 目标对象名称（Agent 或插件名称）
+  string data = 3;        // 任务数据（JSON 格式）
+  string token = 4;       // 任务令牌
+}
+
+// Config 插件配置
+message Config {
+  string name = 1;                    // 插件名称
+  string type = 2;                    // 插件类型
+  string version = 3;                // 插件版本号
+  string sha256 = 4;                 // SHA256 校验值
+  string signature = 5;              // 插件签名
+  repeated string download_urls = 6; // 下载地址列表
+  string detail = 7;                 // 详细信息（JSON 格式）
+}
+
+// Transfer 数据传输服务（双向流）
+service Transfer {
+  rpc Transfer(stream PackagedData) returns (stream Command) {}
+}
+

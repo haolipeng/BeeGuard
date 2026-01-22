@@ -44,3 +44,8 @@ vendor/
 # Linux
 *~
 
+# 开发临时文件夹
+develop/
+
+# Machine ID 文件
+machine-id
