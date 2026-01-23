@@ -8,6 +8,7 @@ tests/e2e/collector/test_collector
 *.dll
 *.so
 *.dylib
+cloudsec-agent
 
 # 测试二进制文件
 *.test

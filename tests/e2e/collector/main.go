@@ -13,8 +13,10 @@ import (
 	businessplugins "business_plugins/lib"
 
 	"gitlab.myinterest.top/security/agent/buffer"
+	"gitlab.myinterest.top/security/agent/config"
 	"gitlab.myinterest.top/security/agent/plugin"
 	"gitlab.myinterest.top/security/agent/proto"
+	"gitlab.myinterest.top/security/agent/transport"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -30,7 +32,7 @@ type jsonWriter struct {
 var (
 	// enableJSONOutput 控制是否将接收到的记录写入 JSON 文件
 	// 设置为 true 启用 JSON 文件输出，设置为 false 禁用
-	enableJSONOutput = true
+	enableJSONOutput = false
 
 	// jsonOutputFile 指定 JSON 输出文件的路径
 	jsonOutputFile = "collector_records.json"
@@ -41,14 +43,21 @@ var (
 
 func main() {
 	// 初始化 logger
-	config := zap.NewDevelopmentConfig()
-	config.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
-	logger, _ := config.Build()
+	logConfig := zap.NewDevelopmentConfig()
+	logConfig.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
+	logger, _ := logConfig.Build()
 	defer logger.Sync()
 	zap.ReplaceGlobals(logger)
 
 	fmt.Println("=== Collector Plugin Test ===")
 	fmt.Println("Starting test agent...")
+
+	// 初始化 agent 配置（连接到 Server）
+	if err := config.Init(); err != nil {
+		zap.S().Errorf("failed to init config: %v", err)
+		os.Exit(1)
+	}
+	zap.S().Info("config initialized successfully")
 
 	// 初始化 JSON 文件写入器（如果启用）
 	if enableJSONOutput {
@@ -71,6 +80,10 @@ func main() {
 	// 启动 plugin daemon
 	wg.Add(1)
 	go plugin.Startup(Context, wg)
+
+	// 启动传输守护进程（连接到 Server）
+	wg.Add(1)
+	go transport.StartTransfer(Context, wg)
 
 	// 等待插件守护进程启动
 	time.Sleep(time.Second * 1)
@@ -119,23 +132,23 @@ func main() {
 
 	// 发送测试任务（触发进程采集、端口采集、内核模块采集、软件采集和用户采集）
 	go func() {
+		time.Sleep(time.Second * 3)
+		sendProcessTask()
 		/*
-				time.Sleep(time.Second * 3)
-				sendProcessTask()
-				time.Sleep(time.Second * 2)
-				sendPortTask()
-				time.Sleep(time.Second * 2)
-				sendKmodTask()
-				time.Sleep(time.Second * 2)
-				sendSoftwareTask()
+					time.Sleep(time.Second * 2)
+					sendPortTask()
+					time.Sleep(time.Second * 2)
+					sendKmodTask()
+					time.Sleep(time.Second * 2)
+					sendSoftwareTask()
 
+				time.Sleep(time.Second * 2)
+				sendUserTask()
 			time.Sleep(time.Second * 2)
-			sendUserTask()
+			sendContainerTask()
+			time.Sleep(time.Second * 2)
+			sendEnvSuspiciousTask()
 		*/
-		time.Sleep(time.Second * 2)
-		sendContainerTask()
-		//time.Sleep(time.Second * 2)
-		//sendEnvSuspiciousTask()
 	}()
 
 	// 信号处理
