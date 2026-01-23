@@ -24,6 +24,12 @@ var (
 
 	// Version 版本号
 	Version string
+
+	// BuildTime 编译时间
+	BuildTime string
+
+	// GitCommit Git 提交哈希
+	GitCommit string
 )
 
 // fromIDFile 从文件中读取 ID 信息

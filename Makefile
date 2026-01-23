@@ -7,8 +7,16 @@ BUILD_DIR=build
 MAIN_FILE=main.go
 MODULE=gitlab.myinterest.top/security/agent
 
+# 版本信息（可通过命令行覆盖）
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+BUILD_TIME ?= $(shell date -u '+%Y-%m-%d_%H:%M:%S')
+GIT_COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+
 # 编译标志
-LDFLAGS=-ldflags "-s -w"
+LDFLAGS=-ldflags "-s -w \
+	-X $(MODULE)/agent.Version=$(VERSION) \
+	-X $(MODULE)/agent.BuildTime=$(BUILD_TIME) \
+	-X $(MODULE)/agent.GitCommit=$(GIT_COMMIT)"
 GOFLAGS=-trimpath
 
 # 默认目标
@@ -98,7 +106,8 @@ test-all: test test-e2e
 .PHONY: help
 help:
 	@echo "Agent Makefile Commands:"
-	@echo "  make build              - Build agent binary"
+	@echo "  make build              - Build agent binary (version from git tag)"
+	@echo "  make build VERSION=x.y.z - Build with specific version"
 	@echo "  make clean              - Clean build artifacts"
 	@echo "  make run                - Build and run agent"
 	@echo "  make deps               - Download and tidy dependencies"
