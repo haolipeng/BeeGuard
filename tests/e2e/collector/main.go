@@ -162,9 +162,8 @@ func main() {
 
 // sendCollectorTask 发送采集任务给 collector 插件的通用函数
 // dataType: 任务的数据类型
-// objectName: 对象名称（如 "process", "port" 等）
 // taskName: 任务名称（用于日志消息，如 "process", "port" 等）
-func sendCollectorTask(dataType int32, objectName, taskName string) {
+func sendCollectorTask(dataType int32, taskName string) {
 	plg, ok := plugin.Get("collector")
 	if !ok {
 		zap.S().Error("collector plugin not found")
@@ -173,8 +172,8 @@ func sendCollectorTask(dataType int32, objectName, taskName string) {
 
 	task := proto.Task{
 		DataType:   dataType,
-		ObjectName: objectName,
-		Data:       "", // collector 插件会自动采集，不需要额外数据
+		ObjectName: "collector", // 固定为插件名称，与 Server 下发格式一致
+		Data:       "",          // collector 插件会自动采集，不需要额外数据
 		Token:      fmt.Sprintf("test-%s-token-%d", taskName, time.Now().Unix()),
 	}
 
@@ -188,37 +187,37 @@ func sendCollectorTask(dataType int32, objectName, taskName string) {
 
 // sendProcessTask 发送进程采集任务给 collector 插件
 func sendProcessTask() {
-	sendCollectorTask(5050, "process", "process")
+	sendCollectorTask(5050, "process")
 }
 
 // sendPortTask 发送端口采集任务给 collector 插件
 func sendPortTask() {
-	sendCollectorTask(5051, "port", "port")
+	sendCollectorTask(5051, "port")
 }
 
 // sendKmodTask 发送内核模块采集任务给 collector 插件
 func sendKmodTask() {
-	sendCollectorTask(5062, "kmod", "kmod")
+	sendCollectorTask(5062, "kmod")
 }
 
 // sendSoftwareTask 发送软件采集任务给 collector 插件
 func sendSoftwareTask() {
-	sendCollectorTask(5055, "software", "software")
+	sendCollectorTask(5055, "software")
 }
 
 // sendUserTask 发送用户采集任务给 collector 插件
 func sendUserTask() {
-	sendCollectorTask(5052, "user", "user")
+	sendCollectorTask(5052, "user")
 }
 
 // sendContainerTask 发送容器采集任务给 collector 插件
 func sendContainerTask() {
-	sendCollectorTask(5056, "container", "container")
+	sendCollectorTask(5056, "container")
 }
 
 // sendEnvSuspiciousTask 发送可疑环境变量检测任务给 collector 插件
 func sendEnvSuspiciousTask() {
-	sendCollectorTask(5057, "env_suspicious", "env_suspicious")
+	sendCollectorTask(5057, "env_suspicious")
 }
 
 // printRecord 打印接收到的记录
