@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log/slog"
 	"os"
@@ -17,7 +18,16 @@ import (
 )
 
 func main() {
+	// 解析命令行参数
+	configPath := flag.String("config", "", "Path to config file")
+	flag.Parse()
+
 	fmt.Println("agent start running!")
+
+	// 设置配置文件路径（如果通过命令行指定）
+	if *configPath != "" {
+		config.SetConfigPath(*configPath)
+	}
 
 	// 初始化配置
 	if err := config.Init(); err != nil {
