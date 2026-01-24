@@ -16,6 +16,9 @@ var (
 	// ID Agent ID
 	ID = ""
 
+	// TestMode 测试模式标志
+	TestMode = false
+
 	// WorkingDirectory 工作目录
 	WorkingDirectory, _ = os.Getwd()
 
@@ -31,6 +34,15 @@ var (
 	// GitCommit Git 提交哈希
 	GitCommit string
 )
+
+// TestAgentID 测试模式下使用的固定 Agent ID
+const TestAgentID = "123456"
+
+// SetTestMode 设置测试模式，使用固定的 Agent ID
+func SetTestMode() {
+	TestMode = true
+	ID = TestAgentID
+}
 
 // fromIDFile 从文件中读取 ID 信息
 func fromIDFile(file string) (id []byte, err error) {

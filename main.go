@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"gitlab.myinterest.top/security/agent/agent"
 	"gitlab.myinterest.top/security/agent/config"
 	"gitlab.myinterest.top/security/agent/plugin"
 	"gitlab.myinterest.top/security/agent/transport"
@@ -20,9 +21,16 @@ import (
 func main() {
 	// 解析命令行参数
 	configPath := flag.String("config", "", "Path to config file")
+	testMode := flag.Bool("test", false, "Enable test mode with fixed agent ID (123456)")
 	flag.Parse()
 
 	fmt.Println("agent start running!")
+
+	// 设置测试模式（如果通过命令行指定）
+	if *testMode {
+		agent.SetTestMode()
+		fmt.Println("Test mode enabled, agent ID:", agent.TestAgentID)
+	}
 
 	// 设置配置文件路径（如果通过命令行指定）
 	if *configPath != "" {

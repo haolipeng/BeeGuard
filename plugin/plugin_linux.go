@@ -48,6 +48,7 @@ func Load(ctx context.Context, config proto.Config) (plg *Plugin, err error) {
 	loadedPlg, ok := m.Load(config.Name)
 	if ok {
 		loadedPlg := loadedPlg.(*Plugin)
+		//已经加载相同版本的插件
 		if loadedPlg.Config.Version == config.Version && loadedPlg.cmd.ProcessState == nil {
 			err = ErrDuplicatePlugin
 			return
