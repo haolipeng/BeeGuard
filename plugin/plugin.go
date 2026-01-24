@@ -182,6 +182,8 @@ func Startup(ctx context.Context, wg *sync.WaitGroup) {
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 	zap.S().Info("plugin daemon startup")
+
+	//无限循环等待，从syncCh通道中获取配置，然后加载插件或移除插件
 	for {
 		select {
 		case <-ctx.Done():

@@ -34,6 +34,8 @@ var (
 	initOnce sync.Once
 	// initErr 初始化错误
 	initErr error
+	// customConfigPath 命令行指定的配置文件路径
+	customConfigPath string
 )
 
 const (
@@ -41,16 +43,26 @@ const (
 	DefaultConfigFile = "config.yaml"
 )
 
+// SetConfigPath 设置配置文件路径（供命令行参数使用）
+func SetConfigPath(path string) {
+	customConfigPath = path
+}
+
 // GetConfigPath 获取配置文件路径
-// 优先级：默认路径 > 当前目录
+// 优先级：命令行参数 > 默认路径 > 当前目录
 func GetConfigPath() string {
-	// 1. 尝试默认路径（/etc/cloudsec-agent/config.yaml）
+	// 1. 命令行指定的路径优先级最高
+	if customConfigPath != "" {
+		return customConfigPath
+	}
+
+	// 2. 尝试默认路径（/etc/cloudsec-agent/config.yaml）
 	defaultPath := filepath.Join("/etc", "cloudsec-agent", DefaultConfigFile)
 	if _, err := os.Stat(defaultPath); err == nil {
 		return defaultPath
 	}
 
-	// 2. 回退到当前目录
+	// 3. 回退到当前目录
 	return DefaultConfigFile
 }
 
