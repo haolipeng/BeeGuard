@@ -159,13 +159,18 @@ func handleReceive(ctx context.Context, wg *sync.WaitGroup, client proto.Transfe
 			return
 		}
 
-		zap.S().Info("received command")
 		atomic.AddUint64(&rxCnt, 1)
 
 		// 处理任务命令
 		if cmd.Task != nil {
+			zap.S().Infow("received task command",
+				"object_name", cmd.Task.ObjectName,
+				"data_type", cmd.Task.DataType,
+				"token", cmd.Task.Token)
+
 			// Agent 自身的任务
 			if cmd.Task.ObjectName == agent.Product {
+				zap.S().Infow("task is for agent itself", "data_type", cmd.Task.DataType)
 				// 当前无具体 Agent 任务，所以只处理关闭agent命令
 				if cmd.Task.DataType == 1060 {
 					zap.S().Info("will shutdown agent")
@@ -177,9 +182,14 @@ func handleReceive(ctx context.Context, wg *sync.WaitGroup, client proto.Transfe
 				// 转发给对应插件的任务
 				plg, ok := plugin.Get(cmd.Task.ObjectName)
 				if ok {
+					zap.S().Infow("forwarding task to plugin",
+						"plugin", cmd.Task.ObjectName,
+						"data_type", cmd.Task.DataType)
 					err := plg.SendTask(*cmd.Task)
 					if err != nil {
 						plg.Error("send task to plugin failed: " + err.Error())
+					} else {
+						zap.S().Infow("task sent to plugin successfully", "plugin", cmd.Task.ObjectName)
 					}
 				} else {
 					zap.S().Errorw("can't find plugin", "plugin", cmd.Task.ObjectName)
@@ -189,9 +199,25 @@ func handleReceive(ctx context.Context, wg *sync.WaitGroup, client proto.Transfe
 		}
 
 		// 处理配置命令
+		if len(cmd.Configs) > 0 {
+			pluginNames := make([]string, 0, len(cmd.Configs))
+			for _, cfg := range cmd.Configs {
+				pluginNames = append(pluginNames, cfg.Name)
+			}
+			zap.S().Infow("received config command",
+				"plugin_count", len(cmd.Configs),
+				"plugins", pluginNames)
+		} else {
+			zap.S().Info("received empty config command")
+		}
+
 		agent.SetRunning()
 		cfgs := make(map[string]*proto.Config)
 		for _, config := range cmd.Configs {
+			zap.S().Infow("processing plugin config",
+				"name", config.Name,
+				"version", config.Version,
+				"type", config.Type)
 			cfgs[config.Name] = config
 		}
 
@@ -200,6 +226,8 @@ func handleReceive(ctx context.Context, wg *sync.WaitGroup, client proto.Transfe
 		err = plugin.Sync(cfgs)
 		if err != nil {
 			zap.S().Errorw("failed to sync plugin configs", "error", err.Error())
+		} else {
+			zap.S().Info("plugin configs synced successfully")
 		}
 	}
 }

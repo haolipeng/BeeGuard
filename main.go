@@ -16,6 +16,7 @@ import (
 	"gitlab.myinterest.top/security/agent/plugin"
 	"gitlab.myinterest.top/security/agent/transport"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 func main() {
@@ -25,6 +26,17 @@ func main() {
 	flag.Parse()
 
 	fmt.Println("agent start running!")
+
+	// 初始化 zap logger
+	logConfig := zap.NewDevelopmentConfig()
+	logConfig.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
+	logger, err := logConfig.Build()
+	if err != nil {
+		fmt.Printf("failed to init zap logger: %v\n", err)
+		os.Exit(1)
+	}
+	zap.ReplaceGlobals(logger)
+	defer logger.Sync()
 
 	// 设置测试模式（如果通过命令行指定）
 	if *testMode {
@@ -61,11 +73,14 @@ func main() {
 		sigs := make(chan os.Signal, 1)
 		signal.Notify(sigs, syscall.SIGTERM, syscall.SIGINT)
 		sig := <-sigs
-		zap.S().Error("receive signal:", sig.String())
-		zap.S().Info("wait for 5 secs to exit")
+		zap.S().Warnf("receive signal: %s, agent will shutdown...", sig.String())
+		zap.S().Info("waiting 5 seconds for graceful shutdown...")
 		<-time.After(time.Second * 5)
 		Cancel()
 	}()
 
 	wg.Wait()
+
+	zap.S().Info("all goroutines exited, agent shutdown complete")
+	fmt.Println("agent stopped")
 }
