@@ -16,6 +16,7 @@ import (
 	"gitlab.myinterest.top/security/agent/plugin"
 	"gitlab.myinterest.top/security/agent/transport"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 func main() {
@@ -25,6 +26,17 @@ func main() {
 	flag.Parse()
 
 	fmt.Println("agent start running!")
+
+	// 初始化 zap logger
+	logConfig := zap.NewDevelopmentConfig()
+	logConfig.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
+	logger, err := logConfig.Build()
+	if err != nil {
+		fmt.Printf("failed to init zap logger: %v\n", err)
+		os.Exit(1)
+	}
+	zap.ReplaceGlobals(logger)
+	defer logger.Sync()
 
 	// 设置测试模式（如果通过命令行指定）
 	if *testMode {
