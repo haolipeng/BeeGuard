@@ -61,11 +61,14 @@ func main() {
 		sigs := make(chan os.Signal, 1)
 		signal.Notify(sigs, syscall.SIGTERM, syscall.SIGINT)
 		sig := <-sigs
-		zap.S().Error("receive signal:", sig.String())
-		zap.S().Info("wait for 5 secs to exit")
+		zap.S().Warnf("receive signal: %s, agent will shutdown...", sig.String())
+		zap.S().Info("waiting 5 seconds for graceful shutdown...")
 		<-time.After(time.Second * 5)
 		Cancel()
 	}()
 
 	wg.Wait()
+
+	zap.S().Info("all goroutines exited, agent shutdown complete")
+	fmt.Println("agent stopped")
 }
