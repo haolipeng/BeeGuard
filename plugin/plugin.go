@@ -181,11 +181,26 @@ func Startup(ctx context.Context, wg *sync.WaitGroup) {
 	defer zap.S().Info("plugin daemon will exit")
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
+	statusTicker := time.NewTicker(30 * time.Second)
+	defer statusTicker.Stop()
 	zap.S().Info("plugin daemon startup")
 
 	//无限循环等待，从syncCh通道中获取配置，然后加载插件或移除插件
 	for {
 		select {
+		case <-statusTicker.C:
+			// 定期打印插件状态
+			plugins := GetAll()
+			if len(plugins) > 0 {
+				for _, plg := range plugins {
+					status := "running"
+					if plg.IsExited() {
+						status = fmt.Sprintf("exited (code: %d)", plg.cmd.ProcessState.ExitCode())
+					}
+					zap.S().Infof("plugin status: name=%s, version=%s, pid=%d, status=%s",
+						plg.Name(), plg.Version(), plg.Pid(), status)
+				}
+			}
 		case <-ctx.Done():
 			zap.S().Info("context has been canceled, will shutdown all plugins")
 			subWg := &sync.WaitGroup{}
