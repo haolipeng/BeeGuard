@@ -5,12 +5,15 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"sync"
+	"sync/atomic"
 	"time"
 
+	"gitlab.myinterest.top/security/agent/agent"
 	"gitlab.myinterest.top/security/agent/proto"
 	"go.uber.org/zap"
 )
@@ -37,6 +40,11 @@ type Plugin struct {
 	done       chan struct{}
 	wg         *sync.WaitGroup
 
+	// 与上面的rx tx概念相反 是从plugin视角看待的
+	rxBytes uint64
+	txBytes uint64
+	rxCnt   uint64
+	txCnt   uint64
 	*zap.SugaredLogger
 }
 
@@ -44,7 +52,10 @@ func (p *Plugin) GetState() (RxSpeed, TxSpeed, RxTPS, TxTPS float64) {
 	now := time.Now()
 	instant := now.Sub(p.updateTime).Seconds()
 	if instant != 0 {
-		//TODO: 计算rx tx速度
+		RxSpeed = float64(atomic.SwapUint64(&p.rxBytes, 0)) / float64(instant)
+		TxSpeed = float64(atomic.SwapUint64(&p.txBytes, 0)) / float64(instant)
+		RxTPS = float64(atomic.SwapUint64(&p.rxCnt, 0)) / float64(instant)
+		TxTPS = float64(atomic.SwapUint64(&p.txCnt, 0)) / float64(instant)
 	}
 	p.updateTime = now
 	return
@@ -194,37 +205,30 @@ func Startup(ctx context.Context, wg *sync.WaitGroup) {
 			zap.S().Infof("syncing plugins...")
 			// 加载插件
 			for _, cfg := range cfgs {
-				// 注意：这里需要 agent.Product，暂时注释掉，后续需要实现 agent 模块
-				// if cfg.Name != agent.Product {
-				plg, err := Load(ctx, *cfg)
-				// 相同版本的同名插件正在运行，无需操作
-				if err == ErrDuplicatePlugin {
-					continue
-				}
-				if err != nil {
-					zap.S().Errorf("when load plugin %v:%v, an error occurred: %v", cfg.Name, cfg.Version, err)
-				} else {
-					if plg.SugaredLogger != nil {
+				if cfg.Name != agent.Product {
+					plg, err := Load(ctx, *cfg)
+					// 相同版本的同名插件正在运行，无需操作
+					if err == ErrDuplicatePlugin {
+						continue
+					}
+					if err != nil {
+						zap.S().Errorf("when load plugin %v:%v, an error occurred: %v", cfg.Name, cfg.Version, err)
+						agent.SetAbnormal(fmt.Sprintf("load plugin %v failed: %v", cfg.Name, err.Error()))
+					} else {
 						plg.Infof("plugin has been loaded")
 					}
 				}
-				// }
 			}
 			// 移除插件
 			for _, plg := range GetAll() {
 				if _, ok := cfgs[plg.Config.Name]; !ok {
-					if plg.SugaredLogger != nil {
-						plg.Infof("when syncing, plugin will be shutdown")
-					}
+					plg.Infof("when syncing, plugin will be shutdown")
 					plg.Shutdown()
-					if plg.SugaredLogger != nil {
-						plg.Infof("shutdown successfully")
-					}
+					plg.Infof("shutdown successfully")
+
 					m.Delete(plg.Config.Name)
 					if err := os.RemoveAll(plg.GetWorkingDirectory()); err != nil {
-						if plg.SugaredLogger != nil {
-							plg.Error("delete dir of plugin failed: ", err)
-						}
+						plg.Error("delete dir of plugin failed: ", err)
 					}
 				}
 			}

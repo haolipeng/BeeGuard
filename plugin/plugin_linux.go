@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"gitlab.myinterest.top/security/agent/agent"
 	"gitlab.myinterest.top/security/agent/buffer"
 	"gitlab.myinterest.top/security/agent/proto"
 	"go.uber.org/zap"
@@ -64,8 +65,7 @@ func Load(ctx context.Context, config proto.Config) (plg *Plugin, err error) {
 	logger := zap.S().With("plugin", config.Name, "pver", config.Version, "psign", config.Signature)
 	logger.Info("plugin is loading...")
 
-	// 注意：这里需要 agent.WorkingDirectory，暂时使用默认值，后续需要实现 agent 模块
-	workingDirectory := path.Join("/tmp", "plugin", config.Name)
+	workingDirectory := path.Join(agent.WorkingDirectory, "plugin", config.Name)
 	// for compatibility
 	os.Remove(path.Join(workingDirectory, config.Name+".stderr"))
 	os.Remove(path.Join(workingDirectory, config.Name+".stdout"))
