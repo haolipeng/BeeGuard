@@ -13,8 +13,10 @@ import (
 	businessplugins "business_plugins/lib"
 
 	"gitlab.myinterest.top/security/agent/buffer"
+	"gitlab.myinterest.top/security/agent/config"
 	"gitlab.myinterest.top/security/agent/plugin"
 	"gitlab.myinterest.top/security/agent/proto"
+	"gitlab.myinterest.top/security/agent/transport"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -30,7 +32,7 @@ type jsonWriter struct {
 var (
 	// enableJSONOutput 控制是否将接收到的记录写入 JSON 文件
 	// 设置为 true 启用 JSON 文件输出，设置为 false 禁用
-	enableJSONOutput = true
+	enableJSONOutput = false
 
 	// jsonOutputFile 指定 JSON 输出文件的路径
 	jsonOutputFile = "collector_records.json"
@@ -41,14 +43,21 @@ var (
 
 func main() {
 	// 初始化 logger
-	config := zap.NewDevelopmentConfig()
-	config.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
-	logger, _ := config.Build()
+	logConfig := zap.NewDevelopmentConfig()
+	logConfig.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
+	logger, _ := logConfig.Build()
 	defer logger.Sync()
 	zap.ReplaceGlobals(logger)
 
 	fmt.Println("=== Collector Plugin Test ===")
 	fmt.Println("Starting test agent...")
+
+	// 初始化 agent 配置（连接到 Server）
+	if err := config.Init(); err != nil {
+		zap.S().Errorf("failed to init config: %v", err)
+		os.Exit(1)
+	}
+	zap.S().Info("config initialized successfully")
 
 	// 初始化 JSON 文件写入器（如果启用）
 	if enableJSONOutput {
@@ -71,6 +80,10 @@ func main() {
 	// 启动 plugin daemon
 	wg.Add(1)
 	go plugin.Startup(Context, wg)
+
+	// 启动传输守护进程（连接到 Server）
+	wg.Add(1)
+	go transport.StartTransfer(Context, wg)
 
 	// 等待插件守护进程启动
 	time.Sleep(time.Second * 1)
@@ -119,23 +132,23 @@ func main() {
 
 	// 发送测试任务（触发进程采集、端口采集、内核模块采集、软件采集和用户采集）
 	go func() {
+		time.Sleep(time.Second * 3)
+		sendProcessTask()
 		/*
-				time.Sleep(time.Second * 3)
-				sendProcessTask()
-				time.Sleep(time.Second * 2)
-				sendPortTask()
-				time.Sleep(time.Second * 2)
-				sendKmodTask()
-				time.Sleep(time.Second * 2)
-				sendSoftwareTask()
+					time.Sleep(time.Second * 2)
+					sendPortTask()
+					time.Sleep(time.Second * 2)
+					sendKmodTask()
+					time.Sleep(time.Second * 2)
+					sendSoftwareTask()
 
+				time.Sleep(time.Second * 2)
+				sendUserTask()
 			time.Sleep(time.Second * 2)
-			sendUserTask()
+			sendContainerTask()
+			time.Sleep(time.Second * 2)
+			sendEnvSuspiciousTask()
 		*/
-		time.Sleep(time.Second * 2)
-		sendContainerTask()
-		//time.Sleep(time.Second * 2)
-		//sendEnvSuspiciousTask()
 	}()
 
 	// 信号处理
@@ -162,9 +175,8 @@ func main() {
 
 // sendCollectorTask 发送采集任务给 collector 插件的通用函数
 // dataType: 任务的数据类型
-// objectName: 对象名称（如 "process", "port" 等）
 // taskName: 任务名称（用于日志消息，如 "process", "port" 等）
-func sendCollectorTask(dataType int32, objectName, taskName string) {
+func sendCollectorTask(dataType int32, taskName string) {
 	plg, ok := plugin.Get("collector")
 	if !ok {
 		zap.S().Error("collector plugin not found")
@@ -173,8 +185,8 @@ func sendCollectorTask(dataType int32, objectName, taskName string) {
 
 	task := proto.Task{
 		DataType:   dataType,
-		ObjectName: objectName,
-		Data:       "", // collector 插件会自动采集，不需要额外数据
+		ObjectName: "collector", // 固定为插件名称，与 Server 下发格式一致
+		Data:       "",          // collector 插件会自动采集，不需要额外数据
 		Token:      fmt.Sprintf("test-%s-token-%d", taskName, time.Now().Unix()),
 	}
 
@@ -188,37 +200,37 @@ func sendCollectorTask(dataType int32, objectName, taskName string) {
 
 // sendProcessTask 发送进程采集任务给 collector 插件
 func sendProcessTask() {
-	sendCollectorTask(5050, "process", "process")
+	sendCollectorTask(5050, "process")
 }
 
 // sendPortTask 发送端口采集任务给 collector 插件
 func sendPortTask() {
-	sendCollectorTask(5051, "port", "port")
+	sendCollectorTask(5051, "port")
 }
 
 // sendKmodTask 发送内核模块采集任务给 collector 插件
 func sendKmodTask() {
-	sendCollectorTask(5062, "kmod", "kmod")
+	sendCollectorTask(5062, "kmod")
 }
 
 // sendSoftwareTask 发送软件采集任务给 collector 插件
 func sendSoftwareTask() {
-	sendCollectorTask(5055, "software", "software")
+	sendCollectorTask(5055, "software")
 }
 
 // sendUserTask 发送用户采集任务给 collector 插件
 func sendUserTask() {
-	sendCollectorTask(5052, "user", "user")
+	sendCollectorTask(5052, "user")
 }
 
 // sendContainerTask 发送容器采集任务给 collector 插件
 func sendContainerTask() {
-	sendCollectorTask(5056, "container", "container")
+	sendCollectorTask(5056, "container")
 }
 
 // sendEnvSuspiciousTask 发送可疑环境变量检测任务给 collector 插件
 func sendEnvSuspiciousTask() {
-	sendCollectorTask(5057, "env_suspicious", "env_suspicious")
+	sendCollectorTask(5057, "env_suspicious")
 }
 
 // printRecord 打印接收到的记录
