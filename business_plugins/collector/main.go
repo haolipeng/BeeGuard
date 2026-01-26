@@ -38,12 +38,14 @@ func main() {
 
 	e.AddHandler(time.Hour, &ProcessHandler{})         //进程
 	e.AddHandler(time.Hour, &PortHandler{})            //端口
-	e.AddHandler(time.Hour, &KmodHandler{})            //内核模块
+	//e.AddHandler(time.Hour, &KmodHandler{})          //内核模块
 	e.AddHandler(time.Hour*6, &ServiceHandler{})       //服务
 	e.AddHandler(time.Hour*6, &SoftwareHandler{})      //软件
 	e.AddHandler(time.Hour*6, &UserHandler{})          //账号和用户
 	e.AddHandler(time.Hour*6, &EnvSuspiciousHandler{}) //可疑环境变量检测
 	e.AddHandler(time.Hour*6, &ContainerHandler{})     //容器
+	e.AddHandler(time.Hour*6, &DatabaseHandler{})      //数据库服务
+	e.AddHandler(time.Hour*6, &WebServiceHandler{})    //Web服务
 
 	//运行engine引擎
 	e.Run()

@@ -117,15 +117,22 @@ func handleSend(ctx context.Context, wg *sync.WaitGroup, client proto.Transfer_T
 			if ipv4, ok := host.IPv4.Load().([]string); ok {
 				ipv4List = ipv4
 			}
+			macAddr := ""
+			if mac, ok := host.MacAddr.Load().(string); ok {
+				macAddr = mac
+			}
 
 			// 构建 PackagedData
 			pkg := &proto.PackagedData{
-				Records:  recs,
-				AgentId:  agent.ID,
-				Ipv4:     ipv4List,
-				Hostname: hostname,
-				Version:  agent.Version,
-				Product:  agent.Product,
+				Records:   recs,
+				AgentId:   agent.ID,
+				Ipv4:      ipv4List,
+				Hostname:  hostname,
+				Version:   agent.Version,
+				Product:   agent.Product,
+				MacAddr:   macAddr,
+				OsType:    host.Platform,
+				OsVersion: host.PlatformVersion,
 			}
 
 			err := client.Send(pkg)
