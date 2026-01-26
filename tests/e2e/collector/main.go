@@ -134,21 +134,22 @@ func main() {
 	go func() {
 		time.Sleep(time.Second * 3)
 		sendProcessTask()
-		/*
-					time.Sleep(time.Second * 2)
-					sendPortTask()
-					time.Sleep(time.Second * 2)
-					sendKmodTask()
-					time.Sleep(time.Second * 2)
-					sendSoftwareTask()
-
-				time.Sleep(time.Second * 2)
-				sendUserTask()
-			time.Sleep(time.Second * 2)
-			sendContainerTask()
-			time.Sleep(time.Second * 2)
-			sendEnvSuspiciousTask()
-		*/
+		time.Sleep(time.Second * 2)
+		sendPortTask()
+		time.Sleep(time.Second * 2)
+		sendUserTask()
+		time.Sleep(time.Second * 2)
+		sendServiceTask()
+		time.Sleep(time.Second * 2)
+		sendSoftwareTask()
+		time.Sleep(time.Second * 2)
+		sendContainerTask()
+		time.Sleep(time.Second * 2)
+		sendEnvSuspiciousTask()
+		time.Sleep(time.Second * 2)
+		sendDatabaseTask()
+		time.Sleep(time.Second * 2)
+		sendWebServiceTask()
 	}()
 
 	// 信号处理
@@ -162,9 +163,9 @@ func main() {
 		Cancel()
 	}()
 
-	// 运行 30 秒后自动退出
+	// 运行 180 秒后自动退出（留足够时间让所有handler执���）
 	go func() {
-		<-time.After(time.Second * 30)
+		<-time.After(time.Second * 180)
 		zap.S().Info("test timeout, exiting...")
 		Cancel()
 	}()
@@ -231,6 +232,21 @@ func sendContainerTask() {
 // sendEnvSuspiciousTask 发送可疑环境变量检测任务给 collector 插件
 func sendEnvSuspiciousTask() {
 	sendCollectorTask(5057, "env_suspicious")
+}
+
+// sendServiceTask 发送系统服务采集任务给 collector 插件
+func sendServiceTask() {
+	sendCollectorTask(5054, "service")
+}
+
+// sendDatabaseTask 发送数据库服务采集任务给 collector 插件
+func sendDatabaseTask() {
+	sendCollectorTask(5061, "database")
+}
+
+// sendWebServiceTask 发送Web服务采集任务给 collector 插件
+func sendWebServiceTask() {
+	sendCollectorTask(5060, "web_service")
 }
 
 // printRecord 打印接收到的记录
