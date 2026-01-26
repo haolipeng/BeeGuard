@@ -10,6 +10,9 @@ message PackagedData {
   string hostname = 4;                  // 主机名
   string version = 5;                   // Agent 版本号
   string product = 6;                   // 产品名称
+  string mac_addr = 7;                  // MAC 地址
+  string os_type = 8;                   // 操作系统类型 (linux/windows)
+  string os_version = 9;                // 操作系统版本
 }
 
 // EncodedRecord 编码后的记录（用于传输）
