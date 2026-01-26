@@ -1,8 +1,10 @@
 package main
 
 import (
+	"flag"
 	"math/rand"
 	"runtime"
+	"strings"
 	"time"
 
 	businessplugins "business_plugins/lib"
@@ -14,12 +16,19 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
+var (
+	runOnce  = flag.Bool("run-once", false, "立即执行一次后退出（用于测试）")
+	handlers = flag.String("handler", "", "指定Handler名称，多个用逗号分隔（如: process,port,database）")
+)
+
 func init() {
 	runtime.GOMAXPROCS(8)
 	rand.Seed(time.Now().UnixNano())
 }
 
 func main() {
+	flag.Parse()
+
 	c := businessplugins.New()
 	l := log.New(
 		log.Config{
@@ -46,6 +55,16 @@ func main() {
 	e.AddHandler(time.Hour*6, &ContainerHandler{})     //容器
 	e.AddHandler(time.Hour*6, &DatabaseHandler{})      //数据库服务
 	e.AddHandler(time.Hour*6, &WebServiceHandler{})    //Web服务
+
+	// 判断执行模式
+	if *runOnce {
+		var names []string
+		if *handlers != "" {
+			names = strings.Split(*handlers, ",")
+		}
+		e.RunOnce(names)
+		return // 执行完毕退出
+	}
 
 	//运行engine引擎
 	e.Run()
