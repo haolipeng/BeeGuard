@@ -2,8 +2,10 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"io"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -52,6 +54,9 @@ type Service struct {
 	WorkingDir string `mapstructure:"working_dir"` // 工作目录（WorkingDirectory）
 	Checksum   string `mapstructure:"checksum"`    // 文件 MD5 校验和
 	BusName    string `mapstructure:"bus_name"`    // D-Bus 总线名称（如果适用）
+	Status     string `mapstructure:"status"`      // 服务运行状态（active/inactive/failed）
+	RunUser    string `mapstructure:"run_user"`    // 运行用户
+	Version    string `mapstructure:"version"`     // 服务版本（从二进制获取）
 }
 
 // SetDefault 设置默认服务类型
@@ -67,6 +72,112 @@ func (s *Service) SetDefault() {
 		// 有 D-Bus 名称，默认为 dbus 类型
 		s.Type = "dbus"
 	}
+}
+
+// getServiceRuntimeInfo 获取服务运行时信息（状态、用户、版本）
+// 通过 systemctl show 命令获取
+func getServiceRuntimeInfo(serviceName string) (status, runUser, version string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// 使用 systemctl show 获取服务属性
+	cmd := exec.CommandContext(ctx, "systemctl", "show", serviceName,
+		"--property=ActiveState,SubState,User,ExecMainPID,Version")
+	output, err := cmd.Output()
+	if err != nil {
+		return "unknown", "", ""
+	}
+
+	// 解析输出
+	lines := strings.Split(string(output), "\n")
+	var activeState, subState string
+	for _, line := range lines {
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+
+		switch key {
+		case "ActiveState":
+			activeState = value
+		case "SubState":
+			subState = value
+		case "User":
+			if value != "" && value != "[not set]" {
+				runUser = value
+			}
+		case "Version":
+			if value != "" && value != "[not set]" {
+				version = value
+			}
+		}
+	}
+
+	// 组合状态: active(running), inactive(dead), failed(failed)
+	if activeState != "" {
+		if subState != "" && subState != activeState {
+			status = activeState + "(" + subState + ")"
+		} else {
+			status = activeState
+		}
+	} else {
+		status = "unknown"
+	}
+
+	return status, runUser, version
+}
+
+// getVersionFromBinary 尝试从二进制文件获取版本号
+func getVersionFromBinary(command string) string {
+	if command == "" {
+		return ""
+	}
+
+	// 提取可执行文件路径（ExecStart 可能包含参数）
+	parts := strings.Fields(command)
+	if len(parts) == 0 {
+		return ""
+	}
+	exe := parts[0]
+
+	// 移除可能的前缀（如 -、@、+、!、!!）
+	exe = strings.TrimLeft(exe, "-@+!")
+
+	// 检查文件是否存在
+	if _, err := os.Stat(exe); err != nil {
+		return ""
+	}
+
+	// 尝试 --version 参数
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, exe, "--version")
+	output, err := cmd.Output()
+	if err != nil {
+		// 尝试 -v 参数
+		ctx2, cancel2 := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel2()
+		cmd = exec.CommandContext(ctx2, exe, "-v")
+		output, err = cmd.Output()
+		if err != nil {
+			return ""
+		}
+	}
+
+	// 提取第一行作为版本信息（通常版本在第一行）
+	lines := strings.Split(string(output), "\n")
+	if len(lines) > 0 {
+		// 截取前100个字符，避免过长
+		version := strings.TrimSpace(lines[0])
+		if len(version) > 100 {
+			version = version[:100]
+		}
+		return version
+	}
+	return ""
 }
 
 func (h *ServiceHandler) Handle(c *businessplugins.Client, cache *engine.Cache, seq string) {
@@ -129,6 +240,9 @@ func (h *ServiceHandler) Handle(c *businessplugins.Client, cache *engine.Cache, 
 						case "WorkingDirectory":
 							// 工作目录
 							u.WorkingDir = value
+						case "User":
+							// 运行用户
+							u.RunUser = value
 						}
 					}
 
@@ -137,6 +251,25 @@ func (h *ServiceHandler) Handle(c *businessplugins.Client, cache *engine.Cache, 
 
 					// 设置默认服务类型
 					u.SetDefault()
+
+					// 获取服务运行时信息（状态、用户）
+					status, runUser, version := getServiceRuntimeInfo(u.Name)
+					u.Status = status
+					// 如果服务文件中没有指定用户，使用运行时用户
+					if u.RunUser == "" {
+						u.RunUser = runUser
+					}
+					// 如果没有从systemctl获取到版本，尝试从二进制获取
+					if version != "" {
+						u.Version = version
+					} else {
+						u.Version = getVersionFromBinary(u.Command)
+					}
+
+					// 如果RunUser仍为空，默认为root
+					if u.RunUser == "" {
+						u.RunUser = "root"
+					}
 
 					// 创建记录
 					rec := &businessplugins.Record{
