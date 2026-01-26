@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"math/rand"
+	"strings"
 	"sync"
 	"time"
 
@@ -193,4 +194,29 @@ func New(c *businessplugins.Client, l cron.Logger) *Engine {
 			mu: &sync.RWMutex{},
 		},
 	}
+}
+
+// RunOnce 立即执行指定（或全部）Handler一次，用于测试
+func (e *Engine) RunOnce(handlerNames []string) {
+	zap.S().Info("engine running in once mode")
+	for _, h := range e.m {
+		// 如果指定了Handler名称，则只执行匹配的
+		if len(handlerNames) > 0 && !contains(handlerNames, h.Handler.Name()) {
+			continue
+		}
+		zap.S().Infof("running handler: %s (DataType: %d)", h.Handler.Name(), h.Handler.DataType())
+		h.Handle(e.c, e.cache)
+		zap.S().Infof("handler %s completed", h.Handler.Name())
+	}
+	zap.S().Info("all handlers completed, exiting")
+}
+
+// contains 检查字符串是否在切片中
+func contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if strings.TrimSpace(s) == item {
+			return true
+		}
+	}
+	return false
 }
