@@ -56,6 +56,11 @@ func main() {
 	}
 	slog.Info("config initialized successfully")
 
+	// 将配置同步到 agent 包
+	cfg, _ := config.Get()
+	agent.WorkingDirectory = cfg.WorkingDirectory
+	agent.PluginsDirectory = cfg.PluginsDirectory
+
 	wg := &sync.WaitGroup{}
 	zap.S().Info("++++++++++++++++++++++++++++++running++++++++++++++++++++++++++++++")
 

@@ -20,6 +20,9 @@ type Config struct {
 	// WorkingDirectory Agent 工作目录
 	WorkingDirectory string `yaml:"working_directory"`
 
+	// PluginsDirectory 插件目录
+	PluginsDirectory string `yaml:"plugins_directory"`
+
 	// RetryMaxCount 最大重试次数
 	RetryMaxCount int `yaml:"retry_max_count"`
 
@@ -40,7 +43,7 @@ var (
 
 const (
 	// DefaultConfigFile 默认配置文件名称
-	DefaultConfigFile = "config.yaml"
+	DefaultConfigFile = "agent.yaml"
 )
 
 // SetConfigPath 设置配置文件路径（供命令行参数使用）
@@ -56,7 +59,7 @@ func GetConfigPath() string {
 		return customConfigPath
 	}
 
-	// 2. 尝试默认路径（/etc/cloudsec-agent/config.yaml）
+	// 2. 尝试默认路径（/etc/cloudsec-agent/agent.yaml）
 	defaultPath := filepath.Join("/etc", "cloudsec-agent", DefaultConfigFile)
 	if _, err := os.Stat(defaultPath); err == nil {
 		return defaultPath
@@ -101,6 +104,10 @@ func ValidateAndSetDefaults(cfg *Config) error {
 
 	if cfg.WorkingDirectory == "" {
 		cfg.WorkingDirectory = "/var/run/cloudsec-agent"
+	}
+
+	if cfg.PluginsDirectory == "" {
+		cfg.PluginsDirectory = "/opt/cloudsec/plugins"
 	}
 
 	if cfg.RetryMaxCount <= 0 {

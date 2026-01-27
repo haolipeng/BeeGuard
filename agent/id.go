@@ -22,6 +22,9 @@ var (
 	// WorkingDirectory 工作目录
 	WorkingDirectory, _ = os.Getwd()
 
+	// PluginsDirectory 插件目录
+	PluginsDirectory = "/opt/cloudsec/plugins"
+
 	// Product 产品名称
 	Product string = "cloudsec-agent"
 

@@ -109,7 +109,7 @@ deploy_agent() {
 
     # 复制配置文件（如果不存在）
     if [ ! -f "$DEPLOY_DIR/conf/agent.yaml" ]; then
-        sudo cp "$AGENT_DIR/config.yaml" "$DEPLOY_DIR/conf/agent.yaml"
+        sudo cp "$AGENT_DIR/agent.yaml" "$DEPLOY_DIR/conf/agent.yaml"
         info "Config copied to $DEPLOY_DIR/conf/agent.yaml"
     else
         warn "Config already exists, skipping..."
