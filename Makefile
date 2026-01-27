@@ -97,6 +97,7 @@ deploy: build
 	@sudo mkdir -p $(DEPLOY_DIR)/conf
 	@sudo mkdir -p $(DEPLOY_DIR)/data/agent
 	@sudo mkdir -p $(DEPLOY_DIR)/data/plugins/collector
+	@sudo mkdir -p $(DEPLOY_DIR)/data/plugins/baseline
 	@sudo mkdir -p $(DEPLOY_DIR)/logs/agent
 	@sudo mkdir -p $(DEPLOY_DIR)/logs/plugins/collector
 	@sudo mkdir -p $(DEPLOY_DIR)/logs/plugins/baseline
