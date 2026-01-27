@@ -40,7 +40,7 @@ var (
 
 const (
 	// DefaultConfigFile 默认配置文件名称
-	DefaultConfigFile = "config.yaml"
+	DefaultConfigFile = "agent.yaml"
 )
 
 // SetConfigPath 设置配置文件路径（供命令行参数使用）
@@ -56,7 +56,7 @@ func GetConfigPath() string {
 		return customConfigPath
 	}
 
-	// 2. 尝试默认路径（/etc/cloudsec-agent/config.yaml）
+	// 2. 尝试默认路径（/etc/cloudsec-agent/agent.yaml）
 	defaultPath := filepath.Join("/etc", "cloudsec-agent", DefaultConfigFile)
 	if _, err := os.Stat(defaultPath); err == nil {
 		return defaultPath

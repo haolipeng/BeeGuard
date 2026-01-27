@@ -114,7 +114,7 @@ deploy: build-all
 	@sudo chmod 755 $(DEPLOY_DIR)/bin/$(BINARY_NAME)
 	@sudo chmod 755 $(DEPLOY_DIR)/plugins/*
 	@if [ ! -f $(DEPLOY_DIR)/conf/agent.yaml ]; then \
-		sudo cp config.yaml $(DEPLOY_DIR)/conf/agent.yaml; \
+		sudo cp agent.yaml $(DEPLOY_DIR)/conf/agent.yaml; \
 		echo "Config copied to $(DEPLOY_DIR)/conf/agent.yaml"; \
 	else \
 		echo "Config already exists, skipping..."; \
