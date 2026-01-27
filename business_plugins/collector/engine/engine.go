@@ -94,7 +94,7 @@ func (h *handler) Handle(c *businessplugins.Client, cache *Cache) {
 }
 
 type Engine struct {
-	m     map[int]*handler
+	m     map[int]*handler // 数据类型到处理器的映射,比如5050对应ProcessHandler,通过AddHandler注册
 	s     *cron.Cron
 	c     *businessplugins.Client
 	cache *Cache
@@ -135,6 +135,7 @@ func (e *Engine) Run() {
 			h.l.Info("init call")
 			h.Handle(e.c, e.cache)
 			time.Sleep(time.Minute * time.Duration(minutes))
+			//为每个handler添加定时任务
 			e.s.AddFunc(spec, func() { h.Handle(e.c, e.cache) })
 			h.l.Info("add func to scheduler successfully")
 		}(h)
@@ -145,6 +146,7 @@ func (e *Engine) Run() {
 	}()
 	// receive task until stop
 	for {
+		//接收服务端任务
 		t, err := e.c.ReceiveTask()
 		if err != nil {
 			break
@@ -153,6 +155,7 @@ func (e *Engine) Run() {
 		if h, ok := e.m[int(t.DataType)]; ok {
 			h.Handle(e.c, e.cache)
 			// send result recored
+			//发送数据记录结果
 			e.c.SendRecord(
 				&businessplugins.Record{
 					DataType:  5100,

@@ -20,6 +20,9 @@ type Config struct {
 	// WorkingDirectory Agent 工作目录
 	WorkingDirectory string `yaml:"working_directory"`
 
+	// PluginsDirectory 插件目录
+	PluginsDirectory string `yaml:"plugins_directory"`
+
 	// RetryMaxCount 最大重试次数
 	RetryMaxCount int `yaml:"retry_max_count"`
 
@@ -101,6 +104,10 @@ func ValidateAndSetDefaults(cfg *Config) error {
 
 	if cfg.WorkingDirectory == "" {
 		cfg.WorkingDirectory = "/var/run/cloudsec-agent"
+	}
+
+	if cfg.PluginsDirectory == "" {
+		cfg.PluginsDirectory = "/opt/cloudsec/plugins"
 	}
 
 	if cfg.RetryMaxCount <= 0 {

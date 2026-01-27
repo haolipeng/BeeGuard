@@ -102,10 +102,13 @@ deploy: build
 	@sudo mkdir -p $(DEPLOY_DIR)/logs/plugins/collector
 	@sudo mkdir -p $(DEPLOY_DIR)/logs/plugins/baseline
 	@sudo cp $(BUILD_DIR)/$(BINARY_NAME) $(DEPLOY_DIR)/bin/
-	@sudo cp $(PLUGINS_DIR)/collector $(DEPLOY_DIR)/plugins/
-	@sudo cp $(PLUGINS_DIR)/baseline $(DEPLOY_DIR)/plugins/
+	@sudo mkdir -p $(DEPLOY_DIR)/plugins/collector
+	@sudo mkdir -p $(DEPLOY_DIR)/plugins/baseline
+	@sudo cp $(PLUGINS_DIR)/collector $(DEPLOY_DIR)/plugins/collector/
+	@sudo cp $(PLUGINS_DIR)/baseline $(DEPLOY_DIR)/plugins/baseline/
 	@sudo chmod 755 $(DEPLOY_DIR)/bin/$(BINARY_NAME)
-	@sudo chmod 755 $(DEPLOY_DIR)/plugins/*
+	@sudo chmod 755 $(DEPLOY_DIR)/plugins/collector/collector
+	@sudo chmod 755 $(DEPLOY_DIR)/plugins/baseline/baseline
 	@if [ ! -f $(DEPLOY_DIR)/conf/agent.yaml ]; then \
 		sudo cp agent.yaml $(DEPLOY_DIR)/conf/agent.yaml; \
 		echo "Config copied to $(DEPLOY_DIR)/conf/agent.yaml"; \
@@ -130,9 +133,12 @@ deploy-agent: build-agent
 .PHONY: deploy-plugins
 deploy-plugins: build-plugins
 	@echo "Deploying plugins only to $(DEPLOY_DIR)..."
-	@sudo mkdir -p $(DEPLOY_DIR)/plugins
-	@sudo cp $(PLUGINS_DIR)/* $(DEPLOY_DIR)/plugins/
-	@sudo chmod 755 $(DEPLOY_DIR)/plugins/*
+	@sudo mkdir -p $(DEPLOY_DIR)/plugins/collector
+	@sudo mkdir -p $(DEPLOY_DIR)/plugins/baseline
+	@sudo cp $(PLUGINS_DIR)/collector $(DEPLOY_DIR)/plugins/collector/
+	@sudo cp $(PLUGINS_DIR)/baseline $(DEPLOY_DIR)/plugins/baseline/
+	@sudo chmod 755 $(DEPLOY_DIR)/plugins/collector/collector
+	@sudo chmod 755 $(DEPLOY_DIR)/plugins/baseline/baseline
 	@echo "Deploy complete: $(DEPLOY_DIR)/plugins/"
 
 # 代码格式化
