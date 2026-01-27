@@ -32,38 +32,30 @@ GOFLAGS=-trimpath
 .PHONY: all
 all: build
 
-# 编译agent主程序
-.PHONY: build
-build:
+# 编译 agent 主程序
+.PHONY: build-agent
+build-agent:
 	@echo "Building $(BINARY_NAME)..."
 	@mkdir -p $(BUILD_DIR)
 	$(GO) build $(GOFLAGS) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) $(MAIN_FILE)
 	@echo "Build complete: $(BUILD_DIR)/$(BINARY_NAME)"
 
-# 编译 collector 插件
-.PHONY: build-collector
-build-collector:
-	@echo "Building collector plugin..."
-	@mkdir -p $(PLUGINS_DIR)
-	@cd $(COLLECTOR_SRC) && $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/collector .
-	@echo "Build complete: $(PLUGINS_DIR)/collector"
-
-# 编译 baseline 插件
-.PHONY: build-baseline
-build-baseline:
-	@echo "Building baseline plugin..."
-	@mkdir -p $(PLUGINS_DIR)
-	@cd $(BASELINE_SRC) && $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/baseline .
-	@echo "Build complete: $(PLUGINS_DIR)/baseline"
-
 # 编译所有插件
 .PHONY: build-plugins
-build-plugins: build-collector build-baseline
+build-plugins:
+	@echo "Building all plugins..."
+	@mkdir -p $(PLUGINS_DIR)
+	@echo "  Building collector plugin..."
+	@cd $(COLLECTOR_SRC) && $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/collector .
+	@echo "  Building baseline plugin..."
+	@cd $(BASELINE_SRC) && $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/baseline .
 	@echo "All plugins built successfully"
+	@echo "  $(PLUGINS_DIR)/collector"
+	@echo "  $(PLUGINS_DIR)/baseline"
 
 # 编译所有组件 (agent + plugins)
-.PHONY: build-all
-build-all: build build-plugins
+.PHONY: build
+build: build-agent build-plugins
 	@echo "All components built successfully"
 	@echo "  Agent:   $(BUILD_DIR)/$(BINARY_NAME)"
 	@echo "  Plugins: $(PLUGINS_DIR)/"
@@ -98,7 +90,7 @@ install: build
 
 # 部署到 /opt/cloudsec/
 .PHONY: deploy
-deploy: build-all
+deploy: build
 	@echo "Deploying to $(DEPLOY_DIR)..."
 	@sudo mkdir -p $(DEPLOY_DIR)/bin
 	@sudo mkdir -p $(DEPLOY_DIR)/plugins
@@ -126,7 +118,7 @@ deploy: build-all
 
 # 仅部署 agent（不含插件）
 .PHONY: deploy-agent
-deploy-agent: build
+deploy-agent: build-agent
 	@echo "Deploying agent only to $(DEPLOY_DIR)..."
 	@sudo mkdir -p $(DEPLOY_DIR)/bin
 	@sudo cp $(BUILD_DIR)/$(BINARY_NAME) $(DEPLOY_DIR)/bin/
@@ -191,11 +183,9 @@ help:
 	@echo "Agent Makefile Commands:"
 	@echo ""
 	@echo "Build:"
-	@echo "  make build              - Build agent binary"
-	@echo "  make build-collector    - Build collector plugin"
-	@echo "  make build-baseline     - Build baseline plugin"
+	@echo "  make build              - Build agent + all plugins"
+	@echo "  make build-agent        - Build agent only"
 	@echo "  make build-plugins      - Build all plugins"
-	@echo "  make build-all          - Build agent + all plugins"
 	@echo "  make clean              - Clean build artifacts"
 	@echo ""
 	@echo "Deploy (to $(DEPLOY_DIR)):"
