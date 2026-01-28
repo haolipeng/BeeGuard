@@ -12,6 +12,7 @@ MODULE=gitlab.myinterest.top/security/agent
 PLUGINS_SRC_DIR=business_plugins
 COLLECTOR_SRC=$(PLUGINS_SRC_DIR)/collector
 BASELINE_SRC=$(PLUGINS_SRC_DIR)/baseline
+DETECTOR_SRC=$(PLUGINS_SRC_DIR)/detector
 
 # 部署目录
 DEPLOY_DIR=/opt/cloudsec
@@ -49,9 +50,12 @@ build-plugins:
 	@cd $(COLLECTOR_SRC) && $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/collector .
 	@echo "  Building baseline plugin..."
 	@cd $(BASELINE_SRC) && $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/baseline .
+	@echo "  Building detector plugin..."
+	@cd $(DETECTOR_SRC) && $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/detector .
 	@echo "All plugins built successfully"
 	@echo "  $(PLUGINS_DIR)/collector"
 	@echo "  $(PLUGINS_DIR)/baseline"
+	@echo "  $(PLUGINS_DIR)/detector"
 
 # 编译所有组件 (agent + plugins)
 .PHONY: build
@@ -98,17 +102,22 @@ deploy: build
 	@sudo mkdir -p $(DEPLOY_DIR)/data/agent
 	@sudo mkdir -p $(DEPLOY_DIR)/data/plugins/collector
 	@sudo mkdir -p $(DEPLOY_DIR)/data/plugins/baseline
+	@sudo mkdir -p $(DEPLOY_DIR)/data/plugins/detector
 	@sudo mkdir -p $(DEPLOY_DIR)/logs/agent
 	@sudo mkdir -p $(DEPLOY_DIR)/logs/plugins/collector
 	@sudo mkdir -p $(DEPLOY_DIR)/logs/plugins/baseline
+	@sudo mkdir -p $(DEPLOY_DIR)/logs/plugins/detector
 	@sudo cp $(BUILD_DIR)/$(BINARY_NAME) $(DEPLOY_DIR)/bin/
 	@sudo mkdir -p $(DEPLOY_DIR)/plugins/collector
 	@sudo mkdir -p $(DEPLOY_DIR)/plugins/baseline
+	@sudo mkdir -p $(DEPLOY_DIR)/plugins/detector
 	@sudo cp $(PLUGINS_DIR)/collector $(DEPLOY_DIR)/plugins/collector/
 	@sudo cp $(PLUGINS_DIR)/baseline $(DEPLOY_DIR)/plugins/baseline/
+	@sudo cp $(PLUGINS_DIR)/detector $(DEPLOY_DIR)/plugins/detector/
 	@sudo chmod 755 $(DEPLOY_DIR)/bin/$(BINARY_NAME)
 	@sudo chmod 755 $(DEPLOY_DIR)/plugins/collector/collector
 	@sudo chmod 755 $(DEPLOY_DIR)/plugins/baseline/baseline
+	@sudo chmod 755 $(DEPLOY_DIR)/plugins/detector/detector
 	@if [ ! -f $(DEPLOY_DIR)/conf/agent.yaml ]; then \
 		sudo cp agent.yaml $(DEPLOY_DIR)/conf/agent.yaml; \
 		echo "Config copied to $(DEPLOY_DIR)/conf/agent.yaml"; \
@@ -135,10 +144,13 @@ deploy-plugins: build-plugins
 	@echo "Deploying plugins only to $(DEPLOY_DIR)..."
 	@sudo mkdir -p $(DEPLOY_DIR)/plugins/collector
 	@sudo mkdir -p $(DEPLOY_DIR)/plugins/baseline
+	@sudo mkdir -p $(DEPLOY_DIR)/plugins/detector
 	@sudo cp $(PLUGINS_DIR)/collector $(DEPLOY_DIR)/plugins/collector/
 	@sudo cp $(PLUGINS_DIR)/baseline $(DEPLOY_DIR)/plugins/baseline/
+	@sudo cp $(PLUGINS_DIR)/detector $(DEPLOY_DIR)/plugins/detector/
 	@sudo chmod 755 $(DEPLOY_DIR)/plugins/collector/collector
 	@sudo chmod 755 $(DEPLOY_DIR)/plugins/baseline/baseline
+	@sudo chmod 755 $(DEPLOY_DIR)/plugins/detector/detector
 	@echo "Deploy complete: $(DEPLOY_DIR)/plugins/"
 
 # 代码格式化
