@@ -1,0 +1,35 @@
+# FTP暴力破解检测配置 (vsftpd)
+ftp:
+  enabled: true
+
+  # 监控的日志文件
+  log_paths:
+    - /var/log/vsftpd.log      # vsftpd主日志
+    - /var/log/xferlog         # FTP传输日志
+
+  # 检测规则
+  rules:
+    # 规则1: 认证失败暴力破解
+    - name: auth_failure_brute_force
+      description: "FTP认证失败暴力破解检测"
+      action: failed
+      frequency: 6           # 触发次数
+      timeframe: 120         # 时间窗口(秒)
+      level: 10              # 告警级别
+      ignore: 60             # 触发后抑制时间(秒)
+      group_by: source_ip    # 按源IP聚合
+
+    # 规则2: 多次连接尝试检测
+    - name: multiple_connection_attempt
+      description: "FTP多次连接尝试检测"
+      action: connect
+      frequency: 10
+      timeframe: 60
+      level: 10
+      ignore: 60
+      group_by: source_ip
+
+  # 白名单IP(不检测)
+  whitelist:
+    - 127.0.0.1
+    - ::1

@@ -1,4 +1,4 @@
-package ssh
+package ftp
 
 import (
 	"fmt"
@@ -11,19 +11,19 @@ import (
 )
 
 const (
-	// DataTypeSSHBruteForce SSH暴力破解告警数据类型
-	DataTypeSSHBruteForce = 6001
+	// DataTypeFTPBruteForce FTP暴力破解告警数据类型
+	DataTypeFTPBruteForce = 6002
 )
 
-// Detector SSH暴力破解检测器
+// Detector FTP暴力破解检测器
 type Detector struct {
 	mu      sync.RWMutex
-	config  config.SSHConfig
+	config  config.FTPConfig
 	windows map[string]*engine.SlidingWindow // 每个规则一个滑动窗口
 }
 
-// New 创建SSH检测器
-func New(cfg config.SSHConfig) *Detector {
+// New 创建FTP检测器
+func New(cfg config.FTPConfig) *Detector {
 	d := &Detector{
 		config:  cfg,
 		windows: make(map[string]*engine.SlidingWindow),
@@ -45,12 +45,12 @@ func New(cfg config.SSHConfig) *Detector {
 
 // Name 返回检测器名称
 func (d *Detector) Name() string {
-	return "ssh"
+	return "ftp"
 }
 
 // DataType 返回数据类型
 func (d *Detector) DataType() int {
-	return DataTypeSSHBruteForce
+	return DataTypeFTPBruteForce
 }
 
 // LogPaths 返回监控的日志路径
@@ -129,9 +129,9 @@ func (d *Detector) Check(event *engine.Event) *engine.Alert {
 	// 构造告警
 	return &engine.Alert{
 		AlertType:   "brute_force",
-		Service:     "ssh",
+		Service:     "ftp",
 		RuleName:    rule.Name,
-		Description: fmt.Sprintf("%s: 检测到来自 %s 的暴力破解攻击，%d秒内失败%d次",
+		Description: fmt.Sprintf("%s: 检测到来自 %s 的FTP暴力破解攻击，%d秒内失败%d次",
 			rule.Description, event.SourceIP, rule.Timeframe, result.Count),
 		SourceIP:   event.SourceIP,
 		TargetUser: event.Username,
@@ -146,7 +146,7 @@ func (d *Detector) Check(event *engine.Event) *engine.Alert {
 // UpdateConfig 更新检测器配置 (实现 engine.ConfigUpdater 接口)
 func (d *Detector) UpdateConfig(data string) error {
 	// 解析新配置
-	newCfg, err := config.ParseSSHConfigFromJSON(data)
+	newCfg, err := config.ParseFTPConfigFromJSON(data)
 	if err != nil {
 		return fmt.Errorf("failed to parse config: %w", err)
 	}
@@ -171,7 +171,7 @@ func (d *Detector) UpdateConfig(data string) error {
 	}
 	d.windows = newWindows
 
-	zap.S().Infof("SSH detector config updated: %d rules, %d whitelist entries",
+	zap.S().Infof("FTP detector config updated: %d rules, %d whitelist entries",
 		len(newCfg.Rules), len(newCfg.Whitelist))
 
 	return nil
