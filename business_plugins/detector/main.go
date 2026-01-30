@@ -10,6 +10,7 @@ import (
 	businessplugins "business_plugins/lib"
 
 	"gitlab.myinterest.top/security/agent/business_plugins/detector/config"
+	"gitlab.myinterest.top/security/agent/business_plugins/detector/detector/command"
 	"gitlab.myinterest.top/security/agent/business_plugins/detector/detector/ftp"
 	"gitlab.myinterest.top/security/agent/business_plugins/detector/detector/ssh"
 	"gitlab.myinterest.top/security/agent/business_plugins/detector/engine"
@@ -139,6 +140,19 @@ func main() {
 		zap.S().Info("FTP detector registered")
 	}
 
+	// 注册高危命令检测器 (使用审计子系统，独立于Engine运行)
+	var cmdDetector *command.Detector
+	if cfg.Command.Enabled {
+		cmdDetector = command.New(cfg.Command, pluginClient)
+		if err := cmdDetector.Start(); err != nil {
+			zap.S().Warnf("failed to start command detector: %v (audit may not be available)", err)
+		} else {
+			// 注册到 detectors map，用于配置更新
+			detectors["command"] = cmdDetector
+			zap.S().Info("Command detector registered")
+		}
+	}
+
 	// 启动任务接收循环
 	go func() {
 		for {
@@ -161,6 +175,12 @@ func main() {
 	<-sigCh
 
 	zap.S().Info("detector plugin stopping...")
+
+	// 停止高危命令检测器
+	if cmdDetector != nil {
+		cmdDetector.Stop()
+	}
+
 	eng.Stop()
 	pluginClient.Close()
 	zap.S().Info("detector plugin stopped")
