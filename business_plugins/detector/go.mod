@@ -6,6 +6,7 @@ replace business_plugins/lib => ../lib
 
 require (
 	business_plugins/lib v0.0.0-00010101000000-000000000000
+	github.com/elastic/go-libaudit/v2 v2.5.0
 	github.com/nxadm/tail v1.4.11
 	go.uber.org/zap v1.27.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1

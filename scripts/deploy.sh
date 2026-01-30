@@ -65,9 +65,11 @@ create_deploy_dirs() {
     sudo mkdir -p "$DEPLOY_DIR/conf"
     sudo mkdir -p "$DEPLOY_DIR/data/agent"
     sudo mkdir -p "$DEPLOY_DIR/data/plugins/collector"
+    sudo mkdir -p "$DEPLOY_DIR/data/plugins/detector"
     sudo mkdir -p "$DEPLOY_DIR/logs/agent"
     sudo mkdir -p "$DEPLOY_DIR/logs/plugins/collector"
     sudo mkdir -p "$DEPLOY_DIR/logs/plugins/baseline"
+    sudo mkdir -p "$DEPLOY_DIR/logs/plugins/detector"
 
     # 设置目录权限
     sudo chmod 755 "$DEPLOY_DIR"
@@ -92,7 +94,7 @@ clean_deploy() {
 build_agent() {
     info "Building agent and plugins..."
     cd "$AGENT_DIR"
-    make build-all
+    make build
     success "Agent and plugins built successfully"
 }
 
@@ -130,8 +132,9 @@ deploy_plugins() {
 
     # 部署 collector 插件
     if [ -f "$plugins_dir/collector" ]; then
-        sudo cp "$plugins_dir/collector" "$DEPLOY_DIR/plugins/"
-        sudo chmod 755 "$DEPLOY_DIR/plugins/collector"
+        sudo mkdir -p "$DEPLOY_DIR/plugins/collector"
+        sudo cp "$plugins_dir/collector" "$DEPLOY_DIR/plugins/collector/"
+        sudo chmod 755 "$DEPLOY_DIR/plugins/collector/collector"
         success "Collector plugin deployed"
     else
         warn "Collector plugin not found, skipping..."
@@ -139,11 +142,27 @@ deploy_plugins() {
 
     # 部署 baseline 插件
     if [ -f "$plugins_dir/baseline" ]; then
-        sudo cp "$plugins_dir/baseline" "$DEPLOY_DIR/plugins/"
-        sudo chmod 755 "$DEPLOY_DIR/plugins/baseline"
+        sudo mkdir -p "$DEPLOY_DIR/plugins/baseline"
+        sudo cp "$plugins_dir/baseline" "$DEPLOY_DIR/plugins/baseline/"
+        sudo chmod 755 "$DEPLOY_DIR/plugins/baseline/baseline"
         success "Baseline plugin deployed"
     else
         warn "Baseline plugin not found, skipping..."
+    fi
+
+    # 部署 detector 插件
+    if [ -f "$plugins_dir/detector" ]; then
+        sudo mkdir -p "$DEPLOY_DIR/plugins/detector"
+        sudo cp "$plugins_dir/detector" "$DEPLOY_DIR/plugins/detector/"
+        sudo chmod 755 "$DEPLOY_DIR/plugins/detector/detector"
+        # 复制 detector 配置文件
+        if [ -d "$AGENT_DIR/business_plugins/detector/config" ]; then
+            sudo cp -r "$AGENT_DIR/business_plugins/detector/config" "$DEPLOY_DIR/plugins/detector/"
+            info "Detector config copied"
+        fi
+        success "Detector plugin deployed"
+    else
+        warn "Detector plugin not found, skipping..."
     fi
 
     success "Plugins deployed to $DEPLOY_DIR/plugins/"

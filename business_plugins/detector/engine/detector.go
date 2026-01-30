@@ -46,3 +46,10 @@ type Detector interface {
 	// Check 检查事件是否触发告警
 	Check(event *Event) *Alert
 }
+
+// ConfigUpdater 支持动态配置更新的检测器接口
+type ConfigUpdater interface {
+	// UpdateConfig 更新检测器配置
+	// data 为 JSON 格式的配置数据
+	UpdateConfig(data string) error
+}

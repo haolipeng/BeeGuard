@@ -1,0 +1,142 @@
+command:
+  enabled: true
+
+  rules:
+    # 反向Shell检测
+    - name: reverse_shell_bash_tcp
+      description: "Bash反向Shell (/dev/tcp)"
+      category: reverse_shell
+      command_type: data_exfiltration
+      pattern: '/dev/tcp/\d+\.\d+\.\d+\.\d+/\d+'
+      level: 10
+
+    - name: reverse_shell_nc
+      description: "Netcat反向Shell"
+      category: reverse_shell
+      command_type: data_exfiltration
+      pattern: 'nc\s+.*-e\s+(/bin/)?(ba)?sh'
+      level: 10
+
+    - name: reverse_shell_nc_mkfifo
+      description: "Netcat FIFO反向Shell"
+      category: reverse_shell
+      command_type: data_exfiltration
+      pattern: 'mkfifo.*nc\s+'
+      level: 10
+
+    - name: reverse_shell_python
+      description: "Python反向Shell"
+      category: reverse_shell
+      command_type: data_exfiltration
+      pattern: 'python.*pty\.spawn|python.*socket.*connect'
+      level: 10
+
+    - name: reverse_shell_perl
+      description: "Perl反向Shell"
+      category: reverse_shell
+      command_type: data_exfiltration
+      pattern: 'perl.*socket.*exec'
+      level: 10
+
+    - name: reverse_shell_php
+      description: "PHP反向Shell"
+      category: reverse_shell
+      command_type: data_exfiltration
+      pattern: 'php.*fsockopen|php.*exec.*socket'
+      level: 10
+
+    - name: reverse_shell_ruby
+      description: "Ruby反向Shell"
+      category: reverse_shell
+      command_type: data_exfiltration
+      pattern: 'ruby.*TCPSocket.*exec'
+      level: 10
+
+    # 权限提升检测
+    - name: privilege_escalation_sudo_shell
+      description: "sudo获取Shell"
+      category: privilege_escalation
+      command_type: privilege_escalation
+      pattern: 'sudo\s+(-i|su\s+-|bash|sh|/bin/bash|/bin/sh)'
+      level: 8
+
+    - name: privilege_escalation_chmod_dangerous
+      description: "危险chmod操作"
+      category: privilege_escalation
+      command_type: permission_modify
+      pattern: 'chmod\s+(777|4755|u\+s|\+s)'
+      level: 7
+
+    - name: privilege_escalation_chown_root
+      description: "修改文件所有者为root"
+      category: privilege_escalation
+      command_type: permission_modify
+      pattern: 'chown\s+root'
+      level: 6
+
+    # 文件删除检测
+    - name: file_delete_rm_rf
+      description: "危险rm -rf操作"
+      category: file_delete
+      command_type: file_delete
+      pattern: 'rm\s+(-rf|-fr|--no-preserve-root)\s+/'
+      level: 9
+
+    - name: file_delete_shred
+      description: "安全删除文件"
+      category: file_delete
+      command_type: file_delete
+      pattern: 'shred\s+'
+      level: 7
+
+    # 日志篡改检测
+    - name: log_tamper_history
+      description: "清除历史记录"
+      category: log_tamper
+      command_type: log_tamper
+      pattern: 'history\s+-c|>\s*~/.bash_history|rm.*\.bash_history'
+      level: 9
+
+    - name: log_tamper_auth_log
+      description: "清除认证日志"
+      category: log_tamper
+      command_type: log_tamper
+      pattern: '>\s*/var/log/(auth|secure)|rm.*/var/log/(auth|secure)'
+      level: 10
+
+    # 网络扫描检测
+    - name: network_scan_nmap
+      description: "nmap扫描"
+      category: network_scan
+      command_type: network_scan
+      pattern: 'nmap\s+'
+      level: 6
+
+    - name: network_scan_masscan
+      description: "masscan扫描"
+      category: network_scan
+      command_type: network_scan
+      pattern: 'masscan\s+'
+      level: 7
+
+    # 服务停止检测
+    - name: service_stop_systemctl
+      description: "停止系统服务"
+      category: service_stop
+      command_type: service_stop
+      pattern: 'systemctl\s+stop\s+(sshd|firewalld|iptables|auditd)'
+      level: 8
+
+    - name: service_stop_kill
+      description: "强制终止关键进程"
+      category: service_stop
+      command_type: service_stop
+      pattern: 'kill\s+-9.*sshd|killall\s+sshd'
+      level: 9
+
+  whitelist:
+    users: []
+    commands: []
+    exe_paths:
+      - /usr/lib/systemd/
+      - /usr/libexec/
