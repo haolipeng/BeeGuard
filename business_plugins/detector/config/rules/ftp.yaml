@@ -1,0 +1,25 @@
+ftp:
+  enabled: true
+  log_paths:
+    - /var/log/vsftpd.log
+    - /var/log/xferlog
+  rules:
+    - name: auth_failure_brute_force
+      description: FTP认证失败暴力破解检测
+      action: failed
+      frequency: 6
+      timeframe: 120
+      level: 10
+      ignore: 60
+      group_by: source_ip
+    - name: multiple_connection_attempt
+      description: FTP多次连接尝试检测
+      action: connect
+      frequency: 10
+      timeframe: 60
+      level: 10
+      ignore: 60
+      group_by: source_ip
+  whitelist:
+    - 127.0.0.1
+    - ::1

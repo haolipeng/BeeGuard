@@ -1,0 +1,27 @@
+ssh:
+  enabled: true
+  log_paths:
+    - /var/log/auth.log
+    - /var/log/secure
+  rules:
+    - name: auth_failure_brute_force
+      description: SSH认证失败暴力破解检测
+      pattern: 'Failed (password|publickey) for .* from (\S+)'
+      action: failed
+      frequency: 6
+      timeframe: 120
+      level: 10
+      ignore: 60
+      group_by: source_ip
+    - name: invalid_user_brute_force
+      description: SSH非法用户暴力破解检测
+      pattern: '(Invalid|Illegal) user .* from (\S+)'
+      action: invalid_user
+      frequency: 6
+      timeframe: 120
+      level: 10
+      ignore: 60
+      group_by: source_ip
+  whitelist:
+    - 127.0.0.1
+    - ::1
