@@ -3,6 +3,7 @@ module gitlab.myinterest.top/security/agent
 go 1.25
 
 require (
+	business_plugins/lib v0.0.0
 	github.com/gogo/protobuf v1.3.2
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/golang-lru v1.0.2
@@ -28,3 +29,5 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251029180050-ab9386a59fda // indirect
 	google.golang.org/protobuf v1.36.10 // indirect
 )
+
+replace business_plugins/lib => ./business_plugins/lib

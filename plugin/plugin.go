@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"gitlab.myinterest.top/security/agent/agent"
+	businessplugins "business_plugins/lib"
 	"gitlab.myinterest.top/security/agent/proto"
 	"go.uber.org/zap"
 )
@@ -45,6 +46,9 @@ type Plugin struct {
 	txBytes uint64
 	rxCnt   uint64
 	txCnt   uint64
+
+	// 插件协议类型：true表示标准protobuf格式(driver等eBPF插件)，false表示优化格式(collector等)
+	useStandardProtocol bool
 	*zap.SugaredLogger
 }
 
@@ -77,6 +81,7 @@ func (p *Plugin) IsExited() bool {
 	return p.cmd.ProcessState != nil
 }
 
+// ReceiveData 接收优化格式的数据（collector等插件使用）
 func (p *Plugin) ReceiveData() (rec *proto.EncodedRecord, err error) {
 	var l uint32
 	err = binary.Read(p.reader, binary.LittleEndian, &l)
@@ -133,6 +138,49 @@ func (p *Plugin) ReceiveData() (rec *proto.EncodedRecord, err error) {
 	}
 	//atomic.AddUint64(&p.txCnt, 1)
 	//atomic.AddUint64(&p.txBytes, uint64(l))
+	return
+}
+
+// ReceiveStandardRecord 接收标准protobuf格式的Record（driver等eBPF插件使用）
+// 格式：[4字节长度(小端序)][Protobuf(bridge.Record)]
+func (p *Plugin) ReceiveStandardRecord() (rec *proto.EncodedRecord, err error) {
+	// 1. 读取4字节长度
+	var length uint32
+	err = binary.Read(p.reader, binary.LittleEndian, &length)
+	if err != nil {
+		return
+	}
+
+	// 2. 读取Protobuf数据
+	buf := make([]byte, length)
+	_, err = io.ReadFull(p.reader, buf)
+	if err != nil {
+		return
+	}
+
+	// 3. 反序列化bridge.Record
+	bridgeRec := &businessplugins.Record{}
+	err = bridgeRec.Unmarshal(buf)
+	if err != nil {
+		return
+	}
+
+	// 4. 转换为EncodedRecord
+	// 将Payload序列化为字节数组
+	var payloadData []byte
+	if bridgeRec.Data != nil {
+		payloadData, err = bridgeRec.Data.Marshal()
+		if err != nil {
+			return
+		}
+	}
+
+	rec = &proto.EncodedRecord{
+		DataType:  bridgeRec.DataType,
+		Timestamp: bridgeRec.Timestamp,
+		Data:      payloadData,
+	}
+
 	return
 }
 
