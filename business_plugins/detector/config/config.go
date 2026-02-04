@@ -41,12 +41,19 @@ type SSHAnomalyConfig struct {
 	IgnoreTime   int           `yaml:"ignore_time" json:"ignore_time"` // 告警抑制时间(秒)
 }
 
+// TimeRange 时间段定义
+type TimeRange struct {
+	Start string `yaml:"start" json:"start"` // 开始时间，格式 "HH:MM"，如 "09:00"
+	End   string `yaml:"end" json:"end"`     // 结束时间，格式 "HH:MM"，如 "18:00"
+}
+
 // AnomalyRule 异常登录白名单规则
 type AnomalyRule struct {
-	Name        string   `yaml:"name" json:"name"`
-	Description string   `yaml:"description" json:"description"`
-	Enabled     bool     `yaml:"enabled" json:"enabled"`
-	IPs         []string `yaml:"ips" json:"ips"` // IP白名单（单IP列表）
+	Name        string      `yaml:"name" json:"name"`
+	Description string      `yaml:"description" json:"description"`
+	Enabled     bool        `yaml:"enabled" json:"enabled"`
+	IPs         []string    `yaml:"ips" json:"ips"`                   // IP白名单（单IP列表）
+	TimeRanges  []TimeRange `yaml:"time_ranges" json:"time_ranges"`   // 允许的时间段列表，为空表示全天允许
 }
 
 // Rule 检测规则

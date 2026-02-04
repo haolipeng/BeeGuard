@@ -20,39 +20,97 @@ const (
 type Detector struct {
 	mu          sync.RWMutex
 	config      config.SSHAnomalyConfig
-	ipWhitelist map[string]bool   // 所有规则的IP白名单合集
-	alertCache  map[string]time.Time // IP -> 上次告警时间（告警抑制）
+	ipRuleIndex map[string][]*config.AnomalyRule // IP -> 包含该IP的规则列表
+	alertCache  map[string]time.Time             // IP -> 上次告警时间（告警抑制）
 }
 
 // New 创建SSH异常登录检测器
 func New(cfg config.SSHAnomalyConfig) (*Detector, error) {
 	d := &Detector{
 		config:      cfg,
-		ipWhitelist: make(map[string]bool),
+		ipRuleIndex: make(map[string][]*config.AnomalyRule),
 		alertCache:  make(map[string]time.Time),
 	}
 
-	// 编译IP白名单
-	d.compileIPWhitelist()
+	// 编译IP到规则的索引
+	d.compileIPRuleIndex()
 
 	return d, nil
 }
 
-// compileIPWhitelist 从所有启用的规则中收集IP白名单
-func (d *Detector) compileIPWhitelist() {
-	d.ipWhitelist = make(map[string]bool)
+// compileIPRuleIndex 构建IP到规则的索引映射
+func (d *Detector) compileIPRuleIndex() {
+	d.ipRuleIndex = make(map[string][]*config.AnomalyRule)
 
-	for _, rule := range d.config.AnomalyRules {
+	for i := range d.config.AnomalyRules {
+		rule := &d.config.AnomalyRules[i]
 		if !rule.Enabled {
 			continue
 		}
 		for _, ip := range rule.IPs {
-			d.ipWhitelist[ip] = true
+			d.ipRuleIndex[ip] = append(d.ipRuleIndex[ip], rule)
 		}
 	}
 
-	zap.S().Infof("SSH anomaly detector: compiled %d IPs in whitelist from %d rules",
-		len(d.ipWhitelist), len(d.config.AnomalyRules))
+	zap.S().Infof("SSH anomaly detector: compiled %d IPs from %d rules",
+		len(d.ipRuleIndex), len(d.config.AnomalyRules))
+}
+
+// parseTimeString 解析 "HH:MM" 格式的时间字符串
+func parseTimeString(s string) (hour, minute int, err error) {
+	var h, m int
+	n, err := fmt.Sscanf(s, "%d:%d", &h, &m)
+	if err != nil || n != 2 {
+		return 0, 0, fmt.Errorf("invalid time format: %s, expected HH:MM", s)
+	}
+	if h < 0 || h > 23 || m < 0 || m > 59 {
+		return 0, 0, fmt.Errorf("invalid time value: %s", s)
+	}
+	return h, m, nil
+}
+
+// isTimeInRange 检查时间是否在单个时间段内
+func isTimeInRange(t time.Time, tr config.TimeRange) bool {
+	startHour, startMin, err := parseTimeString(tr.Start)
+	if err != nil {
+		zap.S().Warnf("invalid time range start: %v", err)
+		return true // 配置错误时默认允许
+	}
+
+	endHour, endMin, err := parseTimeString(tr.End)
+	if err != nil {
+		zap.S().Warnf("invalid time range end: %v", err)
+		return true // 配置错误时默认允许
+	}
+
+	// 检查 start >= end 的无效配置
+	startMins := startHour*60 + startMin
+	endMins := endHour*60 + endMin
+	if startMins >= endMins {
+		zap.S().Warnf("invalid time range: start %s >= end %s", tr.Start, tr.End)
+		return true // 配置错误时默认允许
+	}
+
+	// 获取事件时间的时分
+	eventMins := t.Hour()*60 + t.Minute()
+
+	return eventMins >= startMins && eventMins <= endMins
+}
+
+// isTimeAllowed 检查时间是否在规则的任意时间段内
+func isTimeAllowed(t time.Time, rule *config.AnomalyRule) bool {
+	// 没有配置时间段，默认全天允许
+	if len(rule.TimeRanges) == 0 {
+		return true
+	}
+
+	// 检查是否在任一时间段内
+	for _, tr := range rule.TimeRanges {
+		if isTimeInRange(t, tr) {
+			return true
+		}
+	}
+	return false
 }
 
 // hasEnabledRules 检查是否有启用的规则
@@ -108,13 +166,38 @@ func (d *Detector) Check(event *engine.Event) *engine.Alert {
 		return nil
 	}
 
-	// 检查IP是否在白名单中
-	if d.ipWhitelist[event.SourceIP] {
-		// 正常登录，不告警
-		return nil
+	// 检查IP是否在白名单中，并验证时间段
+	rules, found := d.ipRuleIndex[event.SourceIP]
+	if found {
+		for _, rule := range rules {
+			if isTimeAllowed(event.Timestamp, rule) {
+				// IP匹配且时间允许，正常登录
+				return nil
+			}
+		}
+		// IP在白名单但时间不允许 -> 生成时间异常告警
+		if d.shouldSuppressAlert(event.SourceIP) {
+			zap.S().Debugf("SSH anomaly alert suppressed for IP %s", event.SourceIP)
+			return nil
+		}
+		d.alertCache[event.SourceIP] = time.Now()
+		return &engine.Alert{
+			AlertType:   "anomaly_login",
+			Service:     "ssh",
+			RuleName:    "ssh_anomaly_login",
+			Description: fmt.Sprintf("检测到SSH异常登录: 用户 %s 从 %s 在 %s 登录，该时间不在允许的时间段内",
+				event.Username, event.SourceIP, event.Timestamp.Format("15:04")),
+			SourceIP:   event.SourceIP,
+			TargetUser: event.Username,
+			Count:      1,
+			Timeframe:  0,
+			FirstSeen:  event.Timestamp.Unix(),
+			LastSeen:   event.Timestamp.Unix(),
+			Level:      d.config.AlertLevel,
+		}
 	}
 
-	// 检查告警抑制
+	// IP不在白名单，检查告警抑制
 	if d.shouldSuppressAlert(event.SourceIP) {
 		zap.S().Debugf("SSH anomaly alert suppressed for IP %s", event.SourceIP)
 		return nil
@@ -123,7 +206,7 @@ func (d *Detector) Check(event *engine.Event) *engine.Alert {
 	// 更新告警缓存
 	d.alertCache[event.SourceIP] = time.Now()
 
-	// 异常登录，生成告警
+	// IP异常登录，生成告警
 	return &engine.Alert{
 		AlertType:   "anomaly_login",
 		Service:     "ssh",
@@ -163,14 +246,14 @@ func (d *Detector) UpdateConfig(data string) error {
 
 	d.config = *newCfg
 
-	// 重新编译IP白名单
-	d.compileIPWhitelist()
+	// 重新编译IP到规则的索引
+	d.compileIPRuleIndex()
 
 	// 清空告警缓存
 	d.alertCache = make(map[string]time.Time)
 
-	zap.S().Infof("SSH anomaly detector config updated: %d rules, %d IPs in whitelist",
-		len(d.config.AnomalyRules), len(d.ipWhitelist))
+	zap.S().Infof("SSH anomaly detector config updated: %d rules, %d IPs indexed",
+		len(d.config.AnomalyRules), len(d.ipRuleIndex))
 
 	return nil
 }

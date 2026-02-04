@@ -19,7 +19,7 @@ struct {
     __uint(max_entries, 1);
 } percpu_buf SEC(".maps");
 
-// 批次3注释：完整路径采集在eBPF中实现复杂，受限于验证器
+// 完整路径采集在eBPF中实现复杂，受限于验证器
 // 当前使用简化实现（读取文件名），后续可在Go层通过/proc补全
 static __always_inline int read_full_exe_path(struct task_struct *task, char *buf, int buf_size)
 {
@@ -119,13 +119,13 @@ int tp_proc_exec(struct bpf_raw_tracepoint_args *ctx)
     evt->pid = id;           // 低32位：线程ID
     evt->tgid = id >> 32;    // 高32位：进程ID（线程组ID）
 
-    // 批次3新增：获取父进程信息
+    // 获取父进程信息
     parent = BPF_CORE_READ(task, real_parent);
     if (parent) {
         evt->ppid = BPF_CORE_READ(parent, tgid);
     }
 
-    // 批次3新增：获取进程组ID（简化版，直接读取）
+    // 获取进程组ID（简化版）
     // 完整的PGID需要复杂的namespace处理，这里使用简化实现
     evt->pgid = BPF_CORE_READ(task, tgid);
 
@@ -136,14 +136,13 @@ int tp_proc_exec(struct bpf_raw_tracepoint_args *ctx)
     // 获取进程名（comm字段，最多16字节）
     bpf_get_current_comm(&evt->comm, sizeof(evt->comm));
 
-    // 批次3增强：读取完整可执行文件路径
+    // 读取完整可执行文件路径
     read_full_exe_path(task, evt->exe_path, sizeof(evt->exe_path));
 
     // 读取命令行参数
     read_args(task, evt->args, sizeof(evt->args));
 
     // 通过Perf Event Array输出事件到用户态
-    // BPF_F_CURRENT_CPU: 使用当前CPU的缓冲区，避免锁竞争
     bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU,
                           evt, sizeof(*evt));
 
