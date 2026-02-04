@@ -11,9 +11,9 @@ import (
 
 // Config 全局配置
 type Config struct {
-	SSH     SSHConfig     `yaml:"ssh" json:"ssh"`
-	FTP     FTPConfig     `yaml:"ftp" json:"ftp"`
-	Command CommandConfig `yaml:"command" json:"command"`
+	SSH        SSHConfig        `yaml:"ssh" json:"ssh"`
+	FTP        FTPConfig        `yaml:"ftp" json:"ftp"`
+	SSHAnomaly SSHAnomalyConfig `yaml:"ssh_anomaly" json:"ssh_anomaly"`
 }
 
 // SSHConfig SSH检测配置
@@ -32,28 +32,21 @@ type FTPConfig struct {
 	Whitelist []string `yaml:"whitelist" json:"whitelist"`
 }
 
-// CommandConfig 高危命令检测配置
-type CommandConfig struct {
-	Enabled   bool              `yaml:"enabled" json:"enabled"`
-	Rules     []CommandRule     `yaml:"rules" json:"rules"`
-	Whitelist CommandWhitelist  `yaml:"whitelist" json:"whitelist"`
+// SSHAnomalyConfig SSH异常登录检测配置
+type SSHAnomalyConfig struct {
+	Enabled      bool          `yaml:"enabled" json:"enabled"`
+	LogPaths     []string      `yaml:"log_paths" json:"log_paths"`
+	AnomalyRules []AnomalyRule `yaml:"anomaly_rules" json:"anomaly_rules"`
+	AlertLevel   int           `yaml:"alert_level" json:"alert_level"`
+	IgnoreTime   int           `yaml:"ignore_time" json:"ignore_time"` // 告警抑制时间(秒)
 }
 
-// CommandRule 高危命令检测规则
-type CommandRule struct {
-	Name        string `yaml:"name" json:"name"`
-	Description string `yaml:"description" json:"description"`
-	Category    string `yaml:"category" json:"category"`       // reverse_shell, privilege_escalation, file_delete, etc.
-	CommandType string `yaml:"command_type" json:"command_type"` // soc_tech_doc.md 定义的枚举值
-	Pattern     string `yaml:"pattern" json:"pattern"`
-	Level       int    `yaml:"level" json:"level"`
-}
-
-// CommandWhitelist 高危命令白名单
-type CommandWhitelist struct {
-	Users    []string `yaml:"users" json:"users"`
-	Commands []string `yaml:"commands" json:"commands"`
-	ExePaths []string `yaml:"exe_paths" json:"exe_paths"`
+// AnomalyRule 异常登录白名单规则
+type AnomalyRule struct {
+	Name        string   `yaml:"name" json:"name"`
+	Description string   `yaml:"description" json:"description"`
+	Enabled     bool     `yaml:"enabled" json:"enabled"`
+	IPs         []string `yaml:"ips" json:"ips"` // IP白名单（单IP列表）
 }
 
 // Rule 检测规则
@@ -73,8 +66,8 @@ type Rule struct {
 func Load(configDir string) (*Config, error) {
 	cfg := &Config{}
 
-	// 加载SSH配置
-	sshConfigPath := filepath.Join(configDir, "ssh.yaml")
+	// 加载SSH暴力破解检测配置
+	sshConfigPath := filepath.Join(configDir, "ssh_brute_force.yaml")
 	if _, err := os.Stat(sshConfigPath); err == nil {
 		sshCfg, err := loadSSHConfig(sshConfigPath)
 		if err != nil {
@@ -86,8 +79,8 @@ func Load(configDir string) (*Config, error) {
 		cfg.SSH = defaultSSHConfig()
 	}
 
-	// 加载FTP配置
-	ftpConfigPath := filepath.Join(configDir, "ftp.yaml")
+	// 加载FTP暴力破解检测配置
+	ftpConfigPath := filepath.Join(configDir, "ftp_brute_force.yaml")
 	if _, err := os.Stat(ftpConfigPath); err == nil {
 		ftpCfg, err := loadFTPConfig(ftpConfigPath)
 		if err != nil {
@@ -99,17 +92,17 @@ func Load(configDir string) (*Config, error) {
 		cfg.FTP = defaultFTPConfig()
 	}
 
-	// 加载Command配置
-	cmdConfigPath := filepath.Join(configDir, "command.yaml")
-	if _, err := os.Stat(cmdConfigPath); err == nil {
-		cmdCfg, err := loadCommandConfig(cmdConfigPath)
+	// 加载SSH异常登录检测配置
+	sshAnomalyConfigPath := filepath.Join(configDir, "ssh_anomaly_login.yaml")
+	if _, err := os.Stat(sshAnomalyConfigPath); err == nil {
+		sshAnomalyCfg, err := loadSSHAnomalyConfig(sshAnomalyConfigPath)
 		if err != nil {
-			return nil, fmt.Errorf("failed to load command config: %w", err)
+			return nil, fmt.Errorf("failed to load ssh_anomaly_login config: %w", err)
 		}
-		cfg.Command = *cmdCfg
+		cfg.SSHAnomaly = *sshAnomalyCfg
 	} else {
-		// 使用默认配置
-		cfg.Command = defaultCommandConfig()
+		// 使用默认配置（功能关闭）
+		cfg.SSHAnomaly = defaultSSHAnomalyConfig()
 	}
 
 	return cfg, nil
@@ -339,84 +332,67 @@ func ParseFTPConfigFromJSON(data string) (*FTPConfig, error) {
 	return &wrapper.FTP, nil
 }
 
-// loadCommandConfig 加载Command配置文件
-func loadCommandConfig(path string) (*CommandConfig, error) {
+// loadSSHAnomalyConfig 加载SSH异常登录检测配置文件
+func loadSSHAnomalyConfig(path string) (*SSHAnomalyConfig, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
 
 	var wrapper struct {
-		Command CommandConfig `yaml:"command"`
+		SSHAnomaly SSHAnomalyConfig `yaml:"ssh_anomaly_login"`
 	}
 	if err := yaml.Unmarshal(data, &wrapper); err != nil {
 		return nil, err
 	}
 
 	// 设置默认值
-	setCommandDefaults(&wrapper.Command)
+	setSSHAnomalyDefaults(&wrapper.SSHAnomaly)
 
-	return &wrapper.Command, nil
+	return &wrapper.SSHAnomaly, nil
 }
 
-// defaultCommandConfig 返回默认Command配置
-func defaultCommandConfig() CommandConfig {
-	return CommandConfig{
-		Enabled: true,
-		Rules: []CommandRule{
-			{
-				Name:        "reverse_shell_bash_tcp",
-				Description: "Bash反向Shell (/dev/tcp)",
-				Category:    "reverse_shell",
-				CommandType: "data_exfiltration",
-				Pattern:     `/dev/tcp/\d+\.\d+\.\d+\.\d+/\d+`,
-				Level:       10,
-			},
-			{
-				Name:        "reverse_shell_nc",
-				Description: "Netcat反向Shell",
-				Category:    "reverse_shell",
-				CommandType: "data_exfiltration",
-				Pattern:     `nc\s+.*-e\s+(/bin/)?(ba)?sh`,
-				Level:       10,
-			},
-			{
-				Name:        "privilege_escalation_chmod",
-				Description: "危险chmod操作",
-				Category:    "privilege_escalation",
-				CommandType: "permission_modify",
-				Pattern:     `chmod\s+(777|4755|u\+s)`,
-				Level:       7,
-			},
+// defaultSSHAnomalyConfig 返回默认SSH异常登录配置（功能关闭）
+func defaultSSHAnomalyConfig() SSHAnomalyConfig {
+	return SSHAnomalyConfig{
+		Enabled: false,
+		LogPaths: []string{
+			"/var/log/auth.log",
+			"/var/log/secure",
 		},
-		Whitelist: CommandWhitelist{
-			Users:    []string{},
-			Commands: []string{},
-			ExePaths: []string{"/usr/lib/systemd/"},
-		},
+		AnomalyRules: []AnomalyRule{},
+		AlertLevel:   8,
+		IgnoreTime:   300,
 	}
 }
 
-// setCommandDefaults 设置Command配置默认值
-func setCommandDefaults(cfg *CommandConfig) {
-	for i := range cfg.Rules {
-		if cfg.Rules[i].Level == 0 {
-			cfg.Rules[i].Level = 10
+// setSSHAnomalyDefaults 设置SSH异常登录配置默认值
+func setSSHAnomalyDefaults(cfg *SSHAnomalyConfig) {
+	if len(cfg.LogPaths) == 0 {
+		cfg.LogPaths = []string{
+			"/var/log/auth.log",
+			"/var/log/secure",
 		}
 	}
+	if cfg.AlertLevel == 0 {
+		cfg.AlertLevel = 8
+	}
+	if cfg.IgnoreTime == 0 {
+		cfg.IgnoreTime = 300
+	}
 }
 
-// ParseCommandConfigFromJSON 从 JSON 字符串解析 Command 配置
-func ParseCommandConfigFromJSON(data string) (*CommandConfig, error) {
+// ParseSSHAnomalyConfigFromJSON 从 JSON 字符串解析 SSH 异常登录配置
+func ParseSSHAnomalyConfigFromJSON(data string) (*SSHAnomalyConfig, error) {
 	var wrapper struct {
-		Command CommandConfig `json:"command"`
+		SSHAnomaly SSHAnomalyConfig `json:"ssh_anomaly_login"`
 	}
 	if err := json.Unmarshal([]byte(data), &wrapper); err != nil {
 		return nil, fmt.Errorf("failed to parse json: %w", err)
 	}
 
 	// 设置默认值
-	setCommandDefaults(&wrapper.Command)
+	setSSHAnomalyDefaults(&wrapper.SSHAnomaly)
 
-	return &wrapper.Command, nil
+	return &wrapper.SSHAnomaly, nil
 }

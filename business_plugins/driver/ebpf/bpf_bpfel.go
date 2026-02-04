@@ -15,7 +15,10 @@ import (
 type bpfExecveEvent struct {
 	Pid     uint32
 	Tgid    uint32
+	Ppid    uint32
+	Pgid    uint32
 	Uid     uint32
+	Padding uint32
 	Comm    [16]int8
 	ExePath [256]int8
 	Args    [512]int8

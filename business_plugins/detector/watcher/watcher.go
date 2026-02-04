@@ -39,10 +39,10 @@ func (w *Watcher) Start() error {
 		}
 
 		t, err := tail.TailFile(path, tail.Config{
-			Follow:    true,           // 持续跟踪文件
-			ReOpen:    true,           // 支持日志轮转后重新打开
-			MustExist: false,          // 文件不存在时不报错
-			Poll:      true,           // 使用轮询模式(兼容性更好)
+			Follow:    true,                                              // 持续跟踪文件
+			ReOpen:    true,                                              // 支持日志轮转后重新打开
+			MustExist: false,                                             // 文件不存在时不报错
+			Poll:      true,                                              // 使用轮询模式(兼容性更好)
 			Location:  &tail.SeekInfo{Offset: 0, Whence: os.SEEK_END}, // 从文件末尾开始
 		})
 		if err != nil {

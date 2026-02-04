@@ -130,18 +130,26 @@ func Load(ctx context.Context, config proto.Config) (plg *Plugin, err error) {
 	if err != nil {
 		return
 	}
+	// 判断插件是否使用标准protobuf协议（driver等eBPF插件）
+	useStandardProtocol := false
+	if config.Name == "driver" {
+		useStandardProtocol = true
+		logger.Info("plugin will use standard protobuf protocol")
+	}
+
 	plg = &Plugin{
-		Config:        config,
-		mu:            &sync.Mutex{},
-		cmd:           cmd,
-		rx:            rx_r,
-		updateTime:    time.Now(),
-		reader:        bufio.NewReaderSize(rx_r, 1024*128),
-		tx:            tx_w,
-		done:          make(chan struct{}),
-		taskCh:        make(chan proto.Task),
-		wg:            &sync.WaitGroup{},
-		SugaredLogger: logger,
+		Config:              config,
+		mu:                  &sync.Mutex{},
+		cmd:                 cmd,
+		rx:                  rx_r,
+		updateTime:          time.Now(),
+		reader:              bufio.NewReaderSize(rx_r, 1024*128),
+		tx:                  tx_w,
+		done:                make(chan struct{}),
+		taskCh:              make(chan proto.Task),
+		wg:                  &sync.WaitGroup{},
+		useStandardProtocol: useStandardProtocol,
+		SugaredLogger:       logger,
 	}
 	plg.wg.Add(3)
 
@@ -169,7 +177,16 @@ func Load(ctx context.Context, config proto.Config) (plg *Plugin, err error) {
 		defer plg.Info("gorountine of receiving plugin's data will exit")
 
 		for {
-			rec, err := plg.ReceiveData()
+			var rec *proto.EncodedRecord
+			var err error
+
+			// 根据插件类型选择接收方法
+			if plg.useStandardProtocol {
+				rec, err = plg.ReceiveStandardRecord()
+			} else {
+				rec, err = plg.ReceiveData()
+			}
+
 			if err != nil {
 				if errors.Is(err, bufio.ErrBufferFull) {
 					plg.Warn("when receiving data, buffer is full, skip this record")
@@ -177,7 +194,7 @@ func Load(ctx context.Context, config proto.Config) (plg *Plugin, err error) {
 				} else if !(errors.Is(err, io.EOF) || errors.Is(err, io.ErrClosedPipe) || errors.Is(err, os.ErrClosed)) {
 					plg.Error("when receiving data, an error occurred: ", err)
 				} else {
-					plg.Error("when receiving data, meet unexpected error: ", err)
+					plg.Info("when receiving data, pipe closed normally")
 					break
 				}
 			}

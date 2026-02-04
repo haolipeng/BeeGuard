@@ -1,0 +1,25 @@
+ssh_anomaly_login:
+  enabled: false
+  log_paths:
+    - /var/log/auth.log
+    - /var/log/secure
+  alert_level: 8
+  ignore_time: 300
+
+  anomaly_rules: []
+  # 示例规则配置:
+  # anomaly_rules:
+  #   - name: office_ips
+  #     description: "办公网段IP"
+  #     enabled: true
+  #     ips:
+  #       - 192.168.1.100
+  #       - 192.168.1.101
+  #       - 10.0.0.1
+  #
+  #   - name: ops_ips
+  #     description: "运维IP"
+  #     enabled: true
+  #     ips:
+  #       - 10.10.10.50
+  #       - 10.10.10.51

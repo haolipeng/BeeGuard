@@ -10,9 +10,9 @@ import (
 	businessplugins "business_plugins/lib"
 
 	"gitlab.myinterest.top/security/agent/business_plugins/detector/config"
-	"gitlab.myinterest.top/security/agent/business_plugins/detector/detector/command"
-	"gitlab.myinterest.top/security/agent/business_plugins/detector/detector/ftp"
-	"gitlab.myinterest.top/security/agent/business_plugins/detector/detector/ssh"
+	bruteforceftp "gitlab.myinterest.top/security/agent/business_plugins/detector/brute_force/ftp"
+	bruteforcessh "gitlab.myinterest.top/security/agent/business_plugins/detector/brute_force/ssh"
+	anomalyloginssh "gitlab.myinterest.top/security/agent/business_plugins/detector/anomaly_login/ssh"
 	"gitlab.myinterest.top/security/agent/business_plugins/detector/engine"
 	"gitlab.myinterest.top/security/agent/business_plugins/detector/log"
 	"go.uber.org/zap"
@@ -122,34 +122,34 @@ func main() {
 	// 创建检测引擎
 	eng := engine.New(pluginClient)
 
-	// 注册SSH检测器
+	// 注册SSH暴力破解检测器
 	if cfg.SSH.Enabled {
-		sshDetector := ssh.New(cfg.SSH)
+		sshDetector := bruteforcessh.New(cfg.SSH)
 		eng.Register(sshDetector)
 		// 注册到 detectors map，用于配置更新
 		detectors["ssh"] = sshDetector
-		zap.S().Info("SSH detector registered")
+		zap.S().Info("SSH brute force detector registered")
 	}
 
-	// 注册FTP检测器
+	// 注册FTP暴力破解检测器
 	if cfg.FTP.Enabled {
-		ftpDetector := ftp.New(cfg.FTP)
+		ftpDetector := bruteforceftp.New(cfg.FTP)
 		eng.Register(ftpDetector)
 		// 注册到 detectors map，用于配置更新
 		detectors["ftp"] = ftpDetector
-		zap.S().Info("FTP detector registered")
+		zap.S().Info("FTP brute force detector registered")
 	}
 
-	// 注册高危命令检测器 (使用审计子系统，独立于Engine运行)
-	var cmdDetector *command.Detector
-	if cfg.Command.Enabled {
-		cmdDetector = command.New(cfg.Command, pluginClient)
-		if err := cmdDetector.Start(); err != nil {
-			zap.S().Warnf("failed to start command detector: %v (audit may not be available)", err)
+	// 注册SSH异常登录检测器
+	if cfg.SSHAnomaly.Enabled {
+		sshAnomalyDetector, err := anomalyloginssh.New(cfg.SSHAnomaly)
+		if err != nil {
+			zap.S().Errorf("failed to create ssh_anomaly_login detector: %v", err)
 		} else {
+			eng.Register(sshAnomalyDetector)
 			// 注册到 detectors map，用于配置更新
-			detectors["command"] = cmdDetector
-			zap.S().Info("Command detector registered")
+			detectors["ssh_anomaly_login"] = sshAnomalyDetector
+			zap.S().Info("SSH anomaly login detector registered")
 		}
 	}
 
@@ -175,11 +175,6 @@ func main() {
 	<-sigCh
 
 	zap.S().Info("detector plugin stopping...")
-
-	// 停止高危命令检测器
-	if cmdDetector != nil {
-		cmdDetector.Stop()
-	}
 
 	eng.Stop()
 	pluginClient.Close()

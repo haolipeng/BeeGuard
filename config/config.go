@@ -28,6 +28,27 @@ type Config struct {
 
 	// RetryInterval 重试间隔（秒）
 	RetryInterval int `yaml:"retry_interval"`
+
+	// Standalone standalone 模式配置
+	Standalone *StandaloneConfig `yaml:"standalone,omitempty"`
+}
+
+// StandaloneConfig standalone 模式配置
+type StandaloneConfig struct {
+	// Enabled 是否启用 standalone 模式
+	Enabled bool `yaml:"enabled"`
+
+	// Output 输出方式: "log" (zap日志) 或 "file" (JSON文件)
+	Output string `yaml:"output"`
+
+	// OutputPath JSON文件输出路径（当 Output 为 "file" 时生效）
+	OutputPath string `yaml:"output_path"`
+
+	// Plugins 指定加载的插件列表，为空则加载全部
+	Plugins []string `yaml:"plugins,omitempty"`
+
+	// FlushInterval 刷新间隔（秒）
+	FlushInterval int `yaml:"flush_interval"`
 }
 
 var (
@@ -92,12 +113,26 @@ func Load() (*Config, error) {
 
 // ValidateAndSetDefaults 验证配置并设置默认值
 func ValidateAndSetDefaults(cfg *Config) error {
-	// 1. 验证必填配置项
-	if cfg.Server == "" {
-		return fmt.Errorf("server address is required")
+	// 1. Standalone 模式下 server 不是必须的
+	isStandalone := cfg.Standalone != nil && cfg.Standalone.Enabled
+	if !isStandalone && cfg.Server == "" {
+		return fmt.Errorf("server address is required (or enable standalone mode)")
 	}
 
-	// 2. 设置默认值
+	// 2. 设置 standalone 模式默认值
+	if isStandalone {
+		if cfg.Standalone.Output == "" {
+			cfg.Standalone.Output = "log"
+		}
+		if cfg.Standalone.OutputPath == "" {
+			cfg.Standalone.OutputPath = "/tmp/cloudsec-detection-results.json"
+		}
+		if cfg.Standalone.FlushInterval <= 0 {
+			cfg.Standalone.FlushInterval = 1 // 默认 1 秒
+		}
+	}
+
+	// 3. 设置默认值
 	if cfg.ConnectTimeout <= 0 {
 		cfg.ConnectTimeout = 30 // 默认 30 秒
 	}
@@ -154,4 +189,50 @@ func Get() (*Config, error) {
 		return nil, errors.New("config not initialized, call Init() first")
 	}
 	return globalConfig, nil
+}
+
+// SetStandalone 设置 standalone 模式配置（供命令行参数使用）
+// 在 Init() 之后调用
+func SetStandalone(enabled bool, output, outputPath string, plugins []string) error {
+	if globalConfig == nil {
+		return errors.New("config not initialized, call Init() first")
+	}
+
+	if !enabled {
+		return nil
+	}
+
+	if globalConfig.Standalone == nil {
+		globalConfig.Standalone = &StandaloneConfig{}
+	}
+
+	globalConfig.Standalone.Enabled = true
+
+	if output != "" {
+		globalConfig.Standalone.Output = output
+	}
+	if outputPath != "" {
+		globalConfig.Standalone.OutputPath = outputPath
+	}
+	if len(plugins) > 0 {
+		globalConfig.Standalone.Plugins = plugins
+	}
+
+	// 设置默认值
+	if globalConfig.Standalone.Output == "" {
+		globalConfig.Standalone.Output = "log"
+	}
+	if globalConfig.Standalone.FlushInterval <= 0 {
+		globalConfig.Standalone.FlushInterval = 1
+	}
+
+	return nil
+}
+
+// IsStandalone 检查是否为 standalone 模式
+func IsStandalone() bool {
+	if globalConfig == nil {
+		return false
+	}
+	return globalConfig.Standalone != nil && globalConfig.Standalone.Enabled
 }

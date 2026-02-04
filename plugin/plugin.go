@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"gitlab.myinterest.top/security/agent/agent"
+	businessplugins "business_plugins/lib"
+	"gitlab.myinterest.top/security/agent/config"
 	"gitlab.myinterest.top/security/agent/proto"
 	"go.uber.org/zap"
 )
@@ -45,6 +47,9 @@ type Plugin struct {
 	txBytes uint64
 	rxCnt   uint64
 	txCnt   uint64
+
+	// 插件协议类型：true表示标准protobuf格式(driver等eBPF插件)，false表示优化格式(collector等)
+	useStandardProtocol bool
 	*zap.SugaredLogger
 }
 
@@ -77,6 +82,7 @@ func (p *Plugin) IsExited() bool {
 	return p.cmd.ProcessState != nil
 }
 
+// ReceiveData 接收优化格式的数据（collector等插件使用）
 func (p *Plugin) ReceiveData() (rec *proto.EncodedRecord, err error) {
 	var l uint32
 	err = binary.Read(p.reader, binary.LittleEndian, &l)
@@ -136,6 +142,49 @@ func (p *Plugin) ReceiveData() (rec *proto.EncodedRecord, err error) {
 	return
 }
 
+// ReceiveStandardRecord 接收标准protobuf格式的Record（driver等eBPF插件使用）
+// 格式：[4字节长度(小端序)][Protobuf(bridge.Record)]
+func (p *Plugin) ReceiveStandardRecord() (rec *proto.EncodedRecord, err error) {
+	// 1. 读取4字节长度
+	var length uint32
+	err = binary.Read(p.reader, binary.LittleEndian, &length)
+	if err != nil {
+		return
+	}
+
+	// 2. 读取Protobuf数据
+	buf := make([]byte, length)
+	_, err = io.ReadFull(p.reader, buf)
+	if err != nil {
+		return
+	}
+
+	// 3. 反序列化bridge.Record
+	bridgeRec := &businessplugins.Record{}
+	err = bridgeRec.Unmarshal(buf)
+	if err != nil {
+		return
+	}
+
+	// 4. 转换为EncodedRecord
+	// 将Payload序列化为字节数组
+	var payloadData []byte
+	if bridgeRec.Data != nil {
+		payloadData, err = bridgeRec.Data.Marshal()
+		if err != nil {
+			return
+		}
+	}
+
+	rec = &proto.EncodedRecord{
+		DataType:  bridgeRec.DataType,
+		Timestamp: bridgeRec.Timestamp,
+		Data:      payloadData,
+	}
+
+	return
+}
+
 // 向任务队列中投递任务
 func (p *Plugin) SendTask(task proto.Task) (err error) {
 	select {
@@ -184,6 +233,18 @@ func Startup(ctx context.Context, wg *sync.WaitGroup) {
 	statusTicker := time.NewTicker(30 * time.Second)
 	defer statusTicker.Stop()
 	zap.S().Info("plugin daemon startup")
+
+	// Standalone 模式：自动扫描并加载本地插件
+	if config.IsStandalone() {
+		cfg, _ := config.Get()
+		go func() {
+			// 等待一小段时间确保初始化完成
+			time.Sleep(time.Second)
+			if err := loadLocalPlugins(ctx, cfg.Standalone.Plugins); err != nil {
+				zap.S().Errorf("failed to load local plugins: %v", err)
+			}
+		}()
+	}
 
 	//无限循环等待，从syncCh通道中获取配置，然后加载插件或移除插件
 	for {
@@ -252,4 +313,56 @@ func Startup(ctx context.Context, wg *sync.WaitGroup) {
 			zap.S().Infof("sync done")
 		}
 	}
+}
+
+// loadLocalPlugins 加载本地插件（standalone 模式）
+func loadLocalPlugins(ctx context.Context, allowedPlugins []string) error {
+	pluginsDir := agent.PluginsDirectory
+	entries, err := os.ReadDir(pluginsDir)
+	if err != nil {
+		return fmt.Errorf("failed to read plugins directory %s: %w", pluginsDir, err)
+	}
+
+	// 构建允许加载的插件映射
+	allowedMap := make(map[string]bool)
+	for _, p := range allowedPlugins {
+		allowedMap[p] = true
+	}
+
+	zap.S().Infof("scanning plugins directory: %s", pluginsDir)
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		pluginName := entry.Name()
+
+		// 如果指定了允许的插件列表，检查是否在列表中
+		if len(allowedPlugins) > 0 && !allowedMap[pluginName] {
+			zap.S().Infof("skipping plugin %s (not in allowed list)", pluginName)
+			continue
+		}
+
+		// 创建虚拟配置来加载插件
+		pluginConfig := proto.Config{
+			Name:    pluginName,
+			Version: "standalone",
+		}
+
+		zap.S().Infof("loading local plugin: %s", pluginName)
+
+		plg, err := Load(ctx, pluginConfig)
+		if err != nil {
+			if err == ErrDuplicatePlugin {
+				zap.S().Infof("plugin %s already loaded", pluginName)
+				continue
+			}
+			zap.S().Errorf("failed to load plugin %s: %v", pluginName, err)
+			continue
+		}
+		plg.Infof("plugin loaded in standalone mode")
+	}
+
+	return nil
 }

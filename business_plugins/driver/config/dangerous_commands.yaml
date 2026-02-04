@@ -1,0 +1,207 @@
+# 高危命令检测规则配置文件
+# 说明: 此文件定义高危命令的检测规则，支持动态加载
+
+version: "1.0"
+description: "高危命令检测规则"
+
+rules:
+  # ============================================
+  # 危险删除操作
+  # ============================================
+  - id: "DC001"
+    name: "危险删除操作"
+    description: "检测可能导致系统损坏的删除命令，如 rm -rf /"
+    severity: "critical"
+    enabled: true
+    match:
+      type: "regex"
+      patterns:
+        - "rm\\s+.*-rf\\s+/"
+        - "rm\\s+.*--no-preserve-root"
+        - "rm\\s+-rf\\s+/\\*"
+        - "rm\\s+-rf\\s+~"
+
+  # ============================================
+  # 敏感文件访问
+  # ============================================
+  - id: "DC002"
+    name: "敏感文件访问"
+    description: "检测对敏感系统文件的读取或修改操作"
+    severity: "high"
+    enabled: true
+    match:
+      type: "regex"
+      patterns:
+        - "cat\\s+.*/etc/(passwd|shadow|sudoers)"
+        - "vi(m)?\\s+.*/etc/(passwd|shadow|sudoers)"
+        - "nano\\s+.*/etc/(passwd|shadow|sudoers)"
+        - "less\\s+.*/etc/shadow"
+        - "more\\s+.*/etc/shadow"
+        - "head\\s+.*/etc/shadow"
+        - "tail\\s+.*/etc/shadow"
+
+  # ============================================
+  # 危险权限修改
+  # ============================================
+  - id: "DC003"
+    name: "危险权限修改"
+    description: "检测危险的文件权限修改操作，如设置777权限或SUID位"
+    severity: "high"
+    enabled: true
+    match:
+      type: "regex"
+      patterns:
+        - "chmod\\s+.*777\\s+/"
+        - "chmod\\s+.*\\+s\\s+"
+        - "chmod\\s+4[0-7]{3}\\s+"
+        - "chown\\s+root:\\s+"
+        - "chown\\s+root:root\\s+/"
+
+  # ============================================
+  # 下载并执行
+  # ============================================
+  - id: "DC004"
+    name: "下载并执行"
+    description: "检测从网络下载并直接执行的命令模式"
+    severity: "critical"
+    enabled: true
+    match:
+      type: "regex"
+      patterns:
+        - "curl\\s+.*\\|\\s*(ba)?sh"
+        - "wget\\s+.*-O\\s*-\\s*\\|\\s*(ba)?sh"
+        - "curl\\s+.*>\\s*/tmp/.*&&.*sh"
+        - "wget\\s+.*&&\\s*(ba)?sh"
+        - "curl\\s+.*-o\\s+/tmp/.*&&"
+
+  # ============================================
+  # 计划任务修改
+  # ============================================
+  - id: "DC005"
+    name: "计划任务修改"
+    description: "检测对crontab或计划任务的修改操作"
+    severity: "medium"
+    enabled: true
+    match:
+      type: "regex"
+      patterns:
+        - "crontab\\s+-e"
+        - "crontab\\s+-r"
+        - "echo\\s+.*>>\\s*/etc/crontab"
+        - "echo\\s+.*>\\s*/var/spool/cron"
+        - "echo\\s+.*>>\\s*/etc/cron\\.d/"
+
+  # ============================================
+  # 可疑安全工具
+  # ============================================
+  - id: "DC006"
+    name: "可疑安全工具"
+    description: "检测可疑的安全扫描或渗透测试工具的使用"
+    severity: "medium"
+    enabled: true
+    match:
+      type: "contains"
+      patterns:
+        - "nmap"
+        - "masscan"
+        - "hydra"
+        - "sqlmap"
+        - "nikto"
+        - "dirb"
+        - "gobuster"
+        - "wpscan"
+
+  # ============================================
+  # SSH密钥操作
+  # ============================================
+  - id: "DC007"
+    name: "SSH密钥操作"
+    description: "检测对SSH密钥文件的可疑操作"
+    severity: "high"
+    enabled: true
+    match:
+      type: "regex"
+      patterns:
+        - "echo\\s+.*>>\\s*.*\\.ssh/authorized_keys"
+        - "cat\\s+.*>\\s*.*\\.ssh/authorized_keys"
+        - "cp\\s+.*\\.ssh/id_rsa"
+        - "scp\\s+.*\\.ssh/"
+
+  # ============================================
+  # 历史记录清除
+  # ============================================
+  - id: "DC008"
+    name: "历史记录清除"
+    description: "检测清除命令历史记录的操作"
+    severity: "medium"
+    enabled: true
+    match:
+      type: "regex"
+      patterns:
+        - "history\\s+-c"
+        - "echo\\s+.*>\\s*.*\\.bash_history"
+        - "rm\\s+.*\\.bash_history"
+        - "unset\\s+HISTFILE"
+        - "export\\s+HISTSIZE=0"
+
+  # ============================================
+  # 内核模块操作
+  # ============================================
+  - id: "DC009"
+    name: "内核模块操作"
+    description: "检测内核模块的加载或卸载操作"
+    severity: "high"
+    enabled: true
+    match:
+      type: "prefix"
+      patterns:
+        - "insmod"
+        - "rmmod"
+        - "modprobe"
+
+  # ============================================
+  # 防火墙规则修改
+  # ============================================
+  - id: "DC010"
+    name: "防火墙规则修改"
+    description: "检测防火墙规则的修改操作"
+    severity: "medium"
+    enabled: true
+    match:
+      type: "regex"
+      patterns:
+        - "iptables\\s+-F"
+        - "iptables\\s+-X"
+        - "iptables\\s+.*-j\\s+ACCEPT"
+        - "ufw\\s+disable"
+        - "firewall-cmd\\s+.*--add-port"
+
+  # ============================================
+  # Base64解码执行
+  # ============================================
+  - id: "DC011"
+    name: "Base64解码执行"
+    description: "检测通过Base64解码后执行的命令"
+    severity: "high"
+    enabled: true
+    match:
+      type: "regex"
+      patterns:
+        - "base64\\s+-d.*\\|\\s*(ba)?sh"
+        - "echo\\s+.*\\|\\s*base64\\s+-d\\s*\\|\\s*(ba)?sh"
+
+  # ============================================
+  # Python/Perl危险执行
+  # ============================================
+  - id: "DC012"
+    name: "脚本语言危险执行"
+    description: "检测Python/Perl等脚本语言的危险执行模式"
+    severity: "high"
+    enabled: true
+    match:
+      type: "regex"
+      patterns:
+        - "python.*-c.*exec\\("
+        - "python.*-c.*import\\s+os"
+        - "perl\\s+-e.*system\\("
+        - "ruby\\s+-e.*exec"
