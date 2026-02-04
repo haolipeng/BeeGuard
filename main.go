@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"gitlab.myinterest.top/security/agent/agent"
 	"gitlab.myinterest.top/security/agent/config"
 	"gitlab.myinterest.top/security/agent/plugin"
+	"gitlab.myinterest.top/security/agent/standalone"
 	"gitlab.myinterest.top/security/agent/transport"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -23,6 +25,10 @@ func main() {
 	// 解析命令行参数
 	configPath := flag.String("config", "", "Path to config file")
 	testMode := flag.Bool("test", false, "Enable test mode with fixed agent ID (123456)")
+	standaloneMode := flag.Bool("standalone", false, "Enable standalone mode (no gRPC transport)")
+	outputMode := flag.String("output", "log", "Standalone output mode: log or file")
+	outputPath := flag.String("output-path", "", "Standalone output file path")
+	pluginsList := flag.String("plugins", "", "Comma-separated list of plugins to load (standalone mode)")
 	flag.Parse()
 
 	fmt.Println("agent start running!")
@@ -56,6 +62,19 @@ func main() {
 	}
 	slog.Info("config initialized successfully")
 
+	// 设置 standalone 模式（通过命令行指定）
+	if *standaloneMode {
+		var plugins []string
+		if *pluginsList != "" {
+			plugins = strings.Split(*pluginsList, ",")
+		}
+		if err := config.SetStandalone(true, *outputMode, *outputPath, plugins); err != nil {
+			slog.Error("failed to set standalone mode", slog.String("error", err.Error()))
+			os.Exit(1)
+		}
+		fmt.Println("Standalone mode enabled")
+	}
+
 	// 将配置同步到 agent 包
 	cfg, _ := config.Get()
 	agent.WorkingDirectory = cfg.WorkingDirectory
@@ -70,9 +89,14 @@ func main() {
 	wg.Add(1)
 	go plugin.Startup(Context, wg)
 
-	// 启动传输守护进程（gRPC 连接）
+	// 根据模式启动不同的传输守护进程
 	wg.Add(1)
-	go transport.StartTransfer(Context, wg)
+	if config.IsStandalone() {
+		zap.S().Info("running in standalone mode, transport disabled")
+		go standalone.StartOutputHandler(Context, wg)
+	} else {
+		go transport.StartTransfer(Context, wg)
+	}
 
 	go func() {
 		sigs := make(chan os.Signal, 1)

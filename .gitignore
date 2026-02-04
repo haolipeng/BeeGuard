@@ -1,6 +1,7 @@
 # 编译生成的可执行文件
 business_plugins/collector/collector
 tests/e2e/collector/test_collector
+business_plugins/driver/driver
 
 # Go 编译文件
 *.exe
@@ -8,7 +9,6 @@ tests/e2e/collector/test_collector
 *.dll
 *.so
 *.dylib
-cloudsec-agent
 
 # 测试二进制文件
 *.test

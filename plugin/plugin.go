@@ -15,6 +15,7 @@ import (
 
 	"gitlab.myinterest.top/security/agent/agent"
 	businessplugins "business_plugins/lib"
+	"gitlab.myinterest.top/security/agent/config"
 	"gitlab.myinterest.top/security/agent/proto"
 	"go.uber.org/zap"
 )
@@ -233,6 +234,18 @@ func Startup(ctx context.Context, wg *sync.WaitGroup) {
 	defer statusTicker.Stop()
 	zap.S().Info("plugin daemon startup")
 
+	// Standalone 模式：自动扫描并加载本地插件
+	if config.IsStandalone() {
+		cfg, _ := config.Get()
+		go func() {
+			// 等待一小段时间确保初始化完成
+			time.Sleep(time.Second)
+			if err := loadLocalPlugins(ctx, cfg.Standalone.Plugins); err != nil {
+				zap.S().Errorf("failed to load local plugins: %v", err)
+			}
+		}()
+	}
+
 	//无限循环等待，从syncCh通道中获取配置，然后加载插件或移除插件
 	for {
 		select {
@@ -300,4 +313,56 @@ func Startup(ctx context.Context, wg *sync.WaitGroup) {
 			zap.S().Infof("sync done")
 		}
 	}
+}
+
+// loadLocalPlugins 加载本地插件（standalone 模式）
+func loadLocalPlugins(ctx context.Context, allowedPlugins []string) error {
+	pluginsDir := agent.PluginsDirectory
+	entries, err := os.ReadDir(pluginsDir)
+	if err != nil {
+		return fmt.Errorf("failed to read plugins directory %s: %w", pluginsDir, err)
+	}
+
+	// 构建允许加载的插件映射
+	allowedMap := make(map[string]bool)
+	for _, p := range allowedPlugins {
+		allowedMap[p] = true
+	}
+
+	zap.S().Infof("scanning plugins directory: %s", pluginsDir)
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		pluginName := entry.Name()
+
+		// 如果指定了允许的插件列表，检查是否在列表中
+		if len(allowedPlugins) > 0 && !allowedMap[pluginName] {
+			zap.S().Infof("skipping plugin %s (not in allowed list)", pluginName)
+			continue
+		}
+
+		// 创建虚拟配置来加载插件
+		pluginConfig := proto.Config{
+			Name:    pluginName,
+			Version: "standalone",
+		}
+
+		zap.S().Infof("loading local plugin: %s", pluginName)
+
+		plg, err := Load(ctx, pluginConfig)
+		if err != nil {
+			if err == ErrDuplicatePlugin {
+				zap.S().Infof("plugin %s already loaded", pluginName)
+				continue
+			}
+			zap.S().Errorf("failed to load plugin %s: %v", pluginName, err)
+			continue
+		}
+		plg.Infof("plugin loaded in standalone mode")
+	}
+
+	return nil
 }

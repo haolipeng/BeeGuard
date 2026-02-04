@@ -15,9 +15,9 @@ import (
 
 // Loader eBPF程序加载器
 type Loader struct {
-	objs       *bpfObjects     // eBPF程序和Maps句柄
-	links      []link.Link     // Hook点链接（用于detach）
-	perfReader *perf.Reader    // Perf buffer读取器
+	objs       *bpfObjects  // eBPF程序和Maps句柄
+	links      []link.Link  // Hook点链接（用于detach）
+	perfReader *perf.Reader // Perf buffer读取器
 }
 
 // NewLoader 创建并加载eBPF程序

@@ -10,17 +10,17 @@ import (
 	businessplugins "business_plugins/lib"
 )
 
-// ExecveEvent execve事件 - 对应C结构体 struct execve_event（批次3增强）
+// ExecveEvent execve事件 - 对应C结构体 struct execve_event
 type ExecveEvent struct {
-	PID     uint32     // 进程ID（线程ID）
-	TGID    uint32     // 线程组ID（进程ID）
-	PPID    uint32     // 父进程ID（批次3新增）
-	PGID    uint32     // 进程组ID（批次3新增）
-	UID     uint32     // 用户ID
-	Padding uint32     // 对齐填充
-	Comm    [16]byte   // 进程名
-	ExePath [256]byte  // 可执行文件完整路径（批次3增强）
-	Args    [512]byte  // 命令行参数
+	PID     uint32    // 进程ID（线程ID）
+	TGID    uint32    // 线程组ID（进程ID）
+	PPID    uint32    // 父进程ID
+	PGID    uint32    // 进程组ID
+	UID     uint32    // 用户ID
+	Padding uint32    // 对齐填充
+	Comm    [16]byte  // 进程名
+	ExePath [256]byte // 可执行文件的完整路径
+	Args    [512]byte // 命令行参数
 }
 
 // UnmarshalBinary 从二进制数据反序列化事件
@@ -29,7 +29,7 @@ func (e *ExecveEvent) UnmarshalBinary(data []byte) error {
 	return binary.Read(buf, binary.LittleEndian, e)
 }
 
-// ToRecord 转换为Agent的protobuf Record格式（批次3增强）
+// ToRecord 转换为Agent的protobuf Record格式
 func (e *ExecveEvent) ToRecord() *businessplugins.Record {
 	// 将字节数组转换为字符串（C字符串以\0结尾）
 	comm := cstring(e.Comm[:])
@@ -44,11 +44,11 @@ func (e *ExecveEvent) ToRecord() *businessplugins.Record {
 			Fields: map[string]string{
 				"pid":      fmt.Sprintf("%d", e.PID),
 				"tgid":     fmt.Sprintf("%d", e.TGID),
-				"ppid":     fmt.Sprintf("%d", e.PPID),    // 批次3新增
-				"pgid":     fmt.Sprintf("%d", e.PGID),    // 批次3新增
+				"ppid":     fmt.Sprintf("%d", e.PPID),
+				"pgid":     fmt.Sprintf("%d", e.PGID),
 				"uid":      fmt.Sprintf("%d", e.UID),
 				"comm":     comm,
-				"exe_path": exePath,  // 批次3：现在是完整路径
+				"exe_path": exePath,
 				"args":     args,
 			},
 		},

@@ -101,6 +101,9 @@ func main() {
 
 					result := det.Detect(comm, args)
 					if result != nil {
+						// 修改DataType为高危命令告警类型（6003），以便Server端正确处理
+						record.DataType = 6003
+
 						// 添加检测结果到record（保留原有字段供调试）
 						record.Data.Fields["detection_type"] = detector.DetectionTypeDangerousCommand
 						record.Data.Fields["rule_id"] = result.RuleID
@@ -110,9 +113,9 @@ func main() {
 						record.Data.Fields["matched_pattern"] = result.MatchedPattern
 
 						// 添加Server端期望的字段（用于告警入库）
-						record.Data.Fields["command"] = args                      // 完整命令行
-						record.Data.Fields["command_type"] = result.RuleID        // 使用rule_id作为命令类型
-						record.Data.Fields["user"] = record.Data.Fields["uid"]    // 用户ID
+						record.Data.Fields["command"] = args                   // 完整命令行
+						record.Data.Fields["command_type"] = result.RuleID     // 使用rule_id作为命令类型
+						record.Data.Fields["user"] = record.Data.Fields["uid"] // 用户ID
 						if evt.UID == 0 {
 							record.Data.Fields["privilege_level"] = "root"
 						} else {

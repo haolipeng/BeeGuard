@@ -1,0 +1,16 @@
+# Agent Standalone 模式配置
+# 用于本地测试高危命令检测功能，不连接 server
+
+# 基础配置（standalone 模式下 server 不是必须的）
+# server: "127.0.0.1:50051"
+working_directory: "/tmp/cloudsec-agent"
+plugins_directory: "/opt/cloudsec/plugins"
+
+# Standalone 模式配置
+standalone:
+  enabled: true
+  output: "log"                                      # "log" 输出到日志, "file" 输出到文件
+  output_path: "/tmp/cloudsec-detection-results.json"
+  flush_interval: 1                                  # 刷新间隔（秒）
+  plugins:
+    - driver                                         # 仅加载 driver 插件
