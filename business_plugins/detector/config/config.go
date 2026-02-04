@@ -66,8 +66,8 @@ type Rule struct {
 func Load(configDir string) (*Config, error) {
 	cfg := &Config{}
 
-	// 加载SSH配置
-	sshConfigPath := filepath.Join(configDir, "ssh.yaml")
+	// 加载SSH暴力破解检测配置
+	sshConfigPath := filepath.Join(configDir, "ssh_brute_force.yaml")
 	if _, err := os.Stat(sshConfigPath); err == nil {
 		sshCfg, err := loadSSHConfig(sshConfigPath)
 		if err != nil {
@@ -79,8 +79,8 @@ func Load(configDir string) (*Config, error) {
 		cfg.SSH = defaultSSHConfig()
 	}
 
-	// 加载FTP配置
-	ftpConfigPath := filepath.Join(configDir, "ftp.yaml")
+	// 加载FTP暴力破解检测配置
+	ftpConfigPath := filepath.Join(configDir, "ftp_brute_force.yaml")
 	if _, err := os.Stat(ftpConfigPath); err == nil {
 		ftpCfg, err := loadFTPConfig(ftpConfigPath)
 		if err != nil {

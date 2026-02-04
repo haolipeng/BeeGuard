@@ -7,6 +7,7 @@ require (
 	github.com/gogo/protobuf v1.3.2
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/golang-lru v1.0.2
+	github.com/s3rj1k/go-fanotify/fanotify v0.0.0-20240229202106-bca3154da60a
 	github.com/shirou/gopsutil/v3 v3.24.5
 	go.uber.org/zap v1.21.0
 	golang.org/x/sys v0.38.0

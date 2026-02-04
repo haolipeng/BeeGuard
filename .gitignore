@@ -36,6 +36,7 @@ vendor/
 # 临时文件
 *.tmp
 *.temp
+.claude/CLAUDE.md
 
 # JSON 输出文件（测试生成）
 *.json
@@ -52,3 +53,4 @@ develop/
 # Machine ID 文件
 machine-id
 bin/agent
+

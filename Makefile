@@ -44,7 +44,7 @@ build-agent:
 
 # 编译所有插件
 .PHONY: build-plugins
-build-plugins:
+build-plugins: generate-ebpf
 	@echo "Building all plugins..."
 	@mkdir -p $(PLUGINS_DIR)
 	@echo "  Building collector plugin..."
@@ -61,9 +61,16 @@ build-plugins:
 	@echo "  $(PLUGINS_DIR)/detector"
 	@echo "  $(PLUGINS_DIR)/driver"
 
+# 生成 eBPF 代码 (driver 插件依赖)
+.PHONY: generate-ebpf
+generate-ebpf:
+	@echo "Generating eBPF code..."
+	@cd $(DRIVER_SRC)/ebpf && $(GO) generate ./...
+	@echo "eBPF code generation complete"
+
 # 编译 driver 插件
 .PHONY: build-driver
-build-driver:
+build-driver: generate-ebpf
 	@echo "Building driver plugin..."
 	@mkdir -p $(PLUGINS_DIR)
 	@cd $(DRIVER_SRC) && $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/driver .
@@ -238,6 +245,7 @@ help:
 	@echo "  make build-agent        - Build agent only"
 	@echo "  make build-plugins      - Build all plugins"
 	@echo "  make build-driver       - Build driver plugin only"
+	@echo "  make generate-ebpf      - Generate eBPF code (requires clang, libbpf)"
 	@echo "  make clean              - Clean build artifacts"
 	@echo ""
 	@echo "Deploy (to $(DEPLOY_DIR)):"
