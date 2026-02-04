@@ -194,13 +194,63 @@ ls -la /opt/cloudsec/plugins/driver/
 ls -la /opt/cloudsec/plugins/driver/config/
 ```
 
-### 3.2 eBPF 进程监控验证
+### 3.2 Standalone 模式测试
+
+Standalone 模式允许不连接 gRPC Server 进行本地测试，检测结果输出到日志或文件。**在测试 driver 插件时，推荐优先使用此模式。**
+
+**配置文件 (agent-standalone.yaml):**
+
+```yaml
+# Agent Standalone 模式配置
+working_directory: "/tmp/cloudsec-agent"
+plugins_directory: "/opt/cloudsec/plugins"
+
+standalone:
+  enabled: true
+  output: "log"                    # "log" 或 "file"
+  output_path: "/tmp/cloudsec-detection-results.json"
+  flush_interval: 1                # 刷新间隔（秒）
+  plugins:
+    - driver                       # 仅加载 driver 插件
+```
+
+**启动方式:**
+
+```bash
+# 方式一：使用配置文件
+sudo ./build/agent -config=agent-standalone.yaml -test
+
+# 方式二：使用命令行参数
+sudo ./build/agent -standalone -plugins=driver -output=log -test
+```
+
+**命令行参数:**
+
+| 参数 | 说明 | 示例 |
+|------|------|------|
+| `-config` | 配置文件路径 | `-config=agent-standalone.yaml` |
+| `-standalone` | 启用 standalone 模式 | `-standalone` |
+| `-output` | 输出方式 (log/file) | `-output=log` |
+| `-output-path` | 输出文件路径 | `-output-path=/tmp/results.json` |
+| `-plugins` | 加载的插件列表 | `-plugins=driver` |
+| `-test` | 测试模式（固定 agent ID） | `-test` |
+
+**日志输出示例:**
+
+```
+INFO  standalone/output.go:151  dangerous command detected
+    {"rule_id": "DC001", "rule_name": "危险删除操作", "severity": "critical",
+     "command": "rm -rf /tmp/test_nonexistent_dir",
+     "matched_pattern": "rm\\s+.*-rf\\s+/", "pid": "727422", "uid": "0"}
+```
+
+### 3.3 eBPF 进程监控验证
 
 **验证步骤:**
 
 ```bash
-# 终端 1: 以 root 启动 driver 插件
-sudo /opt/cloudsec/plugins/driver/driver
+# 终端 1: 以 standalone 模式启动
+sudo ./build/agent -standalone -plugins=driver -output=log -test
 
 # 终端 2: 执行一些命令
 ls /tmp
@@ -225,13 +275,13 @@ cat /etc/hostname
 - exe: 可执行文件路径
 - args: 命令行参数
 
-### 3.3 高危命令检测验证
+### 3.4 高危命令检测验证
 
 **验证步骤:**
 
 ```bash
-# 终端 1: 以 root 启动 driver
-sudo /opt/cloudsec/plugins/driver/driver
+# 终端 1: 以 standalone 模式启动
+sudo ./build/agent -standalone -plugins=driver -output=log -test
 
 # 终端 2: 执行高危命令 (测试环境，注意安全)
 # 示例 1: 敏感文件访问
@@ -274,6 +324,21 @@ nmap --version
 | DC010 | 防火墙规则修改 | medium |
 | DC011 | Base64 解码执行 | high |
 | DC012 | 脚本语言危险执行 | high |
+
+### 3.5 Standalone 模式测试命令汇总
+
+以下命令可用于快速验证各类检测规则：
+
+```bash
+# 终端 1: 启动 standalone 模式
+sudo ./build/agent -standalone -plugins=driver -output=log -test
+
+# 终端 2: 执行测试命令
+rm -rf /tmp/test_nonexistent_dir   # DC001 - 危险删除
+cat /etc/passwd                     # DC002 - 敏感文件访问
+which nmap                          # DC006 - 可疑安全工具
+modprobe --version                  # DC009 - 内核模块操作
+```
 
 ---
 
@@ -389,107 +454,3 @@ make test-e2e-collector
 
 收到各类采集数据，格式化输出到控制台。
 
----
-
-## 六、常见问题
-
-### Q1: 单元测试报 "permission denied"
-
-**原因:** 部分测试需要读取 /proc 等系统文件
-
-**解决:**
-```bash
-# 以 root 运行
-sudo go test -v ./...
-```
-
-### Q2: E2E 测试找不到插件文件
-
-**错误:** `plugin executable not found: /tmp/plugin/xxx/xxx`
-
-**解决:**
-```bash
-# 检查插件是否已编译
-ls -la build/plugins/
-
-# 手动复制
-mkdir -p /tmp/plugin/baseline
-cp build/plugins/baseline /tmp/plugin/baseline/
-chmod +x /tmp/plugin/baseline/baseline
-```
-
-### Q3: Detector 没有检测到暴力破解
-
-**可能原因:**
-1. 日志路径不正确
-2. 未达到检测阈值
-3. IP 在白名单中
-
-**解决:**
-```bash
-# 检查日志路径
-ls -la /var/log/auth.log
-ls -la /var/log/secure
-
-# 检查配置
-cat /opt/cloudsec/plugins/detector/config/rules/ssh_brute_force.yaml
-```
-
-### Q4: Driver 启动报 "eBPF requires root privileges"
-
-**原因:** eBPF 必须以 root 权限运行
-
-**解决:**
-```bash
-sudo /opt/cloudsec/plugins/driver/driver
-```
-
-### Q5: Driver 启动报 "failed to load eBPF objects"
-
-**可能原因:**
-1. 内核版本过低 (需要 >= 5.x)
-2. BTF 不支持
-3. libbpf 版本不兼容
-
-**解决:**
-```bash
-# 检查内核版本
-uname -r
-
-# 检查 BTF 支持
-ls /sys/kernel/btf/vmlinux
-
-# 重新生成 eBPF 代码
-make generate-ebpf
-make build-driver
-```
-
-### Q6: 测试程序卡住不退出
-
-**解决:** 按 `Ctrl+C` 发送 SIGINT 信号，程序会优雅退出。
-
----
-
-## 七、测试命令速查
-
-```bash
-# 单元测试
-make test
-
-# E2E 测试
-make test-e2e-baseline
-make test-e2e-collector
-make test-e2e
-
-# 所有测试
-make test-all
-
-# 编译插件
-make build-plugins
-
-# 部署插件
-make deploy-plugins
-
-# 查看帮助
-make help
-```
