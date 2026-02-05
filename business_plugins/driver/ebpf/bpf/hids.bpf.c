@@ -2,6 +2,7 @@
 #include <vmlinux.h>
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_core_read.h>
+#include <bpf/bpf_tracing.h>
 #include "types.h"
 
 // Perf Event Array Map - 用于将事件从内核态传递到用户态
@@ -18,6 +19,14 @@ struct {
     __type(value, struct execve_event);
     __uint(max_entries, 1);
 } percpu_buf SEC(".maps");
+
+// Per-CPU Array Map for commit_creds event - 用于提权检测
+struct {
+    __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
+    __type(key, u32);
+    __type(value, struct commit_creds_event);
+    __uint(max_entries, 1);
+} percpu_creds_buf SEC(".maps");
 
 // 完整路径采集在eBPF中实现复杂，受限于验证器
 // 当前使用简化实现（读取文件名），后续可在Go层通过/proc补全
@@ -108,8 +117,8 @@ int tp_proc_exec(struct bpf_raw_tracepoint_args *ctx)
     if (!evt)
         return 0;
 
-    // 清零结构体
     __builtin_memset(evt, 0, sizeof(*evt));
+    evt->event_type = EVENT_TYPE_EXECVE;
 
     // 获取当前task_struct
     task = (struct task_struct *)bpf_get_current_task();
@@ -145,6 +154,76 @@ int tp_proc_exec(struct bpf_raw_tracepoint_args *ctx)
     // 通过Perf Event Array输出事件到用户态
     bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU,
                           evt, sizeof(*evt));
+
+    return 0;
+}
+
+// 监听commit_creds调用，检测本地提权行为
+// Hook点: kprobe/commit_creds - 在凭证提交前触发
+// 检测条件: 原uid和euid都非0，新uid或euid为0（非root → root）
+SEC("kprobe/commit_creds")
+int kp_commit_creds(struct pt_regs *ctx)
+{
+    u32 key = 0;
+    struct task_struct *task;
+    struct task_struct *parent;
+
+    // 从Per-CPU Map获取缓冲区
+    struct commit_creds_event *evt = bpf_map_lookup_elem(&percpu_creds_buf, &key);
+    if (!evt)
+        return 0;
+
+    __builtin_memset(evt, 0, sizeof(*evt));
+    evt->event_type = EVENT_TYPE_COMMIT_CREDS;
+
+    // 获取当前task_struct
+    task = (struct task_struct *)bpf_get_current_task();
+
+    // 获取新凭证（commit_creds的第一个参数）
+    struct cred *new_cred = (struct cred *)PT_REGS_PARM1_CORE(ctx);
+    if (!new_cred)
+        return 0;
+
+    // 读取旧凭证（当前task的real_cred）
+    int old_uid = BPF_CORE_READ(task, real_cred, uid.val);
+    int old_euid = BPF_CORE_READ(task, real_cred, euid.val);
+
+    // 读取新凭证
+    int new_uid = BPF_CORE_READ(new_cred, uid.val);
+    int new_euid = BPF_CORE_READ(new_cred, euid.val);
+
+    // 检测条件: 原uid和euid都非0，新uid或euid为0（提权到root）
+    if (old_uid != 0 && old_euid != 0 && (new_uid == 0 || new_euid == 0)) {
+        // 填充事件数据
+        u64 id = bpf_get_current_pid_tgid();
+        evt->pid = id;           // 低32位：线程ID
+        evt->tgid = id >> 32;    // 高32位：进程ID
+
+        // 获取父进程信息
+        parent = BPF_CORE_READ(task, real_parent);
+        if (parent) {
+            evt->ppid = BPF_CORE_READ(parent, tgid);
+        }
+
+        // 获取当前UID
+        evt->uid = bpf_get_current_uid_gid();
+
+        // 记录uid变化
+        evt->old_uid = old_uid;
+        evt->old_euid = old_euid;
+        evt->new_uid = new_uid;
+        evt->new_euid = new_euid;
+
+        // 获取进程名
+        bpf_get_current_comm(&evt->comm, sizeof(evt->comm));
+
+        // 读取可执行文件路径
+        read_full_exe_path(task, evt->exe_path, sizeof(evt->exe_path));
+
+        // 通过Perf Event Array输出事件到用户态
+        bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU,
+                              evt, sizeof(*evt));
+    }
 
     return 0;
 }

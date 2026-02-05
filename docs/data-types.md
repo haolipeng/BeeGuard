@@ -115,6 +115,20 @@
 | size | string | 大小 |
 | used_by | string | 依赖模块 |
 
+### 5058 - 镜像资产
+
+**Handler:** ImageHandler
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| image_id | string | 镜像 ID |
+| image_name | string | 镜像名称 |
+| image_version | string | 镜像版本/标签 |
+| image_size | string | 镜像大小（如 134MB） |
+| container_count | string | 关联容器数 |
+| image_build_time | string | 镜像构建时间 |
+| runtime | string | 运行时 (docker/containerd) |
+
 ### 5060 - Web 服务
 
 **Handler:** WebServiceHandler

@@ -84,58 +84,93 @@ func main() {
 					logger.Warn("Lost samples", "count", rec.LostSamples, "cpu", rec.CPU)
 				}
 
-				// 6.3 反序列化事件
-				var evt events.ExecveEvent
-				if err := evt.UnmarshalBinary(rec.RawSample); err != nil {
-					logger.Error("Failed to unmarshal event", "error", err)
-					continue
-				}
+				// 6.3 根据事件类型分发处理
+				eventType := events.GetEventType(rec.RawSample)
 
-				// 6.4 转换为protobuf格式
-				record := evt.ToRecord()
-
-				// 6.5 高危命令检测
-				if det != nil {
-					comm := cstring(evt.Comm[:])
-					args := argsString(evt.Args[:])
-
-					result := det.Detect(comm, args)
-					if result != nil {
-						// 修改DataType为高危命令告警类型（6003），以便Server端正确处理
-						record.DataType = 6003
-
-						// 添加检测结果到record（保留原有字段供调试）
-						record.Data.Fields["detection_type"] = detector.DetectionTypeDangerousCommand
-						record.Data.Fields["rule_id"] = result.RuleID
-						record.Data.Fields["rule_name"] = result.RuleName
-						record.Data.Fields["severity"] = result.Severity
-						record.Data.Fields["rule_description"] = result.Description
-						record.Data.Fields["matched_pattern"] = result.MatchedPattern
-
-						// 添加Server端期望的字段（用于告警入库）
-						record.Data.Fields["command"] = args                   // 完整命令行
-						record.Data.Fields["command_type"] = result.RuleID     // 使用rule_id作为命令类型
-						record.Data.Fields["user"] = record.Data.Fields["uid"] // 用户ID
-						if evt.UID == 0 {
-							record.Data.Fields["privilege_level"] = "root"
-						} else {
-							record.Data.Fields["privilege_level"] = "normal"
-						}
-						record.Data.Fields["timestamp"] = fmt.Sprintf("%d", record.Timestamp)
-
-						logger.Info("Dangerous command detected",
-							"rule_id", result.RuleID,
-							"rule_name", result.RuleName,
-							"severity", result.Severity,
-							"uid", evt.UID,
-							"comm", comm,
-							"args", args)
+				switch eventType {
+				case events.EventTypeExecve:
+					// 处理execve事件
+					var evt events.ExecveEvent
+					if err := evt.UnmarshalBinary(rec.RawSample); err != nil {
+						logger.Error("Failed to unmarshal execve event", "error", err)
+						continue
 					}
-				}
 
-				// 6.6 发送到Agent
-				if err := client.SendRecord(record); err != nil {
-					logger.Error("Failed to send record to agent", "error", err)
+					record := evt.ToRecord()
+
+					// 高危命令检测
+					if det != nil {
+						comm := cstring(evt.Comm[:])
+						args := argsString(evt.Args[:])
+
+						result := det.Detect(comm, args)
+						if result != nil {
+							// 修改DataType为高危命令告警类型（6003），以便Server端正确处理
+							record.DataType = 6003
+
+							// 添加检测结果到record（保留原有字段供调试）
+							record.Data.Fields["detection_type"] = detector.DetectionTypeDangerousCommand
+							record.Data.Fields["rule_id"] = result.RuleID
+							record.Data.Fields["rule_name"] = result.RuleName
+							record.Data.Fields["severity"] = result.Severity
+							record.Data.Fields["rule_description"] = result.Description
+							record.Data.Fields["matched_pattern"] = result.MatchedPattern
+
+							// 添加Server端期望的字段（用于告警入库）
+							record.Data.Fields["command"] = args                   // 完整命令行
+							record.Data.Fields["command_type"] = result.RuleID     // 使用rule_id作为命令类型
+							record.Data.Fields["user"] = record.Data.Fields["uid"] // 用户ID
+							if evt.UID == 0 {
+								record.Data.Fields["privilege_level"] = "root"
+							} else {
+								record.Data.Fields["privilege_level"] = "normal"
+							}
+							record.Data.Fields["timestamp"] = fmt.Sprintf("%d", record.Timestamp)
+
+							logger.Info("Dangerous command detected",
+								"rule_id", result.RuleID,
+								"rule_name", result.RuleName,
+								"severity", result.Severity,
+								"uid", evt.UID,
+								"comm", comm,
+								"args", args)
+						}
+					}
+
+					// 发送到Agent
+					if err := client.SendRecord(record); err != nil {
+						logger.Error("Failed to send execve record to agent", "error", err)
+					}
+
+				case events.EventTypeCommitCreds:
+					// 处理提权事件
+					var evt events.CommitCredsEvent
+					if err := evt.UnmarshalBinary(rec.RawSample); err != nil {
+						logger.Error("Failed to unmarshal commit_creds event", "error", err)
+						continue
+					}
+
+					record := evt.ToRecord()
+
+					// 记录提权告警日志
+					logger.Warn("Privilege escalation detected",
+						"pid", evt.PID,
+						"tgid", evt.TGID,
+						"ppid", evt.PPID,
+						"comm", cstring(evt.Comm[:]),
+						"exe_path", cstring(evt.ExePath[:]),
+						"old_uid", evt.OldUID,
+						"old_euid", evt.OldEUID,
+						"new_uid", evt.NewUID,
+						"new_euid", evt.NewEUID)
+
+					// 发送到Agent
+					if err := client.SendRecord(record); err != nil {
+						logger.Error("Failed to send privilege escalation record to agent", "error", err)
+					}
+
+				default:
+					logger.Warn("Unknown event type", "type", eventType)
 				}
 			}
 		}
