@@ -10,17 +10,34 @@ import (
 	businessplugins "business_plugins/lib"
 )
 
+// 事件类型常量
+const (
+	EventTypeExecve      uint8 = 1
+	EventTypeCommitCreds uint8 = 2
+)
+
+// GetEventType 从原始数据中获取事件类型
+// 事件类型存储在数据的第一个字节
+func GetEventType(data []byte) uint8 {
+	if len(data) < 1 {
+		return 0
+	}
+	return data[0]
+}
+
 // ExecveEvent execve事件 - 对应C结构体 struct execve_event
 type ExecveEvent struct {
-	PID     uint32    // 进程ID（线程ID）
-	TGID    uint32    // 线程组ID（进程ID）
-	PPID    uint32    // 父进程ID
-	PGID    uint32    // 进程组ID
-	UID     uint32    // 用户ID
-	Padding uint32    // 对齐填充
-	Comm    [16]byte  // 进程名
-	ExePath [256]byte // 可执行文件的完整路径
-	Args    [512]byte // 命令行参数
+	EventType uint8     // 事件类型标识 (EVENT_TYPE_EXECVE = 1)
+	Padding1  [3]byte   // 对齐填充
+	PID       uint32    // 进程ID（线程ID）
+	TGID      uint32    // 线程组ID（进程ID）
+	PPID      uint32    // 父进程ID
+	PGID      uint32    // 进程组ID
+	UID       uint32    // 用户ID
+	Padding   uint32    // 对齐填充
+	Comm      [16]byte  // 进程名
+	ExePath   [256]byte // 可执行文件的完整路径
+	Args      [512]byte // 命令行参数
 }
 
 // UnmarshalBinary 从二进制数据反序列化事件
@@ -50,6 +67,53 @@ func (e *ExecveEvent) ToRecord() *businessplugins.Record {
 				"comm":     comm,
 				"exe_path": exePath,
 				"args":     args,
+			},
+		},
+	}
+}
+
+// CommitCredsEvent commit_creds提权事件 - 对应C结构体 struct commit_creds_event
+type CommitCredsEvent struct {
+	EventType uint8     // 事件类型标识 (EVENT_TYPE_COMMIT_CREDS = 2)
+	Padding1  [3]byte   // 对齐填充
+	PID       uint32    // 进程ID
+	TGID      uint32    // 线程组ID
+	PPID      uint32    // 父进程ID
+	UID       uint32    // 当前用户ID
+	OldUID    uint32    // 提权前的uid
+	OldEUID   uint32    // 提权前的euid
+	NewUID    uint32    // 提权后的uid
+	NewEUID   uint32    // 提权后的euid
+	Comm      [16]byte  // 进程名
+	ExePath   [256]byte // 可执行文件路径
+}
+
+// UnmarshalBinary 从二进制数据反序列化事件
+func (e *CommitCredsEvent) UnmarshalBinary(data []byte) error {
+	buf := bytes.NewReader(data)
+	return binary.Read(buf, binary.LittleEndian, e)
+}
+
+// ToRecord 转换为Agent的protobuf Record格式
+func (e *CommitCredsEvent) ToRecord() *businessplugins.Record {
+	comm := cstring(e.Comm[:])
+	exePath := cstring(e.ExePath[:])
+
+	return &businessplugins.Record{
+		DataType:  60, // 提权检测事件类型
+		Timestamp: time.Now().Unix(),
+		Data: &businessplugins.Payload{
+			Fields: map[string]string{
+				"pid":      fmt.Sprintf("%d", e.PID),
+				"tgid":     fmt.Sprintf("%d", e.TGID),
+				"ppid":     fmt.Sprintf("%d", e.PPID),
+				"uid":      fmt.Sprintf("%d", e.UID),
+				"old_uid":  fmt.Sprintf("%d", e.OldUID),
+				"old_euid": fmt.Sprintf("%d", e.OldEUID),
+				"new_uid":  fmt.Sprintf("%d", e.NewUID),
+				"new_euid": fmt.Sprintf("%d", e.NewEUID),
+				"comm":     comm,
+				"exe_path": exePath,
 			},
 		},
 	}

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 package ebpf
 
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc clang -cflags "-O2 -g -Wall -Werror" -target bpfel -type execve_event bpf ./bpf/hids.bpf.c -- -I./bpf
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc clang -cflags "-O2 -g -Wall -Werror -D__TARGET_ARCH_x86" -target amd64 -type execve_event -type commit_creds_event bpf ./bpf/hids.bpf.c -- -I./bpf
 
 import (
 	"errors"
@@ -51,7 +51,15 @@ func NewLoader() (*Loader, error) {
 	}
 	l.links = append(l.links, lnk)
 
-	// 5. 创建perf reader（8页/CPU = 32KB）
+	// 5. 附加kprobe到commit_creds（提权检测）
+	kpLink, err := link.Kprobe("commit_creds", objs.KpCommitCreds, nil)
+	if err != nil {
+		l.Close()
+		return nil, fmt.Errorf("failed to attach kprobe to commit_creds: %w", err)
+	}
+	l.links = append(l.links, kpLink)
+
+	// 6. 创建perf reader（8页/CPU = 32KB）
 	l.perfReader, err = perf.NewReader(objs.Events, 8*4096)
 	if err != nil {
 		l.Close()
