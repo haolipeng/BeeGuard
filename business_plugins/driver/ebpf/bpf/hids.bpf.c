@@ -180,7 +180,7 @@ int kp_commit_creds(struct pt_regs *ctx)
     task = (struct task_struct *)bpf_get_current_task();
 
     // 获取新凭证（commit_creds的第一个参数）
-    struct cred *new_cred = (struct cred *)PT_REGS_PARM1_CORE(ctx);
+    struct cred *new_cred = (void *)PT_REGS_PARM1_CORE(ctx);
     if (!new_cred)
         return 0;
 
@@ -219,6 +219,13 @@ int kp_commit_creds(struct pt_regs *ctx)
 
         // 读取可执行文件路径
         read_full_exe_path(task, evt->exe_path, sizeof(evt->exe_path));
+
+        // 调试打印：evt 所有字段（bpf_printk 每次最多约3个格式化参数，故分多行）
+        bpf_printk("hids: commit_creds pid=%u tgid=%u ppid=%u\n", evt->pid, evt->tgid, evt->ppid);
+        bpf_printk("hids: commit_creds uid=%u old_uid=%u old_euid=%u\n", evt->uid, evt->old_uid, evt->old_euid);
+        bpf_printk("hids: commit_creds new_uid=%u new_euid=%u\n", evt->new_uid, evt->new_euid);
+        bpf_printk("hids: commit_creds comm=%s\n", evt->comm);
+        bpf_printk("hids: commit_creds exe_path=%s\n", evt->exe_path);
 
         // 通过Perf Event Array输出事件到用户态
         bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU,
