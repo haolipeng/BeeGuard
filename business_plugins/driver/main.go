@@ -23,7 +23,7 @@ import (
 // 默认配置文件路径
 const (
 	defaultConfigPath        = "config/dangerous_commands.yaml"
-	defaultTrustedConfigPath = "config/trusted_executables.yaml"
+	defaultTrustedConfigPath = "config/privilege_escalation_whitelist.yaml"
 )
 
 func main() {

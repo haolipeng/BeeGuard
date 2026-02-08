@@ -199,7 +199,7 @@ ls -la /opt/cloudsec/plugins/driver/config/
 | 配置文件 | 路径 | 用途 |
 |---------|------|------|
 | 高危命令规则 | `/opt/cloudsec/plugins/driver/config/dangerous_commands.yaml` | 定义 12 条高危命令检测规则 |
-| 可信任程序白名单 | `/opt/cloudsec/plugins/driver/config/trusted_executables.yaml` | 本地提权检测白名单（sudo、su 等） |
+| 可信任程序白名单 | `/opt/cloudsec/plugins/driver/config/privilege_escalation_whitelist.yaml` | 本地提权检测白名单（sudo、su 等） |
 
 **数据类型（DataType）：**
 
@@ -665,7 +665,7 @@ gcc -o /tmp/privesc_test privilege_escalation_test.c
 #### 白名单配置
 
 **配置文件:**
-`/opt/cloudsec/plugins/driver/config/trusted_executables.yaml`
+`/opt/cloudsec/plugins/driver/config/privilege_escalation_whitelist.yaml`
 
 **默认白名单内容:**
 ```yaml

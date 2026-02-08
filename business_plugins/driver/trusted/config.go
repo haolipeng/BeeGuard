@@ -8,7 +8,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const DefaultConfigPath = "config/trusted_executables.yaml"
+const DefaultConfigPath = "config/privilege_escalation_whitelist.yaml"
 
 // LoadConfig 加载并验证配置文件
 func LoadConfig(path string) (*TrustedConfig, error) {
