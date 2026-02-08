@@ -36,7 +36,7 @@ vendor/
 # 临时文件
 *.tmp
 *.temp
-.claude/CLAUDE.md
+.claude/*
 
 # JSON 输出文件（测试生成）
 *.json

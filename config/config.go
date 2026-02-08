@@ -38,11 +38,8 @@ type StandaloneConfig struct {
 	// Enabled 是否启用 standalone 模式
 	Enabled bool `yaml:"enabled"`
 
-	// Output 输出方式: "log" (zap日志) 或 "file" (JSON文件)
+	// Output 输出方式: "stderr" (控制台输出) 或文件路径（如 "/tmp/results.json"）
 	Output string `yaml:"output"`
-
-	// OutputPath JSON文件输出路径（当 Output 为 "file" 时生效）
-	OutputPath string `yaml:"output_path"`
 
 	// Plugins 指定加载的插件列表，为空则加载全部
 	Plugins []string `yaml:"plugins,omitempty"`
@@ -122,10 +119,7 @@ func ValidateAndSetDefaults(cfg *Config) error {
 	// 2. 设置 standalone 模式默认值
 	if isStandalone {
 		if cfg.Standalone.Output == "" {
-			cfg.Standalone.Output = "log"
-		}
-		if cfg.Standalone.OutputPath == "" {
-			cfg.Standalone.OutputPath = "/tmp/cloudsec-detection-results.json"
+			cfg.Standalone.Output = "stderr"
 		}
 		if cfg.Standalone.FlushInterval <= 0 {
 			cfg.Standalone.FlushInterval = 1 // 默认 1 秒
@@ -193,7 +187,7 @@ func Get() (*Config, error) {
 
 // SetStandalone 设置 standalone 模式配置（供命令行参数使用）
 // 在 Init() 之后调用
-func SetStandalone(enabled bool, output, outputPath string, plugins []string) error {
+func SetStandalone(enabled bool, output string, plugins []string) error {
 	if globalConfig == nil {
 		return errors.New("config not initialized, call Init() first")
 	}
@@ -211,16 +205,13 @@ func SetStandalone(enabled bool, output, outputPath string, plugins []string) er
 	if output != "" {
 		globalConfig.Standalone.Output = output
 	}
-	if outputPath != "" {
-		globalConfig.Standalone.OutputPath = outputPath
-	}
 	if len(plugins) > 0 {
 		globalConfig.Standalone.Plugins = plugins
 	}
 
 	// 设置默认值
 	if globalConfig.Standalone.Output == "" {
-		globalConfig.Standalone.Output = "log"
+		globalConfig.Standalone.Output = "stderr"
 	}
 	if globalConfig.Standalone.FlushInterval <= 0 {
 		globalConfig.Standalone.FlushInterval = 1

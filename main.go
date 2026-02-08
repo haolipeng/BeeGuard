@@ -26,8 +26,7 @@ func main() {
 	configPath := flag.String("config", "", "Path to config file")
 	testMode := flag.Bool("test", false, "Enable test mode with fixed agent ID (123456)")
 	standaloneMode := flag.Bool("standalone", false, "Enable standalone mode (no gRPC transport)")
-	outputMode := flag.String("output", "log", "Standalone output mode: log or file")
-	outputPath := flag.String("output-path", "", "Standalone output file path")
+	outputMode := flag.String("output", "", "Standalone output: stderr (default) or file path")
 	pluginsList := flag.String("plugins", "", "Comma-separated list of plugins to load (standalone mode)")
 	flag.Parse()
 
@@ -68,7 +67,7 @@ func main() {
 		if *pluginsList != "" {
 			plugins = strings.Split(*pluginsList, ",")
 		}
-		if err := config.SetStandalone(true, *outputMode, *outputPath, plugins); err != nil {
+		if err := config.SetStandalone(true, *outputMode, plugins); err != nil {
 			slog.Error("failed to set standalone mode", slog.String("error", err.Error()))
 			os.Exit(1)
 		}

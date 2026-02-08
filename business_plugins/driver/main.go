@@ -189,7 +189,12 @@ func main() {
 					continue
 				}
 
+				// eBPF 在 kprobe 上下文中 dentry 遍历可能失败，仅返回文件名
+				// 通过 /proc/<pid>/exe 补全完整路径
+				exePath := resolveExePath(evt.TGID, cstring(evt.ExePath[:]))
+
 				record := evt.ToRecord()
+				record.Data.Fields["exe_path"] = exePath
 
 				// 记录提权告警日志
 				logger.Warn("Privilege escalation detected",
@@ -197,7 +202,7 @@ func main() {
 					"tgid", evt.TGID,
 					"ppid", evt.PPID,
 					"comm", cstring(evt.Comm[:]),
-					"exe_path", cstring(evt.ExePath[:]),
+					"exe_path", exePath,
 					"old_uid", evt.OldUID,
 					"old_euid", evt.OldEUID,
 					"new_uid", evt.NewUID,
@@ -285,6 +290,20 @@ func getTrustedConfigPath() string {
 
 	// 回退到当前目录
 	return defaultTrustedConfigPath
+}
+
+// resolveExePath 补全可执行文件的完整路径
+// eBPF 在 kprobe 上下文中 dentry 遍历可能失败，仅返回文件名
+// 通过 /proc/<pid>/exe readlink 获取完整路径
+func resolveExePath(tgid uint32, ebpfPath string) string {
+	if len(ebpfPath) > 0 && ebpfPath[0] == '/' {
+		return ebpfPath
+	}
+	link, err := os.Readlink(fmt.Sprintf("/proc/%d/exe", tgid))
+	if err == nil {
+		return link
+	}
+	return ebpfPath
 }
 
 // cstring 将C字符串（以\0结尾）转换为Go字符串

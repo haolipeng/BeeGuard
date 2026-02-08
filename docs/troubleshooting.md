@@ -54,7 +54,7 @@ ls /sys/kernel/btf/vmlinux
 
 **排查：** 使用 Standalone 模式本地测试
 ```bash
-sudo ./build/agent -standalone -plugins=driver -output=log -test
+sudo ./build/agent -standalone -plugins=driver -output=stderr -test
 ```
 
 ---

@@ -6,11 +6,10 @@ retry_max_count: 10
 retry_interval: 5
 
 # Standalone 模式配置（用于本地测试，不连接 server）
-# 启用后，检测结果将输出到日志或文件，而不是上报到 server
+# 启用后，检测结果将输出到 stderr 或文件，而不是上报到 server
 # standalone:
 #   enabled: true                                    # 是否启用 standalone 模式
-#   output: "log"                                    # 输出方式: "log" 或 "file"
-#   output_path: "/tmp/cloudsec-detection-results.json"  # 输出文件路径（output=file 时生效）
+#   output: "stderr"                                 # 输出方式: "stderr" 或文件路径（��� "/tmp/results.json"）
 #   flush_interval: 1                                # 刷新间隔（秒）
 #   plugins:                                         # 指定加载的插件（不填则加载全部）
 #     - driver

@@ -13,6 +13,7 @@ trusted_executables:
   - "/usr/lib/systemd/systemd"
   - "/usr/lib/systemd/systemd-logind"
   - "/usr/sbin/unix_chkpwd"
+  - "/usr/sbin/smbd"
 
 enabled: true
 log_filtered_events: false  # 是否记录被过滤的事件

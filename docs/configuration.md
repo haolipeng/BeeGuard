@@ -56,18 +56,16 @@ plugins_directory: "/opt/cloudsec/plugins"
 
 standalone:
   enabled: true
-  output: "log"                    # "log" 或 "file"
-  output_path: "/tmp/cloudsec-detection-results.json"
-  flush_interval: 1                # 刷新间隔（秒）
+  output: "stderr"                   # "stderr" 或文件路径（如 "/tmp/results.json"）
+  flush_interval: 1                  # 刷新间隔（秒）
   plugins:
-    - driver                       # 要加载的插件列表
+    - driver                         # 要加载的插件列表
 ```
 
 | 配置项 | 类型 | 说明 |
 |--------|------|------|
 | standalone.enabled | bool | 是否启用独立模式 |
-| standalone.output | string | 输出方式：log 或 file |
-| standalone.output_path | string | 输出文件路径（output=file 时有效） |
+| standalone.output | string | 输出方式：stderr 或文件路径 |
 | standalone.flush_interval | int | 输出刷新间隔（秒） |
 | standalone.plugins | []string | 要加载的插件列表 |
 
@@ -247,8 +245,7 @@ rules:
 | -config | 配置文件路径 | `-config=/etc/cloudsec-agent/agent.yaml` |
 | -test | 测试模式（固定 Agent ID） | `-test` |
 | -standalone | 启用独立模式 | `-standalone` |
-| -output | 输出方式 (log/file) | `-output=log` |
-| -output-path | 输出文件路径 | `-output-path=/tmp/results.json` |
+| -output | 输出方式 (stderr/文件路径) | `-output=stderr` |
 | -plugins | 加载的插件列表 | `-plugins=driver,collector` |
 
 ### 4.2 常用启动命令
@@ -257,11 +254,11 @@ rules:
 # 正常模式
 sudo ./agent -config=agent.yaml
 
-# Standalone 模式（日志输出）
-sudo ./agent -standalone -plugins=driver -output=log -test
+# Standalone 模式（输出到 stderr）
+sudo ./agent -standalone -plugins=driver -output=stderr -test
 
 # Standalone 模式（文件输出）
-sudo ./agent -standalone -plugins=driver -output=file -output-path=/tmp/results.json -test
+sudo ./agent -standalone -plugins=driver -output=/tmp/results.json -test
 
 # 使用配置文件启动 Standalone
 sudo ./agent -config=agent-standalone.yaml -test

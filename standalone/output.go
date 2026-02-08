@@ -15,6 +15,8 @@ import (
 	"go.uber.org/zap"
 )
 
+const dataTypePrivilegeEscalation int32 = 60
+
 // DetectionOutput 高危命令检测结果输出结构
 type DetectionOutput struct {
 	Timestamp  int64             `json:"timestamp"`
@@ -28,6 +30,22 @@ type DetectionOutput struct {
 	UID        string            `json:"uid,omitempty"`
 	ExePath    string            `json:"exe_path,omitempty"`
 	AllFields  map[string]string `json:"all_fields,omitempty"`
+}
+
+// PrivilegeEscalationOutput 本地提权检测结果输出结构
+type PrivilegeEscalationOutput struct {
+	Timestamp int64  `json:"timestamp"`
+	DataType  int32  `json:"data_type"`
+	PID       string `json:"pid"`
+	TGID      string `json:"tgid"`
+	PPID      string `json:"ppid"`
+	UID       string `json:"uid"`
+	Comm      string `json:"comm"`
+	ExePath   string `json:"exe_path"`
+	OldUID    string `json:"old_uid"`
+	OldEUID   string `json:"old_euid"`
+	NewUID    string `json:"new_uid"`
+	NewEUID   string `json:"new_euid"`
 }
 
 // StartOutputHandler 启动 standalone 模式的输出处理
@@ -52,17 +70,17 @@ func StartOutputHandler(ctx context.Context, wg *sync.WaitGroup) {
 	defer ticker.Stop()
 
 	var outputFile *os.File
-	if standaloneCfg.Output == "file" {
-		outputFile, err = os.OpenFile(standaloneCfg.OutputPath,
+	if standaloneCfg.Output != "stderr" {
+		outputFile, err = os.OpenFile(standaloneCfg.Output,
 			os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 		if err != nil {
 			zap.S().Errorf("failed to open output file: %v", err)
 			return
 		}
 		defer outputFile.Close()
-		zap.S().Infof("detection results will be written to: %s", standaloneCfg.OutputPath)
+		zap.S().Infof("detection results will be written to: %s", standaloneCfg.Output)
 	} else {
-		zap.S().Info("detection results will be logged")
+		zap.S().Info("detection results will be output to stderr")
 	}
 
 	for {
@@ -70,18 +88,18 @@ func StartOutputHandler(ctx context.Context, wg *sync.WaitGroup) {
 		case <-ctx.Done():
 			// 退出前处理剩余数据
 			recs := buffer.ReadEncodedRecords()
-			processRecords(recs, standaloneCfg, outputFile)
+			processRecords(recs, outputFile)
 			zap.S().Info("standalone output handler exiting")
 			return
 		case <-ticker.C:
 			recs := buffer.ReadEncodedRecords()
-			processRecords(recs, standaloneCfg, outputFile)
+			processRecords(recs, outputFile)
 		}
 	}
 }
 
 // processRecords 处理检测记录
-func processRecords(recs []*proto.EncodedRecord, cfg *config.StandaloneConfig, file *os.File) {
+func processRecords(recs []*proto.EncodedRecord, file *os.File) {
 	if len(recs) == 0 {
 		return
 	}
@@ -93,21 +111,26 @@ func processRecords(recs []*proto.EncodedRecord, cfg *config.StandaloneConfig, f
 			continue
 		}
 
-		// 仅输出高危命令检测结果（有 rule_id 字段）
-		ruleID, ok := payload.Fields["rule_id"]
-		if !ok || ruleID == "" {
-			continue
-		}
-
-		output := buildOutput(rec, payload)
-
-		switch cfg.Output {
-		case "log":
-			logRecord(output)
-		case "file":
-			writeToFile(file, output)
+		switch rec.DataType {
+		case dataTypePrivilegeEscalation:
+			output := buildPrivilegeEscalationOutput(rec, payload)
+			if file != nil {
+				writeJSON(file, output)
+			} else {
+				logPrivilegeEscalation(output)
+			}
 		default:
-			logRecord(output)
+			// 高危命令检测结果（需要 rule_id 字段）
+			ruleID, ok := payload.Fields["rule_id"]
+			if !ok || ruleID == "" {
+				continue
+			}
+			output := buildOutput(rec, payload)
+			if file != nil {
+				writeJSON(file, output)
+			} else {
+				logRecord(output)
+			}
 		}
 	}
 }
@@ -146,6 +169,26 @@ func buildOutput(rec *proto.EncodedRecord, payload *businessplugins.Payload) *De
 	}
 }
 
+// buildPrivilegeEscalationOutput 构建提权事件输出结构
+func buildPrivilegeEscalationOutput(rec *proto.EncodedRecord, payload *businessplugins.Payload) *PrivilegeEscalationOutput {
+	fields := payload.Fields
+
+	return &PrivilegeEscalationOutput{
+		Timestamp: rec.Timestamp,
+		DataType:  rec.DataType,
+		PID:       fields["pid"],
+		TGID:      fields["tgid"],
+		PPID:      fields["ppid"],
+		UID:       fields["uid"],
+		Comm:      fields["comm"],
+		ExePath:   fields["exe_path"],
+		OldUID:    fields["old_uid"],
+		OldEUID:   fields["old_euid"],
+		NewUID:    fields["new_uid"],
+		NewEUID:   fields["new_euid"],
+	}
+}
+
 // logRecord 将记录输出到日志
 func logRecord(output *DetectionOutput) {
 	zap.S().Infow("dangerous command detected",
@@ -159,8 +202,24 @@ func logRecord(output *DetectionOutput) {
 	)
 }
 
-// writeToFile 将记录写入 JSON 文件
-func writeToFile(file *os.File, output *DetectionOutput) {
+// logPrivilegeEscalation 将提权事件输出到日志
+func logPrivilegeEscalation(output *PrivilegeEscalationOutput) {
+	zap.S().Warnw("Privilege escalation detected",
+		"pid", output.PID,
+		"tgid", output.TGID,
+		"ppid", output.PPID,
+		"comm", output.Comm,
+		"exe_path", output.ExePath,
+		"uid", output.UID,
+		"old_uid", output.OldUID,
+		"old_euid", output.OldEUID,
+		"new_uid", output.NewUID,
+		"new_euid", output.NewEUID,
+	)
+}
+
+// writeJSON 将记录写入 JSON 文件
+func writeJSON(file *os.File, output any) {
 	data, err := json.Marshal(output)
 	if err != nil {
 		zap.S().Errorf("failed to marshal output: %v", err)
