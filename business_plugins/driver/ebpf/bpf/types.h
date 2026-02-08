@@ -8,8 +8,10 @@
 
 // 路径相关常量
 #define PATH_MAX_ENTS   16    // dentry 链最大遍历深度
-#define PATH_BUF_SIZE   512   // 路径重建工作缓冲区大小
-#define PATH_NAME_LEN   256   // 单个 dentry 名称最大长度
+#define PATH_BUF_SIZE   512   // 路径重建工作缓冲区大小（必须为2的幂）
+#define PATH_BUF_MASK   (PATH_BUF_SIZE - 1)  // 位掩码，用于安全索引
+#define PATH_NAME_LEN   256   // 单个 dentry 名称最大长度（必须为2的幂）
+#define PATH_NAME_MASK  (PATH_NAME_LEN - 1)  // 位掩码，满足 BPF 验证器要求
 
 // Per-CPU 路���构建缓冲区（避免栈溢出）
 struct path_buf {
