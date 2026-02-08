@@ -28,41 +28,126 @@ struct {
     __uint(max_entries, 1);
 } percpu_creds_buf SEC(".maps");
 
-// 完整路径采集在eBPF中实现复杂，受限于验证器
-// 当前使用简化实现（读取文件名），后续可在Go层通过/proc补全
-static __always_inline int read_full_exe_path(struct task_struct *task, char *buf, int buf_size)
+// 可信任可执行文件白名单 Map - 用于过滤提权事件
+struct {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __uint(max_entries, 2048);
+    __type(key, __u64);      // Murmur 哈希值
+    __type(value, struct exe_item);
+} trusted_exes SEC(".maps");
+
+// Per-CPU buffer for path construction - 避免栈溢出
+struct {
+    __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
+    __type(key, u32);
+    __type(value, struct path_buf);
+    __uint(max_entries, 1);
+} percpu_path_buf SEC(".maps");
+
+// 从缓冲区末尾反向写入路径分量（'/' + name）
+static __always_inline int prepend_path(char *buf, int *pos, const char *name, int name_len)
 {
+    // 边界检查
+    if (name_len <= 0 || name_len >= PATH_NAME_LEN)
+        return -1;
+    if (*pos < name_len + 1)  // '/' + name
+        return -1;
+
+    // 先写名称
+    *pos -= name_len;
+    bpf_probe_read_kernel(&buf[*pos & (PATH_BUF_SIZE - 1)],
+                          name_len & (PATH_NAME_LEN - 1), name);
+    // 再写 '/'
+    (*pos)--;
+    buf[*pos & (PATH_BUF_SIZE - 1)] = '/';
+
+    return 0;
+}
+
+// 读取 dentry 名称并反向写入缓冲区
+static __always_inline int prepend_entry(char *buf, int *pos, char *swap, struct dentry *de)
+{
+    struct qstr d_name = BPF_CORE_READ(de, d_name);
+    int name_len = d_name.len;
+    if (name_len <= 0 || name_len >= PATH_NAME_LEN)
+        return -1;
+
+    // 读取 dentry 名称到 swap 缓冲区
+    int rc = bpf_probe_read_kernel_str(swap, PATH_NAME_LEN, d_name.name);
+    if (rc <= 1)
+        return -1;
+
+    // rc 包含 \0，实际名称长度 = rc - 1
+    return prepend_path(buf, pos, swap, rc - 1);
+}
+
+// 通过遍历 dentry 链读取可执行文件完整路径
+// 返回不含 \0 的路径长度，0 表示失败
+static __always_inline int read_full_exe_path(struct task_struct *task, char *out_buf, int out_size)
+{
+    u32 key = 0;
+    struct path_buf *pbuf;
     struct file *exe_file;
-    struct dentry *dentry;
-    struct qstr d_name;
-    int len;
+    struct dentry *dentry, *parent;
+    int pos, path_len, i;
 
-    // 初始化缓冲区
-    __builtin_memset(buf, 0, buf_size);
+    __builtin_memset(out_buf, 0, out_size);
 
-    // 读取 task->mm->exe_file
+    // 获取 per-CPU 工作缓冲区
+    pbuf = bpf_map_lookup_elem(&percpu_path_buf, &key);
+    if (!pbuf)
+        return 0;
+
+    // 获取 exe_file->f_path.dentry
     exe_file = BPF_CORE_READ(task, mm, exe_file);
     if (!exe_file)
         return 0;
-
-    // 读取 dentry
     dentry = BPF_CORE_READ(exe_file, f_path.dentry);
     if (!dentry)
         return 0;
 
-    // 读取文件名（dentry的名称）
-    d_name = BPF_CORE_READ(dentry, d_name);
-    len = d_name.len;
+    // 从缓冲区末尾开始反向构建��径
+    pos = PATH_BUF_SIZE - 1;
+    pbuf->data[pos] = '\0';
 
-    if (len <= 0 || len >= buf_size)
+    // 遍历 dentry 链（最多 PATH_MAX_ENTS=16 层）
+    for (i = 0; i < PATH_MAX_ENTS; i++) {
+        parent = BPF_CORE_READ(dentry, d_parent);
+        if (!parent || parent == dentry)
+            break;  // 到达根节点
+
+        if (prepend_entry(pbuf->data, &pos, pbuf->swap, dentry))
+            break;  // 出错
+
+        dentry = parent;
+    }
+
+    // 检查是否成功写入了路径内容
+    if (pos >= PATH_BUF_SIZE - 1) {
+        // 没有写入任何内容，回退到读取文件名
+        struct dentry *orig_dentry;
+        orig_dentry = BPF_CORE_READ(exe_file, f_path.dentry);
+        if (!orig_dentry)
+            return 0;
+        struct qstr d_name = BPF_CORE_READ(orig_dentry, d_name);
+        int len = d_name.len;
+        if (len <= 0 || len >= out_size)
+            return 0;
+        len = bpf_probe_read_kernel_str(out_buf, out_size, d_name.name);
+        if (len <= 1)
+            return 0;
+        return len - 1;
+    }
+
+    // 计算路径长度并复制到输出缓冲区
+    path_len = PATH_BUF_SIZE - 1 - pos;
+    if (path_len <= 0 || path_len >= out_size)
         return 0;
 
-    // 使用 bpf_probe_read_kernel_str 读取文件名
-    len = bpf_probe_read_kernel_str(buf, buf_size, d_name.name);
-    if (len < 0)
-        return 0;
+    bpf_probe_read_kernel(out_buf, path_len & (out_size - 1),
+                          &pbuf->data[pos & (PATH_BUF_SIZE - 1)]);
 
-    return len;
+    return path_len;
 }
 
 // Helper: 读取命令行参数
@@ -101,6 +186,39 @@ static __always_inline int read_args(struct task_struct *task, char *buf, int bu
         return 0;
 
     return (int)args_len;
+}
+
+// Murmur OAAT64 哈希函数 (必须与 Go 版本字节级兼容)
+// BPF 验证器限制: 使用有界循环,最多处理 256 字节
+static __always_inline __u64 hash_murmur_OAAT64(const char *s, int len)
+{
+    __u64 h = 525201411107845655ull;
+    int i;
+
+    // 限制长度以满足 BPF 验证器要求
+    if (len > 256)
+        len = 256;
+
+    // 使用有界循环 (不使用 #pragma unroll)
+    for (i = 0; i < 256 && i < len; i++) {
+        h ^= (__u64)(s[i]);
+        h *= 0x5bd1e9955bd1e995;
+        h ^= h >> 47;
+    }
+
+    return h;
+}
+
+// 检查可执行文件是否可信任
+static __always_inline int exe_is_trusted(const char *exe_path, int path_len)
+{
+    __u64 hash = hash_murmur_OAAT64(exe_path, path_len);
+    struct exe_item *ei;
+
+    ei = bpf_map_lookup_elem(&trusted_exes, &hash);
+
+    // 同时检查哈希和长度匹配 (防止哈希碰撞)
+    return (ei && ei->len == path_len);
 }
 
 // 监听进程执行事件
@@ -192,8 +310,30 @@ int kp_commit_creds(struct pt_regs *ctx)
     int new_uid = BPF_CORE_READ(new_cred, uid.val);
     int new_euid = BPF_CORE_READ(new_cred, euid.val);
 
+    // 调试日志1: hook点被调用，打印所有凭证信息
+    bpf_printk("hids: commit_creds CALLED old_uid=%u old_euid=%u new_uid=%u new_euid=%u\n",
+               old_uid, old_euid);
+    bpf_printk("hids: commit_creds new creds: new_uid=%u new_euid=%u\n",
+               new_uid, new_euid);
+
     // 检测条件: 原uid和euid都非0，新uid或euid为0（提权到root）
-    if (old_uid != 0 && old_euid != 0 && (new_uid == 0 || new_euid == 0)) {
+    if ((old_uid != 0 || old_euid != 0) && (new_uid == 0 || new_euid == 0)) {
+        // 调试日志2: 提权条件满足
+        bpf_printk("hids: PRIVILEGE ESCALATION DETECTED! Condition matched\n");
+        // **新增**: 读取可执行文件路径并检查是否可信任
+        char exe_path_buf[256];
+        __builtin_memset(exe_path_buf, 0, sizeof(exe_path_buf));
+        int path_len = read_full_exe_path(task, exe_path_buf, sizeof(exe_path_buf));
+
+        // 如果是可信任的可执行文件,跳过事件上报
+        if (path_len > 0 && exe_is_trusted(exe_path_buf, path_len)) {
+            bpf_printk("hids: exe_path=%s is in whitelist, skipping\n", exe_path_buf);
+            return 0;  // 内核层直接过滤
+        }
+
+        // 调试日志3: 白名单检查通过，准备上报事件
+        bpf_printk("hids: exe_path=%s NOT in whitelist, reporting event\n", exe_path_buf);
+
         // 填充事件数据
         u64 id = bpf_get_current_pid_tgid();
         evt->pid = id;           // 低32位：线程ID
