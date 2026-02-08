@@ -27,6 +27,13 @@ type bpfCommitCredsEvent struct {
 	ExePath   [256]int8
 }
 
+type bpfExeItem struct {
+	Len  int32
+	Sid  uint32
+	Hash uint64
+	Name [2048]int8
+}
+
 type bpfExecveEvent struct {
 	EventType uint8
 	Padding1  [3]uint8
@@ -39,6 +46,11 @@ type bpfExecveEvent struct {
 	Comm      [16]int8
 	ExePath   [256]int8
 	Args      [512]int8
+}
+
+type bpfPathBuf struct {
+	Data [512]int8
+	Swap [260]int8
 }
 
 // loadBpf returns the embedded CollectionSpec for bpf.
@@ -93,6 +105,8 @@ type bpfMapSpecs struct {
 	Events         *ebpf.MapSpec `ebpf:"events"`
 	PercpuBuf      *ebpf.MapSpec `ebpf:"percpu_buf"`
 	PercpuCredsBuf *ebpf.MapSpec `ebpf:"percpu_creds_buf"`
+	PercpuPathBuf  *ebpf.MapSpec `ebpf:"percpu_path_buf"`
+	TrustedExes    *ebpf.MapSpec `ebpf:"trusted_exes"`
 }
 
 // bpfObjects contains all objects after they have been loaded into the kernel.
@@ -117,6 +131,8 @@ type bpfMaps struct {
 	Events         *ebpf.Map `ebpf:"events"`
 	PercpuBuf      *ebpf.Map `ebpf:"percpu_buf"`
 	PercpuCredsBuf *ebpf.Map `ebpf:"percpu_creds_buf"`
+	PercpuPathBuf  *ebpf.Map `ebpf:"percpu_path_buf"`
+	TrustedExes    *ebpf.Map `ebpf:"trusted_exes"`
 }
 
 func (m *bpfMaps) Close() error {
@@ -124,6 +140,8 @@ func (m *bpfMaps) Close() error {
 		m.Events,
 		m.PercpuBuf,
 		m.PercpuCredsBuf,
+		m.PercpuPathBuf,
+		m.TrustedExes,
 	)
 }
 

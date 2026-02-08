@@ -1,0 +1,18 @@
+version: "1.0"
+description: "Trusted executables whitelist for privilege escalation filtering"
+
+# 可信任的可执行文件（绝对路径）
+# 这些进程的提权行为不会触发告警
+# 要求：每个条目必须是绝对路径，以 "/" 开头
+trusted_executables:
+  - "/usr/bin/sudo"
+  - "/usr/bin/su"
+  - "/usr/bin/pkexec"
+  - "/usr/lib/polkit-1/polkit-agent-helper-1"
+  - "/usr/bin/doas"
+  - "/usr/lib/systemd/systemd"
+  - "/usr/lib/systemd/systemd-logind"
+  - "/usr/sbin/unix_chkpwd"
+
+enabled: true
+log_filtered_events: false  # 是否记录被过滤的事件

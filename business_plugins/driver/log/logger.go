@@ -44,6 +44,21 @@ func New() *Logger {
 	}
 }
 
+// Info 记录信息日志（结构化 key-value 格式）
+func (l *Logger) Info(msg string, keysAndValues ...interface{}) {
+	l.SugaredLogger.Infow(msg, keysAndValues...)
+}
+
+// Warn 记录警告日志（结构化 key-value 格式）
+func (l *Logger) Warn(msg string, keysAndValues ...interface{}) {
+	l.SugaredLogger.Warnw(msg, keysAndValues...)
+}
+
+// Error 记录错误日志（结构化 key-value 格式）
+func (l *Logger) Error(msg string, keysAndValues ...interface{}) {
+	l.SugaredLogger.Errorw(msg, keysAndValues...)
+}
+
 // Fatal 记录致命错误并退出
 func (l *Logger) Fatal(msg string, keysAndValues ...interface{}) {
 	l.SugaredLogger.Fatalw(msg, keysAndValues...)

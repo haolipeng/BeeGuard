@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/perf"
 	"github.com/cilium/ebpf/rlimit"
@@ -104,4 +105,10 @@ func (l *Loader) Close() error {
 	}
 
 	return nil
+}
+
+// GetTrustedExesMap 返回 trusted_exes BPF map 句柄
+// 供用户态程序填充可信任可执行文件列表
+func (l *Loader) GetTrustedExesMap() *ebpf.Map {
+	return l.objs.TrustedExes
 }

@@ -6,6 +6,17 @@
 #define EVENT_TYPE_EXECVE       1
 #define EVENT_TYPE_COMMIT_CREDS 2
 
+// 路径相关常量
+#define PATH_MAX_ENTS   16    // dentry 链最大遍历深度
+#define PATH_BUF_SIZE   512   // 路径重建工作缓冲区大小
+#define PATH_NAME_LEN   256   // 单个 dentry 名称最大长度
+
+// Per-CPU 路���构建缓冲区（避免栈溢出）
+struct path_buf {
+    char data[PATH_BUF_SIZE];       // 路径重建缓冲区
+    char swap[PATH_NAME_LEN + 4];   // dentry 名称临时缓冲区
+};
+
 // execve事件结构体（批次3增强：添加父进程信息）
 struct execve_event {
     __u8  event_type;    // 事件类型标识 (EVENT_TYPE_EXECVE = 1)
@@ -35,6 +46,16 @@ struct commit_creds_event {
     __u32 new_euid;      // 提权后的euid
     char comm[16];       // 进程名
     char exe_path[256];  // 可执行文件路径
+} __attribute__((packed));
+
+// 可信任可执行文件条目 (必须与 Go ExeItem 结构体匹配)
+#define CMDLINE_LEN 2048
+
+struct exe_item {
+	int   len;      // 字符串长度 (不含 \0)
+	__u32 sid;      // 预留字段
+	__u64 hash;     // Murmur OAAT64 哈希
+	char  name[CMDLINE_LEN];  // 可执行文件路径
 } __attribute__((packed));
 
 #endif // __TYPES_H
