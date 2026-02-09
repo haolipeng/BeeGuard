@@ -100,7 +100,7 @@ func (e *CommitCredsEvent) ToRecord() *businessplugins.Record {
 	exePath := cstring(e.ExePath[:])
 
 	return &businessplugins.Record{
-		DataType:  60, // 提权检测事件类型
+		DataType:  6006, // 本地提权告警类型
 		Timestamp: time.Now().Unix(),
 		Data: &businessplugins.Payload{
 			Fields: map[string]string{

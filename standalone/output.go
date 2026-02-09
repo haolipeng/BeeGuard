@@ -15,7 +15,7 @@ import (
 	"go.uber.org/zap"
 )
 
-const dataTypePrivilegeEscalation int32 = 60
+const dataTypePrivilegeEscalation int32 = 6006
 
 // DetectionOutput 高危命令检测结果输出结构
 type DetectionOutput struct {

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"errors"
@@ -8,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -89,7 +91,7 @@ func main() {
 	// 使用 WaitGroup 等待 goroutine 退出
 	var wg sync.WaitGroup
 
-	// 6. 启动事件读取循环
+	// 6. 启���事件读取循环
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -196,6 +198,12 @@ func main() {
 				record := evt.ToRecord()
 				record.Data.Fields["exe_path"] = exePath
 
+				// userspace 丰富字段：通过 /proc 和 /etc/passwd 补充服务端需要的高级字段
+				record.Data.Fields["escalated_user"] = resolveUsername(evt.NewUID)
+				record.Data.Fields["parent_process"] = resolveParentComm(evt.PPID)
+				record.Data.Fields["parent_process_user"] = resolveParentUID(evt.PPID)
+				record.Data.Fields["timestamp"] = fmt.Sprintf("%d", record.Timestamp)
+
 				// 记录提权告警日志
 				logger.Warn("Privilege escalation detected",
 					"pid", evt.PID,
@@ -203,6 +211,9 @@ func main() {
 					"ppid", evt.PPID,
 					"comm", cstring(evt.Comm[:]),
 					"exe_path", exePath,
+					"escalated_user", record.Data.Fields["escalated_user"],
+					"parent_process", record.Data.Fields["parent_process"],
+					"parent_process_user", record.Data.Fields["parent_process_user"],
 					"old_uid", evt.OldUID,
 					"old_euid", evt.OldEUID,
 					"new_uid", evt.NewUID,
@@ -304,6 +315,61 @@ func resolveExePath(tgid uint32, ebpfPath string) string {
 		return link
 	}
 	return ebpfPath
+}
+
+// resolveParentComm 读取父进程名称
+// 通过 /proc/<ppid>/comm 获取父进程的命令名
+func resolveParentComm(ppid uint32) string {
+	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/comm", ppid))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(data))
+}
+
+// resolveParentUID 读取父进程的 UID
+// 通过 /proc/<ppid>/status 中的 Uid 行获取真实 UID
+func resolveParentUID(ppid uint32) string {
+	f, err := os.Open(fmt.Sprintf("/proc/%d/status", ppid))
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "Uid:") {
+			fields := strings.Fields(line)
+			if len(fields) >= 2 {
+				return fields[1] // 真实 UID
+			}
+			break
+		}
+	}
+	return ""
+}
+
+// resolveUsername 将 UID 解析为用户名
+// 通过读取 /etc/passwd 将数字 UID 映射为用户名（如 0 → "root"）
+func resolveUsername(uid uint32) string {
+	uidStr := fmt.Sprintf("%d", uid)
+
+	f, err := os.Open("/etc/passwd")
+	if err != nil {
+		return uidStr
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := scanner.Text()
+		parts := strings.Split(line, ":")
+		if len(parts) >= 3 && parts[2] == uidStr {
+			return parts[0]
+		}
+	}
+	return uidStr
 }
 
 // cstring 将C字符串（以\0结尾）转换为Go字符串
