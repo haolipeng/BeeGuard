@@ -5,6 +5,12 @@
 #include <bpf/bpf_tracing.h>
 #include "types.h"
 
+// container_of 宏 (BPF 程序中需自行定义)
+#ifndef container_of
+#define container_of(ptr, type, member) \
+    ((type *)((void *)(ptr) - __builtin_offsetof(type, member)))
+#endif
+
 // Perf Event Array Map - 用于将事件从内核态传递到用户态
 struct {
     __uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
@@ -44,111 +50,126 @@ struct {
     __uint(max_entries, 1);
 } percpu_path_buf SEC(".maps");
 
-// 从缓冲区末尾反向写入路径分量（'/' + name）
-static __always_inline int prepend_path(char *buf, int *pos, const char *name, int name_len)
+// ========== 路径构建函数 (参考 Elkeid d_path 实现) ==========
+
+// 向路径缓冲区追加路径分量 (缓冲区末尾反向写入，正向计数长度)
+// data: 路径缓冲区, len: 已累积长度(含末尾\0), entry: 路径分量, num: 分量字节数
+static __noinline int prepend_path(char *data, __u32 *len, char *entry, int num)
 {
-    // 边界检查
-    if (name_len <= 0 || name_len >= PATH_NAME_LEN)
-        return -1;
-    if (*pos < name_len + 1)  // '/' + name
+    if (!num)
+        return 0;
+    if (*len + num > PATH_BUF_SIZE)
         return -1;
 
-    // 先写名称
-    *pos -= name_len;
-    bpf_probe_read_kernel(&buf[*pos & (PATH_BUF_SIZE - 1)],
-                          name_len & (PATH_NAME_LEN - 1), name);
-    // 再写 '/'
-    (*pos)--;
-    buf[*pos & (PATH_BUF_SIZE - 1)] = '/';
-
+    bpf_probe_read_kernel(&data[(PATH_BUF_SIZE - *len - num) & PATH_BUF_MASK],
+                          num & PATH_NAME_MASK, entry);
+    *len += num;
     return 0;
 }
 
-// 读取 dentry 名称并反向写入缓冲区
-static __always_inline int prepend_entry(char *buf, int *pos, char *swap, struct dentry *de)
+// 读取 dentry 名称并追加到路径缓冲区
+// swap 布局: swap[3]='/' 前缀, swap[4..] 存 dentry 名称
+static __noinline int prepend_entry(char *data, __u32 *len, char *swap, struct dentry *de)
 {
-    struct qstr d_name = BPF_CORE_READ(de, d_name);
-    int name_len = d_name.len;
-    if (name_len <= 0 || name_len >= PATH_NAME_LEN)
-        return -1;
+    char *name;
+    int rc;
 
-    // 读取 dentry 名称到 swap 缓冲区
-    int rc = bpf_probe_read_kernel_str(swap, PATH_NAME_LEN, d_name.name);
-    if (rc <= 1)
+    if (!de)
         return -1;
-
-    // rc 包含 \0，实际名称长度 = rc - 1
-    return prepend_path(buf, pos, swap, rc - 1);
+    name = (char *)BPF_CORE_READ(de, d_name.name);
+    if (!name)
+        return -1;
+    rc = bpf_probe_read_kernel_str(&swap[4], PATH_NAME_LEN, name);
+    if (rc <= 0)
+        return -1;
+    // 非 '/' 开头: 从 swap[3] 写入 "/name" (rc 字节)
+    if (swap[4] != '/')
+        rc = prepend_path(data, len, &swap[3], rc);
+    else if (rc > 2)  // '/' 开头且长度>2: 跳过顶层 '/'
+        rc = prepend_path(data, len, &swap[4], rc - 1);
+    return rc;
 }
 
-// 通过遍历 dentry 链读取可执行文件完整路径
+// 从 vfsmount 反推 mount 结构体
+static __always_inline struct mount *real_mount(struct vfsmount *mnt)
+{
+    return container_of(mnt, struct mount, mnt);
+}
+
+// 构建完整路径 (支持跨挂载点遍历)
+// 处理 bind mount, overlay 等跨文件系统场景
+// 返回路径在 data 中的起始指针，sz 返回总长度(含\0)
+static __noinline char *build_d_path(char *data, char *swap,
+                                     struct dentry *dentry, struct vfsmount *vfsmnt,
+                                     __u32 *sz)
+{
+    struct mount *mount = real_mount(vfsmnt);
+    struct mount *mnt_parent;
+    __u32 len = 1;  // trailing \0
+
+    mnt_parent = BPF_CORE_READ(mount, mnt_parent);
+    data[PATH_BUF_MASK] = 0;
+    swap[3] = '/';
+
+    for (int i = 0; i < PATH_MAX_ENTS; i++) {
+        struct dentry *root = BPF_CORE_READ(vfsmnt, mnt_root);
+        struct dentry *parent = BPF_CORE_READ(dentry, d_parent);
+
+        if (dentry == root || dentry == parent) {
+            if (dentry != root)
+                break;
+            // 到达 mount 根但不是全局根: 跨越到上层挂载点
+            if (mount != mnt_parent) {
+                dentry = BPF_CORE_READ(mount, mnt_mountpoint);
+                mount = BPF_CORE_READ(mount, mnt_parent);
+                mnt_parent = BPF_CORE_READ(mount, mnt_parent);
+                vfsmnt = &mount->mnt;
+                continue;
+            }
+            break;  // 全局根
+        }
+        if (prepend_entry(data, &len, swap, dentry))
+            break;
+        dentry = parent;
+    }
+
+    *sz = len;
+    return &data[(PATH_BUF_SIZE - len) & PATH_BUF_MASK];
+}
+
+// 读取可执行文件完整路径 (支持跨挂载点)
 // 返回不含 \0 的路径长度，0 表示失败
 static __always_inline int read_full_exe_path(struct task_struct *task, char *out_buf, int out_size)
 {
     u32 key = 0;
     struct path_buf *pbuf;
-    struct file *exe_file;
-    struct dentry *dentry, *parent;
-    int pos, path_len, i;
+    struct vfsmount *exe_mnt;
+    struct dentry *exe_dentry;
+    char *path_start;
+    __u32 path_len;
 
     __builtin_memset(out_buf, 0, out_size);
 
-    // 获取 per-CPU 工作缓冲区
     pbuf = bpf_map_lookup_elem(&percpu_path_buf, &key);
     if (!pbuf)
         return 0;
 
-    // 获取 exe_file->f_path.dentry
-    exe_file = BPF_CORE_READ(task, mm, exe_file);
-    if (!exe_file)
-        return 0;
-    dentry = BPF_CORE_READ(exe_file, f_path.dentry);
-    if (!dentry)
+    exe_mnt = BPF_CORE_READ(task, mm, exe_file, f_path.mnt);
+    exe_dentry = BPF_CORE_READ(task, mm, exe_file, f_path.dentry);
+    if (!exe_mnt || !exe_dentry)
         return 0;
 
-    // 从缓冲区末尾开始反向构建��径
-    pos = PATH_BUF_SIZE - 1;
-    pbuf->data[pos] = '\0';
+    path_start = build_d_path(pbuf->data, pbuf->swap, exe_dentry, exe_mnt, &path_len);
 
-    // 遍历 dentry 链（最多 PATH_MAX_ENTS=16 层）
-    for (i = 0; i < PATH_MAX_ENTS; i++) {
-        parent = BPF_CORE_READ(dentry, d_parent);
-        if (!parent || parent == dentry)
-            break;  // 到达根节点
-
-        if (prepend_entry(pbuf->data, &pos, pbuf->swap, dentry))
-            break;  // 出错
-
-        dentry = parent;
-    }
-
-    // 检查是否成功写入了路径内容
-    if (pos >= PATH_BUF_SIZE - 1) {
-        // 没有写入任何内容，回退到读取文件名
-        struct dentry *orig_dentry;
-        orig_dentry = BPF_CORE_READ(exe_file, f_path.dentry);
-        if (!orig_dentry)
-            return 0;
-        struct qstr d_name = BPF_CORE_READ(orig_dentry, d_name);
-        int len = d_name.len;
-        if (len <= 0 || len >= out_size)
-            return 0;
-        len = bpf_probe_read_kernel_str(out_buf, out_size, d_name.name);
-        if (len <= 1)
-            return 0;
-        return len - 1;
-    }
-
-    // 计算路径长度并复制到输出缓冲区
-    path_len = PATH_BUF_SIZE - 1 - pos;
-    if (path_len <= 0 || path_len >= out_size)
+    if (path_len <= 1 || path_len > (__u32)out_size)
         return 0;
 
-    bpf_probe_read_kernel(out_buf, path_len & (out_size - 1),
-                          &pbuf->data[pos & (PATH_BUF_SIZE - 1)]);
+    bpf_probe_read_kernel(out_buf, path_len & PATH_BUF_MASK, path_start);
 
-    return path_len;
+    return (int)(path_len - 1);
 }
+
+// ========== 辅助函数 ==========
 
 // Helper: 读取命令行参数
 // 从 task->mm->arg_start 到 arg_end 读取用户态内存
@@ -221,6 +242,8 @@ static __always_inline int exe_is_trusted(const char *exe_path, int path_len)
     return (ei && ei->len == path_len);
 }
 
+// ========== eBPF 程序入口 ==========
+
 // 监听进程执行事件
 // Hook点: sched_process_exec - 在execve系统调用成功后触发
 SEC("raw_tracepoint/sched_process_exec")
@@ -253,7 +276,6 @@ int tp_proc_exec(struct bpf_raw_tracepoint_args *ctx)
     }
 
     // 获取进程组ID（简化版）
-    // 完整的PGID需要复杂的namespace处理，这里使用简化实现
     evt->pgid = BPF_CORE_READ(task, tgid);
 
     // 获取当前进程的UID
@@ -310,29 +332,21 @@ int kp_commit_creds(struct pt_regs *ctx)
     int new_uid = BPF_CORE_READ(new_cred, uid.val);
     int new_euid = BPF_CORE_READ(new_cred, euid.val);
 
-    // 调试日志1: hook点被调用，打印所有凭证信息
-    bpf_printk("hids: commit_creds CALLED old_uid=%u old_euid=%u new_uid=%u new_euid=%u\n",
-               old_uid, old_euid);
-    bpf_printk("hids: commit_creds new creds: new_uid=%u new_euid=%u\n",
-               new_uid, new_euid);
-
     // 检测条件: 原uid和euid都非0，新uid或euid为0（提权到root）
     if ((old_uid != 0 || old_euid != 0) && (new_uid == 0 || new_euid == 0)) {
-        // 调试日志2: 提权条件满足
+        // 调试日志: 提权条件满足
         bpf_printk("hids: PRIVILEGE ESCALATION DETECTED! Condition matched\n");
-        // **新增**: 读取可执行文件路径并检查是否可信任
-        char exe_path_buf[256];
-        __builtin_memset(exe_path_buf, 0, sizeof(exe_path_buf));
-        int path_len = read_full_exe_path(task, exe_path_buf, sizeof(exe_path_buf));
+
+        // 读取可执行文件路径到事件结构体中（位于per-CPU map，避免栈上分配256字节缓冲区）
+        int path_len = read_full_exe_path(task, evt->exe_path, sizeof(evt->exe_path));
 
         // 如果是可信任的可执行文件,跳过事件上报
-        if (path_len > 0 && exe_is_trusted(exe_path_buf, path_len)) {
-            bpf_printk("hids: exe_path=%s is in whitelist, skipping\n", exe_path_buf);
+        if (path_len > 0 && exe_is_trusted(evt->exe_path, path_len)) {
+            bpf_printk("hids: exe_path=%s is in whitelist, skipping\n", evt->exe_path);
             return 0;  // 内核层直接过滤
         }
 
-        // 调试日志3: 白名单检查通过，准备上报事件
-        bpf_printk("hids: exe_path=%s NOT in whitelist, reporting event\n", exe_path_buf);
+        bpf_printk("hids: exe_path=%s NOT in whitelist, reporting event\n", evt->exe_path);
 
         // 填充事件数据
         u64 id = bpf_get_current_pid_tgid();
@@ -357,10 +371,7 @@ int kp_commit_creds(struct pt_regs *ctx)
         // 获取进程名
         bpf_get_current_comm(&evt->comm, sizeof(evt->comm));
 
-        // 读取可执行文件路径
-        read_full_exe_path(task, evt->exe_path, sizeof(evt->exe_path));
-
-        // 调试打印：evt 所有字段（bpf_printk 每次最多约3个格式化参数，故分多行）
+        // 调试打印
         bpf_printk("hids: commit_creds pid=%u tgid=%u ppid=%u\n", evt->pid, evt->tgid, evt->ppid);
         bpf_printk("hids: commit_creds uid=%u old_uid=%u old_euid=%u\n", evt->uid, evt->old_uid, evt->old_euid);
         bpf_printk("hids: commit_creds new_uid=%u new_euid=%u\n", evt->new_uid, evt->new_euid);

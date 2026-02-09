@@ -373,7 +373,7 @@ plugins_directory: "/opt/cloudsec/plugins"
 
 ```bash
 # 仅加载你的插件
-sudo ./build/agent -standalone -plugins=your_plugin -output=log -test
+sudo ./build/agent -standalone -plugins=your_plugin -output=stderr -test
 ```
 
 ### 7.2 日志输出
