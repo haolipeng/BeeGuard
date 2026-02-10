@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"net"
 	"time"
 
 	businessplugins "business_plugins/lib"
@@ -12,8 +13,9 @@ import (
 
 // 事件类型常量
 const (
-	EventTypeExecve      uint8 = 1
-	EventTypeCommitCreds uint8 = 2
+	EventTypeExecve       uint8 = 1
+	EventTypeCommitCreds  uint8 = 2
+	EventTypeReverseShell uint8 = 3
 )
 
 // GetEventType 从原始数据中获取事件类型
@@ -114,6 +116,77 @@ func (e *CommitCredsEvent) ToRecord() *businessplugins.Record {
 				"new_euid": fmt.Sprintf("%d", e.NewEUID),
 				"comm":     comm,
 				"exe_path": exePath,
+			},
+		},
+	}
+}
+
+// ReverseShellEvent 反弹Shell检测事件 - 对应C结构体 struct reverse_shell_event
+type ReverseShellEvent struct {
+	EventType  uint8      // EVENT_TYPE_REVERSE_SHELL = 3
+	FDType     uint8      // 1=stdin, 2=stdout, 3=both
+	Padding1   [2]byte    // 对齐填充
+	PID        uint32     // 进程ID（线程ID）
+	TGID       uint32     // 线程组ID（进程ID）
+	PPID       uint32     // 父进程ID
+	PGID       uint32     // 进程组ID
+	UID        uint32     // 用户ID
+	RemoteIP   uint32     // 远程IPv4地址（网络字节序）
+	RemotePort uint16     // 远程端口（网络字节序）
+	LocalPort  uint16     // 本地端口（主机字节序）
+	LocalIP    uint32     // 本地IPv4地址（网络字节序）
+	Comm       [16]byte   // 进程名
+	ExePath    [256]byte  // 可执行文件路径
+	Args       [512]byte  // 命令行参数
+}
+
+// UnmarshalBinary 从二进制数据反序列化事件
+func (e *ReverseShellEvent) UnmarshalBinary(data []byte) error {
+	buf := bytes.NewReader(data)
+	return binary.Read(buf, binary.LittleEndian, e)
+}
+
+// ToRecord 转换为Agent的protobuf Record格式
+func (e *ReverseShellEvent) ToRecord() *businessplugins.Record {
+	comm := cstring(e.Comm[:])
+	exePath := cstring(e.ExePath[:])
+	args := argsString(e.Args[:])
+
+	// 将网络字节序IP转换为可读格式
+	remoteIP := net.IP([]byte{
+		byte(e.RemoteIP),
+		byte(e.RemoteIP >> 8),
+		byte(e.RemoteIP >> 16),
+		byte(e.RemoteIP >> 24),
+	}).String()
+	localIP := net.IP([]byte{
+		byte(e.LocalIP),
+		byte(e.LocalIP >> 8),
+		byte(e.LocalIP >> 16),
+		byte(e.LocalIP >> 24),
+	}).String()
+
+	// 端口从网络字节序转换
+	remotePort := binary.BigEndian.Uint16([]byte{byte(e.RemotePort), byte(e.RemotePort >> 8)})
+
+	return &businessplugins.Record{
+		DataType:  6007, // 反弹Shell告警类型
+		Timestamp: time.Now().Unix(),
+		Data: &businessplugins.Payload{
+			Fields: map[string]string{
+				"pid":         fmt.Sprintf("%d", e.PID),
+				"tgid":        fmt.Sprintf("%d", e.TGID),
+				"ppid":        fmt.Sprintf("%d", e.PPID),
+				"pgid":        fmt.Sprintf("%d", e.PGID),
+				"uid":         fmt.Sprintf("%d", e.UID),
+				"comm":        comm,
+				"exe_path":    exePath,
+				"args":        args,
+				"fd_type":     fmt.Sprintf("%d", e.FDType),
+				"remote_ip":   remoteIP,
+				"remote_port": fmt.Sprintf("%d", remotePort),
+				"local_ip":    localIP,
+				"local_port":  fmt.Sprintf("%d", e.LocalPort),
 			},
 		},
 	}
