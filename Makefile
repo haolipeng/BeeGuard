@@ -138,6 +138,7 @@ deploy: build
 	@sudo cp $(PLUGINS_DIR)/detector $(DEPLOY_DIR)/plugins/detector/
 	@sudo cp $(PLUGINS_DIR)/driver $(DEPLOY_DIR)/plugins/driver/
 	@sudo cp $(DRIVER_SRC)/config/dangerous_commands.yaml $(DEPLOY_DIR)/plugins/driver/config/
+	@sudo cp $(DRIVER_SRC)/config/privilege_escalation_whitelist.yaml $(DEPLOY_DIR)/plugins/driver/config/
 	@sudo chmod 755 $(DEPLOY_DIR)/bin/$(BINARY_NAME)
 	@sudo chmod 755 $(DEPLOY_DIR)/plugins/collector/collector
 	@sudo chmod 755 $(DEPLOY_DIR)/plugins/baseline/baseline
@@ -176,6 +177,7 @@ deploy-plugins: build-plugins
 	@sudo cp $(PLUGINS_DIR)/detector $(DEPLOY_DIR)/plugins/detector/
 	@sudo cp $(PLUGINS_DIR)/driver $(DEPLOY_DIR)/plugins/driver/
 	@sudo cp $(DRIVER_SRC)/config/dangerous_commands.yaml $(DEPLOY_DIR)/plugins/driver/config/
+	@sudo cp $(DRIVER_SRC)/config/privilege_escalation_whitelist.yaml $(DEPLOY_DIR)/plugins/driver/config/
 	@sudo chmod 755 $(DEPLOY_DIR)/plugins/collector/collector
 	@sudo chmod 755 $(DEPLOY_DIR)/plugins/baseline/baseline
 	@sudo chmod 755 $(DEPLOY_DIR)/plugins/detector/detector
@@ -189,6 +191,7 @@ deploy-driver: build-driver
 	@sudo mkdir -p $(DEPLOY_DIR)/plugins/driver/config
 	@sudo cp $(PLUGINS_DIR)/driver $(DEPLOY_DIR)/plugins/driver/
 	@sudo cp $(DRIVER_SRC)/config/dangerous_commands.yaml $(DEPLOY_DIR)/plugins/driver/config/
+	@sudo cp $(DRIVER_SRC)/config/privilege_escalation_whitelist.yaml $(DEPLOY_DIR)/plugins/driver/config/
 	@sudo chmod 755 $(DEPLOY_DIR)/plugins/driver/driver
 	@echo "Deploy complete: $(DEPLOY_DIR)/plugins/driver/"
 
