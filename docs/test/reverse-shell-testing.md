@@ -23,22 +23,12 @@
 ## 第一步：编译
 
 ```bash
+# 1.进入源代码目录下
 cd /home/work/goProject/src/company/agent
-
-# 1. 生成 eBPF 绑定代码（C 结构体或 go:generate 指令变更后必须执行）
-cd business_plugins/driver && go generate ./ebpf/ && cd ../..
 
 # 2. 编译 agent + 所有插件
 make build
 ```
-
-**go generate 常见报错**：
-
-| 报错 | 解决方法 |
-|------|----------|
-| `clang: not found` | `apt install clang llvm` |
-| `vmlinux.h: No such file` | 确认 `bpf/vmlinux.h` 存在，或通过 `bpftool btf dump file /sys/kernel/btf/vmlinux format c > bpf/vmlinux.h` 生成 |
-| `unknown type name 'struct reverse_shell_event'` | 检查 `types.h` 中是否正确定义了 `reverse_shell_event` 结构体 |
 
 ## 第二步：启动 Agent
 
@@ -46,14 +36,6 @@ make build
 # Terminal A: 以 standalone 模式启动，事件输出到 stderr
 sudo ./build/agent -standalone -plugins=driver -output=stderr -test
 ```
-
-启动成功标志：
-
-```
-level=INFO msg="eBPF program loaded successfully"
-```
-
-保持此终端运行，后续测试的告警输出会显示在这里。
 
 **可选**：另开终端监控 eBPF 内核调试日志：
 
