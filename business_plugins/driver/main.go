@@ -224,6 +224,30 @@ func main() {
 					logger.Error("Failed to send privilege escalation record to agent", "error", err)
 				}
 
+			case events.EventTypeReverseShell:
+				// 处理反弹Shell事件
+				var evt events.ReverseShellEvent
+				if err := evt.UnmarshalBinary(rec.RawSample); err != nil {
+					logger.Error("Failed to unmarshal reverse shell event", "error", err)
+					continue
+				}
+
+				record := evt.ToRecord()
+
+				logger.Warn("Reverse shell detected",
+					"pid", evt.PID,
+					"tgid", evt.TGID,
+					"ppid", evt.PPID,
+					"comm", cstring(evt.Comm[:]),
+					"exe_path", cstring(evt.ExePath[:]),
+					"fd_type", evt.FDType,
+					"remote_ip", record.Data.Fields["remote_ip"],
+					"remote_port", record.Data.Fields["remote_port"])
+
+				if err := client.SendRecord(record); err != nil {
+					logger.Error("Failed to send reverse shell record to agent", "error", err)
+				}
+
 			default:
 				logger.Warn("Unknown event type", "type", eventType)
 			}

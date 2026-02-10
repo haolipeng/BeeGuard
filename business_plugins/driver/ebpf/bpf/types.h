@@ -3,8 +3,9 @@
 #define __TYPES_H
 
 // 事件类型标识
-#define EVENT_TYPE_EXECVE       1
-#define EVENT_TYPE_COMMIT_CREDS 2
+#define EVENT_TYPE_EXECVE        1
+#define EVENT_TYPE_COMMIT_CREDS  2
+#define EVENT_TYPE_REVERSE_SHELL 3
 
 // 路径相关常量
 #define PATH_MAX_ENTS   16    // dentry 链最大遍历深度
@@ -48,6 +49,25 @@ struct commit_creds_event {
     __u32 new_euid;      // 提权后的euid
     char comm[16];       // 进程名
     char exe_path[256];  // 可执行文件路径
+} __attribute__((packed));
+
+// 反弹Shell检测事件结构体
+struct reverse_shell_event {
+    __u8  event_type;     // EVENT_TYPE_REVERSE_SHELL = 3
+    __u8  fd_type;        // 触发的FD: 1=stdin, 2=stdout, 3=both
+    __u8  padding1[2];    // 对齐填充
+    __u32 pid;            // 进程ID（线程ID）
+    __u32 tgid;           // 线程组ID（进程ID）
+    __u32 ppid;           // 父进程ID
+    __u32 pgid;           // 进程组ID
+    __u32 uid;            // 用户ID
+    __u32 remote_ip;      // 远程IPv4地址（网络字节序）
+    __u16 remote_port;    // 远程端口（网络字节序）
+    __u16 local_port;     // 本地端口（主机字节序）
+    __u32 local_ip;       // 本地IPv4地址（网络字节序）
+    char  comm[16];       // 进程名
+    char  exe_path[256];  // 可执行文件路径
+    char  args[512];      // 命令行参数
 } __attribute__((packed));
 
 // 可信任可执行文件条目 (必须与 Go ExeItem 结构体匹配)

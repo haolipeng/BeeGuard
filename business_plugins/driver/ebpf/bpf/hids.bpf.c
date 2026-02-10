@@ -50,8 +50,15 @@ struct {
     __uint(max_entries, 1);
 } percpu_path_buf SEC(".maps");
 
-// ========== 路径构建函数 (参考 Elkeid d_path 实现) ==========
+// Per-CPU Array Map for reverse_shell_event - 用于反弹Shell检测
+struct {
+    __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
+    __type(key, u32);
+    __type(value, struct reverse_shell_event);
+    __uint(max_entries, 1);
+} percpu_rs_buf SEC(".maps");
 
+// ========== 路径构建函数 ==========
 // 向路径缓冲区追加路径分量 (缓冲区末尾反向写入，正向计数长度)
 // data: 路径缓冲区, len: 已累积长度(含末尾\0), entry: 路径分量, num: 分量字节数
 static __noinline int prepend_path(char *data, __u32 *len, char *entry, int num)
@@ -242,6 +249,77 @@ static __always_inline int exe_is_trusted(const char *exe_path, int path_len)
     return (ei && ei->len == path_len);
 }
 
+// ========== 反弹Shell检测辅助函数 ==========
+
+// 检查指定 FD 是否指向 IPv4 Socket
+// 返回: 0=不是socket, 1=是IPv4 socket (同时填充 ip/port 信息)
+static __always_inline int check_fd_is_socket(
+    struct task_struct *task, int fd_num,
+    __u32 *remote_ip, __u16 *remote_port,
+    __u32 *local_ip, __u16 *local_port)
+{
+    struct files_struct *files;
+    struct fdtable *fdt;
+    struct file **fd_array;
+    struct file *file_ptr;
+    unsigned short mode;
+    struct socket *sock;
+    struct sock *sk;
+    unsigned short family;
+    __u32 daddr;
+
+    // 1. 获取文件描述符表
+    files = BPF_CORE_READ(task, files);
+    if (!files)
+        return 0;
+
+    fdt = BPF_CORE_READ(files, fdt);
+    if (!fdt)
+        return 0;
+
+    fd_array = BPF_CORE_READ(fdt, fd);
+    if (!fd_array)
+        return 0;
+
+    // 2. 读取目标 FD 对应的 file 指针
+    bpf_probe_read_kernel(&file_ptr, sizeof(file_ptr), &fd_array[fd_num]);
+    if (!file_ptr)
+        return 0;
+
+    // 3. 检查文件类型是否为 Socket (S_IFSOCK = 0140000)
+    mode = BPF_CORE_READ(file_ptr, f_inode, i_mode);
+    if ((mode & 0170000) != 0140000)
+        return 0;
+
+    // 4. 获取 socket 结构体 (file->private_data 指向 struct socket)
+    sock = (struct socket *)BPF_CORE_READ(file_ptr, private_data);
+    if (!sock)
+        return 0;
+
+    // 5. 获取 sock 结构体
+    sk = BPF_CORE_READ(sock, sk);
+    if (!sk)
+        return 0;
+
+    // 6. 检查是否为 IPv4 (AF_INET = 2)
+    family = BPF_CORE_READ(sk, __sk_common.skc_family);
+    if (family != 2)
+        return 0;
+
+    // 7. 检查是否有远程地址（已连接）
+    daddr = BPF_CORE_READ(sk, __sk_common.skc_daddr);
+    if (daddr == 0)
+        return 0;
+
+    // 8. 提取连接信息
+    *remote_ip = daddr;
+    *remote_port = BPF_CORE_READ(sk, __sk_common.skc_dport);
+    *local_ip = BPF_CORE_READ(sk, __sk_common.skc_rcv_saddr);
+    *local_port = BPF_CORE_READ(sk, __sk_common.skc_num);
+
+    return 1;
+}
+
 // ========== eBPF 程序入口 ==========
 
 // 监听进程执行事件
@@ -294,6 +372,61 @@ int tp_proc_exec(struct bpf_raw_tracepoint_args *ctx)
     // 通过Perf Event Array输出事件到用户态
     bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU,
                           evt, sizeof(*evt));
+
+    // --- 反弹 Shell 检测 ---
+    __u32 rs_remote_ip = 0, rs_local_ip = 0;
+    __u16 rs_remote_port = 0, rs_local_port = 0;
+    __u8 fd_type = 0;
+
+    // 检查 stdin (FD 0)
+    if (check_fd_is_socket(task, 0, &rs_remote_ip, &rs_remote_port, &rs_local_ip, &rs_local_port))
+        fd_type |= 1;
+
+    // 检查 stdout (FD 1)
+    __u32 rs_remote_ip2 = 0, rs_local_ip2 = 0;
+    __u16 rs_remote_port2 = 0, rs_local_port2 = 0;
+    if (check_fd_is_socket(task, 1, &rs_remote_ip2, &rs_remote_port2, &rs_local_ip2, &rs_local_port2))
+        fd_type |= 2;
+
+    if (fd_type) {
+        u32 rs_key = 0;
+        struct reverse_shell_event *rs_evt = bpf_map_lookup_elem(&percpu_rs_buf, &rs_key);
+        if (rs_evt) {
+            __builtin_memset(rs_evt, 0, sizeof(*rs_evt));
+            rs_evt->event_type = EVENT_TYPE_REVERSE_SHELL;
+            rs_evt->fd_type = fd_type;
+
+            // 填充进程信息（复用已获取的数据）
+            rs_evt->pid = evt->pid;
+            rs_evt->tgid = evt->tgid;
+            rs_evt->ppid = evt->ppid;
+            rs_evt->pgid = evt->pgid;
+            rs_evt->uid = evt->uid;
+            bpf_get_current_comm(&rs_evt->comm, sizeof(rs_evt->comm));
+
+            // 读取可执行文件路径和命令行参数
+            read_full_exe_path(task, rs_evt->exe_path, sizeof(rs_evt->exe_path));
+            read_args(task, rs_evt->args, sizeof(rs_evt->args));
+
+            // 填充 socket 信息（优先用 stdin 的，没有则用 stdout 的）
+            if (fd_type & 1) {
+                rs_evt->remote_ip = rs_remote_ip;
+                rs_evt->remote_port = rs_remote_port;
+                rs_evt->local_ip = rs_local_ip;
+                rs_evt->local_port = rs_local_port;
+            } else {
+                rs_evt->remote_ip = rs_remote_ip2;
+                rs_evt->remote_port = rs_remote_port2;
+                rs_evt->local_ip = rs_local_ip2;
+                rs_evt->local_port = rs_local_port2;
+            }
+
+            bpf_printk("hids: REVERSE SHELL DETECTED! pid=%u fd_type=%u\n", rs_evt->pid, rs_evt->fd_type);
+
+            bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU,
+                                  rs_evt, sizeof(*rs_evt));
+        }
+    }
 
     return 0;
 }
@@ -371,14 +504,12 @@ int kp_commit_creds(struct pt_regs *ctx)
         // 获取进程名
         bpf_get_current_comm(&evt->comm, sizeof(evt->comm));
 
-        // 调试打印
         bpf_printk("hids: commit_creds pid=%u tgid=%u ppid=%u\n", evt->pid, evt->tgid, evt->ppid);
         bpf_printk("hids: commit_creds uid=%u old_uid=%u old_euid=%u\n", evt->uid, evt->old_uid, evt->old_euid);
         bpf_printk("hids: commit_creds new_uid=%u new_euid=%u\n", evt->new_uid, evt->new_euid);
         bpf_printk("hids: commit_creds comm=%s\n", evt->comm);
         bpf_printk("hids: commit_creds exe_path=%s\n", evt->exe_path);
 
-        // 通过Perf Event Array输出事件到用户态
         bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU,
                               evt, sizeof(*evt));
     }
@@ -386,5 +517,4 @@ int kp_commit_creds(struct pt_regs *ctx)
     return 0;
 }
 
-// eBPF程序许可证声明（必需）
 char LICENSE[] SEC("license") = "GPL";
