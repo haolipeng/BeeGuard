@@ -236,7 +236,7 @@ rm -f /tmp/test_fifo
 |------|----------|
 | Agent 启动失败 `failed to load eBPF` | 确认 root 权限；检查内核版本 >= 5.4；`uname -r` 查看 |
 | 无任何告警输出 | 查看 eBPF 调试日志：`sudo cat /sys/kernel/debug/tracing/trace_pipe \| grep hids` |
-| `nc -e` 报错 `invalid option` | 安�� `netcat-traditional`：`sudo apt install netcat-traditional`，使用 `nc.traditional` |
+| `nc -e` 报错 `invalid option` | 安装 `netcat-traditional`：`sudo apt install netcat-traditional`，使用 `nc.traditional` |
 | bash /dev/tcp 报错 `No such file` | 确认使用的是 bash（不是 dash/sh）：`bash -c 'echo $BASH_VERSION'` |
 | fd_type=1 或 2（不是 3） | 只有一个 FD 指向 socket，检查反弹命令是否正确重定向了 stdin 和 stdout |
 | remote_ip 显示 0.0.0.0 | socket 未成功连接，检查监听端是否启动；或 `skc_daddr` 读取失败 |
@@ -258,6 +258,6 @@ rm -f /tmp/test_fifo
 |------|------|----------|
 | mkfifo 管道方式 | bash 的 FD 0/1 是 pipe 而非 socket | Hook connect/bind 系统调用，关联 socket 与进程树 |
 | socat PTY 方式 | FD 指向 PTY 设备而非 socket | 增加 TTY 检测，结合有无 TTY 做辅助判断 |
-| 高编号 FD 方式（如 `exec 5<>/dev/tcp/...`） | 只检查 FD 0/1，不检查其他 FD | 扩展 FD 扫描范围（参考 Elkeid 扫描前 16 个 FD） |
+| 高编号 FD 方式（如 `exec 5<>/dev/tcp/...`） | 只检查 FD 0/1，不检查其他 FD | 扩展 FD 扫描范围（扫描前 16 个 FD） |
 | execve 后再 dup2 的方式 | 检测时机在 execve，之后的 dup2 无法感知 | Hook dup2/dup3 系统调用 |
 | IPv6 反弹 | 仅检查 AF_INET | 增加 AF_INET6 支持 |
