@@ -127,8 +127,15 @@ struct accept_event {
     char  exe_path[256];
 } __attribute__((packed));
 
-// DNS 查询事件结构体
-#define DNS_DOMAIN_MAX 256
+// DNS 相关常量
+#define DNS_DOMAIN_MAX  256
+#define DNS_RECORD_MAX  512
+#define DNS_RECORD_MASK (DNS_RECORD_MAX - 1)
+
+// DNS 原始包临时缓冲区（per-CPU map 使用）
+struct dns_data_buf {
+    char data[DNS_RECORD_MAX];
+};
 
 struct dns_event {
     __u8  event_type;     // EVENT_TYPE_DNS = 7

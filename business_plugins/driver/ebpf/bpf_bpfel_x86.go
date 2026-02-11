@@ -77,6 +77,8 @@ type bpfConnectEvent struct {
 	ExePath    [256]int8
 }
 
+type bpfDnsDataBuf struct{ Data [512]int8 }
+
 type bpfDnsEvent struct {
 	EventType     uint8
 	Padding1      [3]uint8
@@ -181,7 +183,6 @@ type bpfSpecs struct {
 type bpfProgramSpecs struct {
 	KpCommitCreds *ebpf.ProgramSpec `ebpf:"kp_commit_creds"`
 	TpProcExec    *ebpf.ProgramSpec `ebpf:"tp_proc_exec"`
-	TpSysEnter    *ebpf.ProgramSpec `ebpf:"tp_sys_enter"`
 	TpSysExit     *ebpf.ProgramSpec `ebpf:"tp_sys_exit"`
 }
 
@@ -189,19 +190,17 @@ type bpfProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfMapSpecs struct {
-	Events             *ebpf.MapSpec `ebpf:"events"`
-	PercpuAcceptBuf    *ebpf.MapSpec `ebpf:"percpu_accept_buf"`
-	PercpuBindBuf      *ebpf.MapSpec `ebpf:"percpu_bind_buf"`
-	PercpuBuf          *ebpf.MapSpec `ebpf:"percpu_buf"`
-	PercpuConnectBuf   *ebpf.MapSpec `ebpf:"percpu_connect_buf"`
-	PercpuCredsBuf     *ebpf.MapSpec `ebpf:"percpu_creds_buf"`
-	PercpuDnsBuf       *ebpf.MapSpec `ebpf:"percpu_dns_buf"`
-	PercpuPathBuf      *ebpf.MapSpec `ebpf:"percpu_path_buf"`
-	PercpuRsBuf        *ebpf.MapSpec `ebpf:"percpu_rs_buf"`
-	SyscallBufMap      *ebpf.MapSpec `ebpf:"syscall_buf_map"`
-	SyscallFdMap       *ebpf.MapSpec `ebpf:"syscall_fd_map"`
-	SyscallSockaddrMap *ebpf.MapSpec `ebpf:"syscall_sockaddr_map"`
-	TrustedExes        *ebpf.MapSpec `ebpf:"trusted_exes"`
+	Events           *ebpf.MapSpec `ebpf:"events"`
+	PercpuAcceptBuf  *ebpf.MapSpec `ebpf:"percpu_accept_buf"`
+	PercpuBindBuf    *ebpf.MapSpec `ebpf:"percpu_bind_buf"`
+	PercpuBuf        *ebpf.MapSpec `ebpf:"percpu_buf"`
+	PercpuConnectBuf *ebpf.MapSpec `ebpf:"percpu_connect_buf"`
+	PercpuCredsBuf   *ebpf.MapSpec `ebpf:"percpu_creds_buf"`
+	PercpuDnsBuf     *ebpf.MapSpec `ebpf:"percpu_dns_buf"`
+	PercpuDnsData    *ebpf.MapSpec `ebpf:"percpu_dns_data"`
+	PercpuPathBuf    *ebpf.MapSpec `ebpf:"percpu_path_buf"`
+	PercpuRsBuf      *ebpf.MapSpec `ebpf:"percpu_rs_buf"`
+	TrustedExes      *ebpf.MapSpec `ebpf:"trusted_exes"`
 }
 
 // bpfObjects contains all objects after they have been loaded into the kernel.
@@ -223,19 +222,17 @@ func (o *bpfObjects) Close() error {
 //
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfMaps struct {
-	Events             *ebpf.Map `ebpf:"events"`
-	PercpuAcceptBuf    *ebpf.Map `ebpf:"percpu_accept_buf"`
-	PercpuBindBuf      *ebpf.Map `ebpf:"percpu_bind_buf"`
-	PercpuBuf          *ebpf.Map `ebpf:"percpu_buf"`
-	PercpuConnectBuf   *ebpf.Map `ebpf:"percpu_connect_buf"`
-	PercpuCredsBuf     *ebpf.Map `ebpf:"percpu_creds_buf"`
-	PercpuDnsBuf       *ebpf.Map `ebpf:"percpu_dns_buf"`
-	PercpuPathBuf      *ebpf.Map `ebpf:"percpu_path_buf"`
-	PercpuRsBuf        *ebpf.Map `ebpf:"percpu_rs_buf"`
-	SyscallBufMap      *ebpf.Map `ebpf:"syscall_buf_map"`
-	SyscallFdMap       *ebpf.Map `ebpf:"syscall_fd_map"`
-	SyscallSockaddrMap *ebpf.Map `ebpf:"syscall_sockaddr_map"`
-	TrustedExes        *ebpf.Map `ebpf:"trusted_exes"`
+	Events           *ebpf.Map `ebpf:"events"`
+	PercpuAcceptBuf  *ebpf.Map `ebpf:"percpu_accept_buf"`
+	PercpuBindBuf    *ebpf.Map `ebpf:"percpu_bind_buf"`
+	PercpuBuf        *ebpf.Map `ebpf:"percpu_buf"`
+	PercpuConnectBuf *ebpf.Map `ebpf:"percpu_connect_buf"`
+	PercpuCredsBuf   *ebpf.Map `ebpf:"percpu_creds_buf"`
+	PercpuDnsBuf     *ebpf.Map `ebpf:"percpu_dns_buf"`
+	PercpuDnsData    *ebpf.Map `ebpf:"percpu_dns_data"`
+	PercpuPathBuf    *ebpf.Map `ebpf:"percpu_path_buf"`
+	PercpuRsBuf      *ebpf.Map `ebpf:"percpu_rs_buf"`
+	TrustedExes      *ebpf.Map `ebpf:"trusted_exes"`
 }
 
 func (m *bpfMaps) Close() error {
@@ -247,11 +244,9 @@ func (m *bpfMaps) Close() error {
 		m.PercpuConnectBuf,
 		m.PercpuCredsBuf,
 		m.PercpuDnsBuf,
+		m.PercpuDnsData,
 		m.PercpuPathBuf,
 		m.PercpuRsBuf,
-		m.SyscallBufMap,
-		m.SyscallFdMap,
-		m.SyscallSockaddrMap,
 		m.TrustedExes,
 	)
 }
@@ -262,7 +257,6 @@ func (m *bpfMaps) Close() error {
 type bpfPrograms struct {
 	KpCommitCreds *ebpf.Program `ebpf:"kp_commit_creds"`
 	TpProcExec    *ebpf.Program `ebpf:"tp_proc_exec"`
-	TpSysEnter    *ebpf.Program `ebpf:"tp_sys_enter"`
 	TpSysExit     *ebpf.Program `ebpf:"tp_sys_exit"`
 }
 
@@ -270,7 +264,6 @@ func (p *bpfPrograms) Close() error {
 	return _BpfClose(
 		p.KpCommitCreds,
 		p.TpProcExec,
-		p.TpSysEnter,
 		p.TpSysExit,
 	)
 }

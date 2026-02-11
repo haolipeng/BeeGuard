@@ -91,31 +91,13 @@ struct {
     __uint(max_entries, 1);
 } percpu_dns_buf SEC(".maps");
 
-// 系统调用参数保存 Map (sys_enter → sys_exit 传递)
-// key: pid_tgid, value: syscall fd 参数
+// Per-CPU Array Map for DNS raw data buffer - 避免栈溢出
 struct {
-    __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __uint(max_entries, 4096);
-    __type(key, __u64);     // pid_tgid
-    __type(value, __u64);   // fd (syscall 第一个参数)
-} syscall_fd_map SEC(".maps");
-
-// 系统调用 sockaddr 参数保存 Map
-// key: pid_tgid, value: sockaddr 指针 (用户态地址)
-struct {
-    __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __uint(max_entries, 4096);
-    __type(key, __u64);     // pid_tgid
-    __type(value, __u64);   // sockaddr 用户态指针
-} syscall_sockaddr_map SEC(".maps");
-
-// recvfrom/recvmsg 用户态 buffer 参数保存 Map
-struct {
-    __uint(type, BPF_MAP_TYPE_LRU_HASH);
-    __uint(max_entries, 4096);
-    __type(key, __u64);     // pid_tgid
-    __type(value, __u64);   // 用户态 buffer 指针
-} syscall_buf_map SEC(".maps");
+    __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
+    __type(key, u32);
+    __type(value, struct dns_data_buf);
+    __uint(max_entries, 1);
+} percpu_dns_data SEC(".maps");
 
 // ========== 路径构建函数 ==========
 // 向路径缓冲区追加路径分量 (缓冲区末尾反向写入，正向计数长度)
@@ -266,7 +248,7 @@ static __always_inline int read_args(struct task_struct *task, char *buf, int bu
     if (args_len <= 0 || args_len > buf_size)
         return 0;
 
-    // 从用户态内存读取参数（使用按位与确保验证器知道范围）
+    // 从用户态内存读取参数（使用��位与确保验证器知道范围）
     // 注意：参数之间使用NULL分隔，在Go层面会进行后处理
     ret = bpf_probe_read_user(buf, args_len & 511, (void *)arg_start);
     if (ret < 0)
@@ -492,7 +474,7 @@ int tp_proc_exec(struct bpf_raw_tracepoint_args *ctx)
 
 // 监听commit_creds调用，检测本地提权行为
 // Hook点: kprobe/commit_creds - 在凭证提交前触发
-// 检测条件: 原uid和euid都非0，新uid或euid为0（非root → root）
+// 检测条件: 原uid和euid都非0，新uid或euid为0（非root -> root）
 SEC("kprobe/commit_creds")
 int kp_commit_creds(struct pt_regs *ctx)
 {
@@ -529,7 +511,7 @@ int kp_commit_creds(struct pt_regs *ctx)
         // 调试日志: 提权条件满足
         bpf_printk("hids: PRIVILEGE ESCALATION DETECTED! Condition matched\n");
 
-        // 读取可执行文件路径到事件结构体中（位于per-CPU map，避免栈上分配256字节缓冲区）
+        // 读取可执行文件路径到事件结构��中（位于per-CPU map，避免栈上分配256字节缓冲区）
         int path_len = read_full_exe_path(task, evt->exe_path, sizeof(evt->exe_path));
 
         // 如果是可信任的可执行文件,跳过事件上报
@@ -576,64 +558,86 @@ int kp_commit_creds(struct pt_regs *ctx)
     return 0;
 }
 
-// ========== 网络监控辅助函数 ==========
+// ========== Elkeid 风格网络监控辅助函数 ==========
 
-// 通过 fd 获取 socket 的 sock 结构体
-// 返回 NULL 表示 fd 不是 AF_INET socket
-static __always_inline struct sock *get_sock_from_fd(struct task_struct *task, int fd_num)
+// 从 fd 获取 file 结构体（参考 Elkeid hids.c:447-469）
+static __noinline struct file *fget_raw(struct task_struct *task, int nr)
 {
-    struct files_struct *files;
-    struct fdtable *fdt;
-    struct file **fd_array;
-    struct file *file_ptr;
-    unsigned short mode;
-    struct socket *sock;
-    struct sock *sk;
-    unsigned short family;
-
-    files = BPF_CORE_READ(task, files);
-    if (!files)
+    if (nr < 0 || nr >= 1024)  // FD_MAX 安全上限
         return NULL;
-
-    fdt = BPF_CORE_READ(files, fdt);
-    if (!fdt)
+    struct files_struct *files = BPF_CORE_READ(task, files);
+    if (!files) return NULL;
+    struct fdtable *fdt = BPF_CORE_READ(files, fdt);
+    if (!fdt) return NULL;
+    if (nr >= (int)BPF_CORE_READ(fdt, max_fds))
         return NULL;
-
-    fd_array = BPF_CORE_READ(fdt, fd);
-    if (!fd_array)
-        return NULL;
-
-    bpf_probe_read_kernel(&file_ptr, sizeof(file_ptr), &fd_array[fd_num]);
-    if (!file_ptr)
-        return NULL;
-
-    // 检查是否为 Socket 文件
-    mode = BPF_CORE_READ(file_ptr, f_inode, i_mode);
-    if ((mode & 0170000) != 0140000)
-        return NULL;
-
-    sock = (struct socket *)BPF_CORE_READ(file_ptr, private_data);
-    if (!sock)
-        return NULL;
-
-    sk = BPF_CORE_READ(sock, sk);
-    if (!sk)
-        return NULL;
-
-    // 仅处理 IPv4
-    family = BPF_CORE_READ(sk, __sk_common.skc_family);
-    if (family != 2)  // AF_INET = 2
-        return NULL;
-
-    return sk;
+    struct file **fds = BPF_CORE_READ(fdt, fd);
+    if (!fds) return NULL;
+    struct file *file = NULL;
+    bpf_probe_read_kernel(&file, sizeof(file), &fds[nr]);
+    return file;
 }
 
-// 获取 socket 协议类型 (TCP=6, UDP=17)
-static __always_inline __u8 get_sock_protocol(struct sock *sk)
+// 从 file 获取 sock 结构体（参考 Elkeid hids.c:506-525）
+static __noinline struct sock *sock_from_file(struct file *file)
 {
-    // sk_protocol 在 sock_common 中
-    __u8 proto = BPF_CORE_READ(sk, sk_protocol);
-    return proto;
+    if (!file) return NULL;
+    struct inode *inode = BPF_CORE_READ(file, f_inode);
+    if (!inode) return NULL;
+    unsigned short mode = BPF_CORE_READ(inode, i_mode);
+    if ((mode & 0170000) != 0140000)  // S_IFSOCK
+        return NULL;
+    struct socket *sock = (struct socket *)BPF_CORE_READ(file, private_data);
+    if (!sock) return NULL;
+    return BPF_CORE_READ(sock, sk);
+}
+
+// 组合 fd -> sock（参考 Elkeid hids.c:527-536）
+static __noinline struct sock *sockfd_lookup(struct task_struct *task, int fd)
+{
+    struct file *file = fget_raw(task, fd);
+    if (!file) return NULL;
+    return sock_from_file(file);
+}
+
+// CO-RE 位域读取 sk_protocol（参考 Elkeid hids.c:667-692）
+static __noinline int sock_prot(struct sock *sk)
+{
+    unsigned long long prot = 0;
+    unsigned int offset = __builtin_preserve_field_info(
+        sk->sk_protocol, BPF_FIELD_BYTE_OFFSET);
+    unsigned int size = __builtin_preserve_field_info(
+        sk->sk_protocol, BPF_FIELD_BYTE_SIZE);
+    bpf_probe_read_kernel(&prot, size & 0x0f, (void *)sk + offset);
+    prot <<= __builtin_preserve_field_info(
+        sk->sk_protocol, BPF_FIELD_LSHIFT_U64);
+    prot >>= __builtin_preserve_field_info(
+        sk->sk_protocol, BPF_FIELD_RSHIFT_U64);
+    return (int)prot;
+}
+
+// 获取 socket address family
+static __always_inline unsigned short sock_family(struct sock *sk)
+{
+    return BPF_CORE_READ(sk, __sk_common.skc_family);
+}
+
+// 从 sock 提取 IPv4 地址信息（参考 Elkeid hids.c:713-742）
+// 包含 fallback 逻辑：skc_rcv_saddr 为 0 时尝试 inet_saddr
+static __always_inline void query_ipv4(struct sock *sk,
+    __u32 *src_ip, __u16 *src_port,
+    __u32 *dst_ip, __u16 *dst_port)
+{
+    *src_ip = BPF_CORE_READ(sk, __sk_common.skc_rcv_saddr);
+    *src_port = BPF_CORE_READ(sk, __sk_common.skc_num);
+    *dst_ip = BPF_CORE_READ(sk, __sk_common.skc_daddr);
+    *dst_port = BPF_CORE_READ(sk, __sk_common.skc_dport);
+
+    // fallback: 如果 skc_rcv_saddr 为 0，尝试通过 inet_sock 读取
+    if (*src_ip == 0) {
+        struct inet_sock *inet = (struct inet_sock *)sk;
+        *src_ip = BPF_CORE_READ(inet, inet_saddr);
+    }
 }
 
 // 填充通用进程信息到事件中（使用局部变量避免 packed struct 地址警告）
@@ -648,135 +652,60 @@ static __always_inline __u8 get_sock_protocol(struct sock *sk)
     bpf_get_current_comm(&(evt)->comm, 16); \
 } while (0)
 
-// ========== sys_enter: 保存系统调用参数 ==========
+// ========== DNS 解析辅助函数 ==========
 
-// 拦截 connect/bind/accept4 的 sys_enter，保存 fd 参数
-SEC("raw_tracepoint/sys_enter")
-int tp_sys_enter(struct bpf_raw_tracepoint_args *ctx)
+// DNS 域名状态机解析（参考 Elkeid hids.c:838-857）
+// 逐字节处理 DNS 查询域名，将 3www6google3com0 转换为 .www.google.com
+// 返回 1=继续, 0=结束
+static __noinline int process_domain_name(char *data, char *name, int *flag, int i)
 {
-    // raw_tracepoint/sys_enter 参数:
-    // ctx->args[0] = struct pt_regs *regs
-    // ctx->args[1] = long syscall_nr
-    unsigned long syscall_nr = ctx->args[1];
-    struct pt_regs *regs = (struct pt_regs *)ctx->args[0];
+    char rc = *(data + 12 + i);
+    int v = *flag;
+    if (0 == rc) return 0;
+    if (v == 0) {
+        v = rc;
+        name[i - 1] = 46; // '.'
+    } else {
+        name[i - 1] = rc;
+        v = v - 1;
+    }
+    *flag = v;
+    return 1;
+}
 
-    // 仅处理网络相关系统调用
-    // x86_64: connect=42, bind=49, accept=43, accept4=288, recvfrom=45, recvmsg=47
-    if (syscall_nr != 42 && syscall_nr != 49 && syscall_nr != 43 &&
-        syscall_nr != 288 && syscall_nr != 45 && syscall_nr != 47)
-        return 0;
+// DNS 解析主循环（参考 Elkeid hids.c:860-893）
+// 从 DNS 原始数据中提取域名和查询类型
+// 返回: 0=成功, -1=失败
+static __noinline int query_dns_record(char *data, int data_len, char *domain, int domain_size, __u16 *query_type)
+{
+    if (data_len < 12)
+        return -1;
 
-    __u64 pid_tgid = bpf_get_current_pid_tgid();
+    int flag = 0;
+    int i;
 
-    // 获取第一个参数 (fd) - x86_64: rdi
-    __u64 fd = 0;
-    bpf_probe_read_kernel(&fd, sizeof(fd), &regs->di);
-
-    // 保存 fd 参数
-    bpf_map_update_elem(&syscall_fd_map, &pid_tgid, &fd, BPF_ANY);
-
-    // 对于 connect 和 bind，还需保存 sockaddr 指针 (第二个参数 rsi)
-    if (syscall_nr == 42 || syscall_nr == 49) {
-        __u64 sockaddr_ptr = 0;
-        bpf_probe_read_kernel(&sockaddr_ptr, sizeof(sockaddr_ptr), &regs->si);
-        bpf_map_update_elem(&syscall_sockaddr_map, &pid_tgid, &sockaddr_ptr, BPF_ANY);
+    // 状态机解析域名
+    for (i = 1; i < 64; i++) {
+        if (12 + i >= data_len || i >= domain_size)
+            break;
+        if (!process_domain_name(data, domain, &flag, i))
+            break;
     }
 
-    // 对于 recvfrom，保存 buffer 指针 (第二个参数 rsi)
-    if (syscall_nr == 45) {
-        __u64 buf_ptr = 0;
-        bpf_probe_read_kernel(&buf_ptr, sizeof(buf_ptr), &regs->si);
-        bpf_map_update_elem(&syscall_buf_map, &pid_tgid, &buf_ptr, BPF_ANY);
-    }
+    // 终止域名字符串
+    if (i > 0 && i < domain_size)
+        domain[i - 1] = 0;
 
-    // 对于 recvmsg，保存 msghdr 指针 (第二个参数 rsi)
-    if (syscall_nr == 47) {
-        __u64 msghdr_ptr = 0;
-        bpf_probe_read_kernel(&msghdr_ptr, sizeof(msghdr_ptr), &regs->si);
-        bpf_map_update_elem(&syscall_buf_map, &pid_tgid, &msghdr_ptr, BPF_ANY);
+    // 读取 query type (域名结束后 + 1字节结束符 + 2字节类型)
+    int qtype_offset = 12 + i + 1;
+    if (qtype_offset + 2 <= data_len && qtype_offset + 2 <= DNS_RECORD_MAX) {
+        *query_type = ((__u16)(__u8)data[qtype_offset] << 8) | (__u8)data[qtype_offset + 1];
     }
 
     return 0;
 }
 
 // ========== sys_exit: 处理系统调用返回 ==========
-
-// DNS 域名解析辅助函数
-// 从已读入内核栈的 DNS 包缓冲区中提取查询域名和查询类型
-// DNS 报文格式: Header(12字节) + Query(变长)
-// 域名格式: 3www6google3com0 → www.google.com
-// 注意: buf 是内核栈空间地址（已通过 bpf_probe_read_user 读入）
-static __noinline int parse_dns_query(char *buf, int buf_len, char *domain, int domain_size, __u16 *query_type)
-{
-    // DNS header 至少 12 字节
-    if (buf_len < 12)
-        return -1;
-
-    // 跳过 DNS header (12 字节)
-    int offset = 12;
-    int domain_offset = 0;
-
-    // 解析 Query 部分的域名 (最多 32 个 label)
-    for (int i = 0; i < 32; i++) {
-        if (offset >= buf_len || offset >= 256)
-            return -1;
-
-        __u8 label_len = (__u8)buf[offset];
-
-        // label_len == 0 表示域名结束
-        if (label_len == 0) {
-            offset += 1;
-            break;
-        }
-
-        // 检查指针压缩 (高2位为11)
-        if ((label_len & 0xC0) == 0xC0)
-            return -1;  // 简化版不处理压缩指针
-
-        // 安全检查
-        if (label_len > 63)
-            return -1;
-        if (offset + 1 + label_len > buf_len || offset + 1 + label_len > 256)
-            return -1;
-
-        // 添加 '.' 分隔符（非第一个 label）
-        if (domain_offset > 0 && domain_offset < domain_size - 1) {
-            domain[domain_offset] = '.';
-            domain_offset++;
-        }
-
-        // 逐字节复制 label（满足 BPF 验证器的有界访问要求）
-        int copy_len = label_len;
-        if (domain_offset + copy_len >= domain_size - 1)
-            copy_len = domain_size - 1 - domain_offset;
-        if (copy_len <= 0)
-            break;
-        if (copy_len > 63)
-            copy_len = 63;
-
-        for (int j = 0; j < 63 && j < copy_len; j++) {
-            int src_idx = offset + 1 + j;
-            int dst_idx = domain_offset + j;
-            if (src_idx >= 256 || dst_idx >= domain_size - 1)
-                break;
-            domain[dst_idx] = buf[src_idx];
-        }
-
-        domain_offset += copy_len;
-        offset += 1 + label_len;
-    }
-
-    // 终止域名字符串
-    if (domain_offset >= 0 && domain_offset < domain_size)
-        domain[domain_offset] = 0;
-
-    // 读取 query type (域名后的 2 字节, 网络字节序)
-    if (offset + 2 <= buf_len && offset + 2 <= 256) {
-        *query_type = ((__u16)(__u8)buf[offset] << 8) | (__u8)buf[offset + 1];
-    }
-
-    return 0;
-}
 
 SEC("raw_tracepoint/sys_exit")
 int tp_sys_exit(struct bpf_raw_tracepoint_args *ctx)
@@ -792,46 +721,34 @@ int tp_sys_exit(struct bpf_raw_tracepoint_args *ctx)
     bpf_probe_read_kernel(&syscall_nr, sizeof(syscall_nr), &regs->orig_ax);
 
     // 仅处理网络相关系统调用
+    // x86_64: connect=42, bind=49, accept=43, accept4=288, recvfrom=45, recvmsg=47
     if (syscall_nr != 42 && syscall_nr != 49 && syscall_nr != 43 &&
         syscall_nr != 288 && syscall_nr != 45 && syscall_nr != 47)
         return 0;
 
-    __u64 pid_tgid = bpf_get_current_pid_tgid();
     struct task_struct *task = (struct task_struct *)bpf_get_current_task();
 
-    // 查找保存的 fd 参数
-    __u64 *fd_ptr = bpf_map_lookup_elem(&syscall_fd_map, &pid_tgid);
-    if (!fd_ptr)
-        return 0;
-    int fd = (int)*fd_ptr;
+    // 直接从 pt_regs 读取系统调用参数（纯 sys_exit 方案，不再依赖 sys_enter map）
+    // x86_64 syscall 约定: rdi=parm1, rsi=parm2, rdx=parm3
+    __u64 parm1 = 0, parm2 = 0;
+    bpf_probe_read_kernel(&parm1, sizeof(parm1), &regs->di);
+    bpf_probe_read_kernel(&parm2, sizeof(parm2), &regs->si);
 
     // ========== connect (syscall 42) ==========
     if (syscall_nr == 42) {
-        // 清理保存的参数
-        bpf_map_delete_elem(&syscall_fd_map, &pid_tgid);
-
-        // 获取 sockaddr 指针
-        __u64 *sa_ptr = bpf_map_lookup_elem(&syscall_sockaddr_map, &pid_tgid);
-        if (!sa_ptr) goto cleanup_connect;
-        __u64 sockaddr_uptr = *sa_ptr;
-        bpf_map_delete_elem(&syscall_sockaddr_map, &pid_tgid);
-
-        // 读取 sockaddr_in (sa_family + sin_port + sin_addr)
-        // struct sockaddr_in { sa_family_t sin_family; __be16 sin_port; struct in_addr sin_addr; }
-        __u16 sa_family = 0;
-        bpf_probe_read_user(&sa_family, sizeof(sa_family), (void *)sockaddr_uptr);
-        if (sa_family != 2)  // AF_INET only
+        // 仅采集成功的 connect (retval == 0)
+        if (retval != 0)
             return 0;
 
-        __u16 sin_port = 0;
-        bpf_probe_read_user(&sin_port, sizeof(sin_port), (void *)(sockaddr_uptr + 2));
+        int fd = (int)parm1;
 
-        __u32 sin_addr = 0;
-        bpf_probe_read_user(&sin_addr, sizeof(sin_addr), (void *)(sockaddr_uptr + 4));
+        // 通过 sockfd_lookup 从内核 sock 读取网络信息
+        struct sock *sk = sockfd_lookup(task, fd);
+        if (!sk)
+            return 0;
 
-        // 过滤 loopback 和全零地址
-        // sin_addr 是网络字节序，127.0.0.1 = 0x0100007f
-        if (sin_addr == 0)
+        // 仅处理 IPv4
+        if (sock_family(sk) != 2)  // AF_INET
             return 0;
 
         u32 key = 0;
@@ -844,51 +761,42 @@ int tp_sys_exit(struct bpf_raw_tracepoint_args *ctx)
 
         FILL_PROCESS_INFO(task, evt);
 
-        evt->remote_ip = sin_addr;
-        evt->remote_port = sin_port;
+        // 从 sock 结构体读取 IP/端口（Elkeid query_ipv4 风格）
+        __u32 src_ip = 0, dst_ip = 0;
+        __u16 src_port = 0, dst_port = 0;
+        query_ipv4(sk, &src_ip, &src_port, &dst_ip, &dst_port);
+
+        evt->remote_ip = dst_ip;
+        evt->remote_port = dst_port;
+        evt->local_ip = src_ip;
+        evt->local_port = src_port;
+        evt->protocol = (__u8)sock_prot(sk);
         evt->retval = (__s32)retval;
 
-        // 通过 socket 获取本地地址和协议
-        struct sock *sk = get_sock_from_fd(task, fd);
-        if (sk) {
-            evt->local_ip = BPF_CORE_READ(sk, __sk_common.skc_rcv_saddr);
-            evt->local_port = BPF_CORE_READ(sk, __sk_common.skc_num);
-            evt->protocol = get_sock_protocol(sk);
-        }
+        // 过滤全零目标地址
+        if (evt->remote_ip == 0)
+            return 0;
 
         read_full_exe_path(task, evt->exe_path, sizeof(evt->exe_path));
 
         bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, evt, sizeof(*evt));
         return 0;
-
-    cleanup_connect:
-        bpf_map_delete_elem(&syscall_sockaddr_map, &pid_tgid);
-        return 0;
     }
 
     // ========== bind (syscall 49) ==========
     if (syscall_nr == 49) {
-        bpf_map_delete_elem(&syscall_fd_map, &pid_tgid);
-
-        __u64 *sa_ptr = bpf_map_lookup_elem(&syscall_sockaddr_map, &pid_tgid);
-        if (!sa_ptr) goto cleanup_bind;
-        __u64 sockaddr_uptr = *sa_ptr;
-        bpf_map_delete_elem(&syscall_sockaddr_map, &pid_tgid);
-
         // 仅处理成功的 bind (retval == 0)
         if (retval != 0)
             return 0;
 
-        __u16 sa_family = 0;
-        bpf_probe_read_user(&sa_family, sizeof(sa_family), (void *)sockaddr_uptr);
-        if (sa_family != 2)
+        int fd = (int)parm1;
+
+        struct sock *sk = sockfd_lookup(task, fd);
+        if (!sk)
             return 0;
 
-        __u16 sin_port = 0;
-        bpf_probe_read_user(&sin_port, sizeof(sin_port), (void *)(sockaddr_uptr + 2));
-
-        __u32 sin_addr = 0;
-        bpf_probe_read_user(&sin_addr, sizeof(sin_addr), (void *)(sockaddr_uptr + 4));
+        if (sock_family(sk) != 2)  // AF_INET
+            return 0;
 
         u32 key = 0;
         struct bind_event *evt = bpf_map_lookup_elem(&percpu_bind_buf, &key);
@@ -900,28 +808,24 @@ int tp_sys_exit(struct bpf_raw_tracepoint_args *ctx)
 
         FILL_PROCESS_INFO(task, evt);
 
-        evt->bind_ip = sin_addr;
-        evt->bind_port = sin_port;
-        evt->retval = (__s32)retval;
+        // 从 sock 读取绑定的 IP/端口
+        __u32 src_ip = 0, dst_ip = 0;
+        __u16 src_port = 0, dst_port = 0;
+        query_ipv4(sk, &src_ip, &src_port, &dst_ip, &dst_port);
 
-        struct sock *sk = get_sock_from_fd(task, fd);
-        if (sk)
-            evt->protocol = get_sock_protocol(sk);
+        evt->bind_ip = src_ip;
+        evt->bind_port = bpf_htons(src_port);  // 转换为网络字节序与原格式一致
+        evt->protocol = (__u8)sock_prot(sk);
+        evt->retval = (__s32)retval;
 
         read_full_exe_path(task, evt->exe_path, sizeof(evt->exe_path));
 
         bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, evt, sizeof(*evt));
         return 0;
-
-    cleanup_bind:
-        bpf_map_delete_elem(&syscall_sockaddr_map, &pid_tgid);
-        return 0;
     }
 
     // ========== accept/accept4 (syscall 43/288) ==========
     if (syscall_nr == 43 || syscall_nr == 288) {
-        bpf_map_delete_elem(&syscall_fd_map, &pid_tgid);
-
         // retval 是新的 fd（accept 成功返回新 fd，失败返回负数）
         if (retval < 0)
             return 0;
@@ -929,8 +833,11 @@ int tp_sys_exit(struct bpf_raw_tracepoint_args *ctx)
         int new_fd = (int)retval;
 
         // 从新 fd 获取 socket 信息
-        struct sock *sk = get_sock_from_fd(task, new_fd);
+        struct sock *sk = sockfd_lookup(task, new_fd);
         if (!sk)
+            return 0;
+
+        if (sock_family(sk) != 2)  // AF_INET
             return 0;
 
         u32 key = 0;
@@ -943,11 +850,15 @@ int tp_sys_exit(struct bpf_raw_tracepoint_args *ctx)
 
         FILL_PROCESS_INFO(task, evt);
 
-        evt->remote_ip = BPF_CORE_READ(sk, __sk_common.skc_daddr);
-        evt->remote_port = BPF_CORE_READ(sk, __sk_common.skc_dport);
-        evt->local_ip = BPF_CORE_READ(sk, __sk_common.skc_rcv_saddr);
-        evt->local_port = BPF_CORE_READ(sk, __sk_common.skc_num);
-        evt->protocol = get_sock_protocol(sk);
+        __u32 src_ip = 0, dst_ip = 0;
+        __u16 src_port = 0, dst_port = 0;
+        query_ipv4(sk, &src_ip, &src_port, &dst_ip, &dst_port);
+
+        evt->remote_ip = dst_ip;
+        evt->remote_port = dst_port;
+        evt->local_ip = src_ip;
+        evt->local_port = src_port;
+        evt->protocol = (__u8)sock_prot(sk);
         evt->retval = (__s32)retval;
 
         // 过滤非 IPv4 连接（remote_ip 为 0 表示没有对端）
@@ -960,52 +871,77 @@ int tp_sys_exit(struct bpf_raw_tracepoint_args *ctx)
         return 0;
     }
 
-    // ========== recvfrom (syscall 45) / recvmsg (syscall 47) — DNS 监控 ==========
+    // ========== recvfrom (syscall 45) / recvmsg (syscall 47) -- DNS 监控 ==========
     if (syscall_nr == 45 || syscall_nr == 47) {
-        bpf_map_delete_elem(&syscall_fd_map, &pid_tgid);
-
         // 失败则跳过
         if (retval <= 0)
-            goto cleanup_dns;
+            return 0;
 
-        // 检查 socket 源端口是否为 53 (DNS) 或 5353 (mDNS)
-        struct sock *sk = get_sock_from_fd(task, fd);
+        int fd = (int)parm1;
+
+        // 通过 sockfd_lookup 获取 sock
+        struct sock *sk = sockfd_lookup(task, fd);
         if (!sk)
-            goto cleanup_dns;
+            return 0;
 
-        __u16 src_port = BPF_CORE_READ(sk, __sk_common.skc_dport);
-        // skc_dport 是网络字节序, 53=0x0035, 5353=0x14E9
-        // 网络字节序 (big-endian): 53 → 0x0035, 5353 → 0x14E9
-        if (src_port != __bpf_htons(53) && src_port != __bpf_htons(5353))
-            goto cleanup_dns;
+        // 仅处理 IPv4
+        if (sock_family(sk) != 2)
+            return 0;
 
-        // 获取保存的用户态 buffer 指针
-        __u64 *buf_ptr = bpf_map_lookup_elem(&syscall_buf_map, &pid_tgid);
-        if (!buf_ptr)
-            goto cleanup_dns;
-        __u64 user_buf = *buf_ptr;
-        bpf_map_delete_elem(&syscall_buf_map, &pid_tgid);
+        // UDP 协议过滤（DNS 使用 UDP，IPPROTO_UDP=17）
+        if (sock_prot(sk) != 17)
+            return 0;
 
-        // 对于 recvmsg (47)，需要从 msghdr 中获取实际的 buffer 地址
-        // struct msghdr { struct iovec *msg_iov; ... }
+        // 检查 socket 对端端口是否为 53 (DNS) 或 5353 (mDNS)
+        __u16 peer_port = BPF_CORE_READ(sk, __sk_common.skc_dport);
+        if (peer_port != __bpf_htons(53) && peer_port != __bpf_htons(5353))
+            return 0;
+
+        // 从 pt_regs 读取用户态 buffer 指针 (parm2 = rsi)
+        __u64 user_buf = parm2;
+
+        // 对于 recvmsg (47)，从完整 struct user_msghdr 读取实际数据地址
+        // struct user_msghdr { void *msg_name; int msg_namelen; padding; struct iovec *msg_iov; ... }
         // struct iovec { void *iov_base; size_t iov_len; }
         if (syscall_nr == 47) {
-            // user_buf 指向 struct msghdr (用户态)
-            // msghdr 第二个字段 msg_iov (偏移 8 字节在 x86_64)
-            __u64 msg_iov = 0;
-            // msg_iov 在 user_msghdr 中的偏移 (跳过 msg_name + msg_namelen)
-            bpf_probe_read_user(&msg_iov, sizeof(msg_iov), (void *)(user_buf + 8));
-            if (!msg_iov)
+            // parm2 指向 struct user_msghdr
+            struct iovec iov;
+            __u64 msg_iov_ptr = 0;
+
+            // msg_iov 在 user_msghdr 中偏移: sizeof(void*) + sizeof(int) + padding = 16 bytes on x86_64
+            bpf_probe_read_user(&msg_iov_ptr, sizeof(msg_iov_ptr),
+                (void *)(user_buf + 16));
+            if (!msg_iov_ptr)
                 return 0;
-            // iov_base 是 iovec 的第一个字段
-            __u64 iov_base = 0;
-            bpf_probe_read_user(&iov_base, sizeof(iov_base), (void *)msg_iov);
-            if (!iov_base)
+
+            // 读取第一个 iovec 结构体
+            bpf_probe_read_user(&iov, sizeof(iov), (void *)msg_iov_ptr);
+            if (!iov.iov_base)
                 return 0;
-            user_buf = iov_base;
+
+            user_buf = (__u64)iov.iov_base;
         }
 
-        // 读取 DNS 包到 per-CPU buffer 的字段，避免栈溢出
+        // 使用专用 DNS per-CPU 缓冲区读取 DNS 数据
+        u32 dns_data_key = 0;
+        struct dns_data_buf *dns_buf = bpf_map_lookup_elem(&percpu_dns_data, &dns_data_key);
+        if (!dns_buf)
+            return 0;
+
+        int read_len = (int)retval;
+        if (read_len > DNS_RECORD_MAX)
+            read_len = DNS_RECORD_MAX;
+        if (read_len < 12)  // DNS header 至少 12 字节
+            return 0;
+
+        bpf_probe_read_user(dns_buf->data, read_len & DNS_RECORD_MASK, (void *)user_buf);
+
+        // QR bit 检查：仅处理 DNS 响应包 (QR=1)
+        // DNS Flags 第一个字节的最高位 (data[2] & 0x80)
+        if (!(dns_buf->data[2] & 0x80))
+            return 0;
+
+        // 获取 dns_event per-CPU buffer
         u32 dns_key = 0;
         struct dns_event *evt = bpf_map_lookup_elem(&percpu_dns_buf, &dns_key);
         if (!evt)
@@ -1014,47 +950,29 @@ int tp_sys_exit(struct bpf_raw_tracepoint_args *ctx)
         __builtin_memset(evt, 0, sizeof(*evt));
         evt->event_type = EVENT_TYPE_DNS;
 
-        int read_len = retval;
-        if (read_len > (int)sizeof(evt->domain))
-            read_len = sizeof(evt->domain);
-        if (read_len < 12)  // DNS header 至少 12 字节
-            return 0;
-
-        // 读取 DNS 包到 exe_path 字段作为临���缓冲区（256 字节，在 per-CPU map 中）
-        // exe_path 稍后会被 read_full_exe_path 覆写，所以先借用
-        bpf_probe_read_user(evt->exe_path, read_len & 0xFF, (void *)user_buf);
-
         // 提取 DNS header 中的 opcode 和 rcode
-        // DNS header: ID(2) + Flags(2) + ...
-        // Flags: QR(1) OPCODE(4) AA(1) TC(1) RD(1) RA(1) Z(3) RCODE(4)
-        __u8 flags1 = evt->exe_path[2];
-        __u8 flags2 = evt->exe_path[3];
+        __u8 flags1 = dns_buf->data[2];
+        __u8 flags2 = dns_buf->data[3];
         evt->opcode = (flags1 >> 3) & 0x0F;
         evt->rcode = flags2 & 0x0F;
 
-        // 从 exe_path (临时DNS数据) 解析域名到 domain 字段
+        // 使用状态机解析域名
         __u16 qtype = 0;
-        if (parse_dns_query(evt->exe_path, read_len, evt->domain, sizeof(evt->domain), &qtype) < 0)
+        if (query_dns_record(dns_buf->data, read_len, evt->domain, sizeof(evt->domain), &qtype) < 0)
             return 0;
         evt->query_type = qtype;
 
         FILL_PROCESS_INFO(task, evt);
 
         evt->dns_server_ip = BPF_CORE_READ(sk, __sk_common.skc_daddr);
-        evt->dns_server_port = src_port;
+        evt->dns_server_port = peer_port;
 
         read_full_exe_path(task, evt->exe_path, sizeof(evt->exe_path));
 
         bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, evt, sizeof(*evt));
         return 0;
-
-    cleanup_dns:
-        bpf_map_delete_elem(&syscall_buf_map, &pid_tgid);
-        return 0;
     }
 
-    // 清理未匹配的 map 条目
-    bpf_map_delete_elem(&syscall_fd_map, &pid_tgid);
     return 0;
 }
 
