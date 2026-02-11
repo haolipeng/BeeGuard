@@ -248,6 +248,92 @@ func main() {
 					logger.Error("Failed to send reverse shell record to agent", "error", err)
 				}
 
+			case events.EventTypeConnect:
+				// 处理出站连接事件
+				var evt events.ConnectEvent
+				if err := evt.UnmarshalBinary(rec.RawSample); err != nil {
+					logger.Error("Failed to unmarshal connect event", "error", err)
+					continue
+				}
+
+				record := evt.ToRecord()
+
+				logger.Info("Connect event",
+					"pid", evt.PID,
+					"comm", cstring(evt.Comm[:]),
+					"remote_ip", record.Data.Fields["remote_ip"],
+					"remote_port", record.Data.Fields["remote_port"],
+					"protocol", record.Data.Fields["protocol"],
+					"retval", evt.RetVal)
+
+				if err := client.SendRecord(record); err != nil {
+					logger.Error("Failed to send connect record to agent", "error", err)
+				}
+
+			case events.EventTypeBind:
+				// 处理端口绑定事件
+				var evt events.BindEvent
+				if err := evt.UnmarshalBinary(rec.RawSample); err != nil {
+					logger.Error("Failed to unmarshal bind event", "error", err)
+					continue
+				}
+
+				record := evt.ToRecord()
+
+				logger.Info("Bind event",
+					"pid", evt.PID,
+					"comm", cstring(evt.Comm[:]),
+					"bind_ip", record.Data.Fields["bind_ip"],
+					"bind_port", record.Data.Fields["bind_port"],
+					"protocol", record.Data.Fields["protocol"])
+
+				if err := client.SendRecord(record); err != nil {
+					logger.Error("Failed to send bind record to agent", "error", err)
+				}
+
+			case events.EventTypeAccept:
+				// 处理入站连接事件
+				var evt events.AcceptEvent
+				if err := evt.UnmarshalBinary(rec.RawSample); err != nil {
+					logger.Error("Failed to unmarshal accept event", "error", err)
+					continue
+				}
+
+				record := evt.ToRecord()
+
+				logger.Info("Accept event",
+					"pid", evt.PID,
+					"comm", cstring(evt.Comm[:]),
+					"remote_ip", record.Data.Fields["remote_ip"],
+					"remote_port", record.Data.Fields["remote_port"],
+					"local_port", record.Data.Fields["local_port"],
+					"protocol", record.Data.Fields["protocol"])
+
+				if err := client.SendRecord(record); err != nil {
+					logger.Error("Failed to send accept record to agent", "error", err)
+				}
+
+			case events.EventTypeDNS:
+				// 处理DNS查询事件
+				var evt events.DNSEvent
+				if err := evt.UnmarshalBinary(rec.RawSample); err != nil {
+					logger.Error("Failed to unmarshal DNS event", "error", err)
+					continue
+				}
+
+				record := evt.ToRecord()
+
+				logger.Info("DNS query event",
+					"pid", evt.PID,
+					"comm", cstring(evt.Comm[:]),
+					"domain", record.Data.Fields["domain"],
+					"query_type", record.Data.Fields["query_type"],
+					"dns_server", record.Data.Fields["dns_server_ip"])
+
+				if err := client.SendRecord(record); err != nil {
+					logger.Error("Failed to send DNS record to agent", "error", err)
+				}
+
 			default:
 				logger.Warn("Unknown event type", "type", eventType)
 			}
