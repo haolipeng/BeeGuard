@@ -6,6 +6,10 @@
 #define EVENT_TYPE_EXECVE        1
 #define EVENT_TYPE_COMMIT_CREDS  2
 #define EVENT_TYPE_REVERSE_SHELL 3
+#define EVENT_TYPE_CONNECT       4
+#define EVENT_TYPE_BIND          5
+#define EVENT_TYPE_ACCEPT        6
+#define EVENT_TYPE_DNS           7
 
 // 路径相关常量
 #define PATH_MAX_ENTS   16    // dentry 链最大遍历深度
@@ -68,6 +72,79 @@ struct reverse_shell_event {
     char  comm[16];       // 进程名
     char  exe_path[256];  // 可执行文件路径
     char  args[512];      // 命令行参数
+} __attribute__((packed));
+
+// connect 出站连接事件结构体
+struct connect_event {
+    __u8  event_type;     // EVENT_TYPE_CONNECT = 4
+    __u8  protocol;       // IPPROTO_TCP=6, IPPROTO_UDP=17
+    __u8  padding1[2];
+    __u32 pid;
+    __u32 tgid;
+    __u32 ppid;
+    __u32 uid;
+    __u32 remote_ip;      // 目�� IP（网络字节序）
+    __u16 remote_port;    // 目标端口（网络字节序）
+    __u16 local_port;     // 本地端口
+    __u32 local_ip;       // 本地 IP（网络字节序）
+    __s32 retval;         // 系统调用返回值（0=成功，负数=失败）
+    char  comm[16];
+    char  exe_path[256];
+} __attribute__((packed));
+
+// bind 端口绑定事件结构体
+struct bind_event {
+    __u8  event_type;     // EVENT_TYPE_BIND = 5
+    __u8  protocol;
+    __u8  padding1[2];
+    __u32 pid;
+    __u32 tgid;
+    __u32 ppid;
+    __u32 uid;
+    __u32 bind_ip;        // 绑定 IP
+    __u16 bind_port;      // 绑定端口
+    __u16 padding2;
+    __s32 retval;
+    char  comm[16];
+    char  exe_path[256];
+} __attribute__((packed));
+
+// accept 入站连接事件结构体
+struct accept_event {
+    __u8  event_type;     // EVENT_TYPE_ACCEPT = 6
+    __u8  protocol;
+    __u8  padding1[2];
+    __u32 pid;
+    __u32 tgid;
+    __u32 ppid;
+    __u32 uid;
+    __u32 remote_ip;      // 连接来源 IP
+    __u16 remote_port;    // 连接来源端口
+    __u16 local_port;     // 本地监听端口
+    __u32 local_ip;
+    __s32 retval;
+    char  comm[16];
+    char  exe_path[256];
+} __attribute__((packed));
+
+// DNS 查询事件结构体
+#define DNS_DOMAIN_MAX 256
+
+struct dns_event {
+    __u8  event_type;     // EVENT_TYPE_DNS = 7
+    __u8  padding1[3];
+    __u32 pid;
+    __u32 tgid;
+    __u32 ppid;
+    __u32 uid;
+    __u32 dns_server_ip;  // DNS 服务器 IP
+    __u16 dns_server_port;// DNS 服务器端口（通常 53）
+    __u16 query_type;     // DNS 查询类型 (A=1, AAAA=28, TXT=16, MX=15, CNAME=5)
+    __s32 opcode;         // DNS 操作码
+    __s32 rcode;          // DNS 响应码
+    char  comm[16];
+    char  exe_path[256];
+    char  domain[DNS_DOMAIN_MAX]; // 查询域名
 } __attribute__((packed));
 
 // 可信任可执行文件条目 (必须与 Go ExeItem 结构体匹配)
