@@ -55,6 +55,9 @@ func main() {
 		}
 	}
 
+	// 3.1 初始化用户态反弹 shell 检测器
+	rsDetector := &detector.ReverseShellDetector{}
+
 	// 4. 加载eBPF程序
 	loader, err := ebpf.NewLoader()
 	if err != nil {
@@ -175,6 +178,27 @@ func main() {
 							"uid", evt.UID,
 							"comm", comm,
 							"args", args)
+					}
+				}
+
+				// 用户态反弹 shell 检测
+				rsResult := rsDetector.Detect(&evt)
+				if rsResult != nil {
+					rsRecord := detector.BuildReverseShellRecord(&evt, rsResult)
+					logger.Warn("Reverse shell detected (userspace)",
+						"rule", rsResult.RuleName,
+						"confidence", rsResult.Confidence,
+						"pid", evt.PID,
+						"tgid", evt.TGID,
+						"comm", cstring(evt.Comm[:]),
+						"exe_path", cstring(evt.ExePath[:]),
+						"stdin_path", cstring(evt.StdinPath[:]),
+						"stdout_path", cstring(evt.StdoutPath[:]),
+						"pid_tree", cstring(evt.PidTree[:]),
+						"tty_name", cstring(evt.TTYName[:]),
+						"socket_pid", evt.SocketPID)
+					if err := client.SendRecord(rsRecord); err != nil {
+						logger.Error("Failed to send reverse shell record to agent", "error", err)
 					}
 				}
 

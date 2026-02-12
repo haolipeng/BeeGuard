@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 package ebpf
 
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc clang -cflags "-O2 -g -Wall -Werror -D__TARGET_ARCH_x86" -target amd64 -type execve_event -type commit_creds_event -type reverse_shell_event -type connect_event -type bind_event -type accept_event -type dns_event bpf ./bpf/hids.bpf.c -- -I./bpf
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc clang -cflags "-O2 -g -Wall -Werror -D__TARGET_ARCH_x86" -target amd64 -type execve_event -type commit_creds_event -type reverse_shell_event -type connect_event -type bind_event -type accept_event -type dns_event -type stdio_path_buf bpf ./bpf/hids.bpf.c -- -I./bpf
 
 import (
 	"errors"
@@ -71,8 +71,8 @@ func NewLoader() (*Loader, error) {
 	}
 	l.links = append(l.links, sysExitLink)
 
-	// 7. 创建perf reader（16页/CPU = 64KB，增大以容纳网络事件）
-	l.perfReader, err = perf.NewReader(objs.Events, 16*4096)
+	// 7. 创建perf reader（32页/CPU = 128KB，扩展后的 execve_event ~1.4KB）
+	l.perfReader, err = perf.NewReader(objs.Events, 32*4096)
 	if err != nil {
 		l.Close()
 		return nil, fmt.Errorf("failed to create perf reader: %w", err)
