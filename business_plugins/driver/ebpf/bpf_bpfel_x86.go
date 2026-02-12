@@ -12,6 +12,39 @@ import (
 	"github.com/cilium/ebpf"
 )
 
+type bpfAcceptEvent struct {
+	EventType  uint8
+	Protocol   uint8
+	Padding1   [2]uint8
+	Pid        uint32
+	Tgid       uint32
+	Ppid       uint32
+	Uid        uint32
+	RemoteIp   uint32
+	RemotePort uint16
+	LocalPort  uint16
+	LocalIp    uint32
+	Retval     int32
+	Comm       [16]int8
+	ExePath    [256]int8
+}
+
+type bpfBindEvent struct {
+	EventType uint8
+	Protocol  uint8
+	Padding1  [2]uint8
+	Pid       uint32
+	Tgid      uint32
+	Ppid      uint32
+	Uid       uint32
+	BindIp    uint32
+	BindPort  uint16
+	Padding2  uint16
+	Retval    int32
+	Comm      [16]int8
+	ExePath   [256]int8
+}
+
 type bpfCommitCredsEvent struct {
 	EventType uint8
 	Padding1  [3]uint8
@@ -25,6 +58,42 @@ type bpfCommitCredsEvent struct {
 	NewEuid   uint32
 	Comm      [16]int8
 	ExePath   [256]int8
+}
+
+type bpfConnectEvent struct {
+	EventType  uint8
+	Protocol   uint8
+	Padding1   [2]uint8
+	Pid        uint32
+	Tgid       uint32
+	Ppid       uint32
+	Uid        uint32
+	RemoteIp   uint32
+	RemotePort uint16
+	LocalPort  uint16
+	LocalIp    uint32
+	Retval     int32
+	Comm       [16]int8
+	ExePath    [256]int8
+}
+
+type bpfDnsDataBuf struct{ Data [512]int8 }
+
+type bpfDnsEvent struct {
+	EventType     uint8
+	Padding1      [3]uint8
+	Pid           uint32
+	Tgid          uint32
+	Ppid          uint32
+	Uid           uint32
+	DnsServerIp   uint32
+	DnsServerPort uint16
+	QueryType     uint16
+	Opcode        int32
+	Rcode         int32
+	Comm          [16]int8
+	ExePath       [256]int8
+	Domain        [256]int8
 }
 
 type bpfExeItem struct {
@@ -114,18 +183,24 @@ type bpfSpecs struct {
 type bpfProgramSpecs struct {
 	KpCommitCreds *ebpf.ProgramSpec `ebpf:"kp_commit_creds"`
 	TpProcExec    *ebpf.ProgramSpec `ebpf:"tp_proc_exec"`
+	TpSysExit     *ebpf.ProgramSpec `ebpf:"tp_sys_exit"`
 }
 
 // bpfMapSpecs contains maps before they are loaded into the kernel.
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfMapSpecs struct {
-	Events         *ebpf.MapSpec `ebpf:"events"`
-	PercpuBuf      *ebpf.MapSpec `ebpf:"percpu_buf"`
-	PercpuCredsBuf *ebpf.MapSpec `ebpf:"percpu_creds_buf"`
-	PercpuPathBuf  *ebpf.MapSpec `ebpf:"percpu_path_buf"`
-	PercpuRsBuf    *ebpf.MapSpec `ebpf:"percpu_rs_buf"`
-	TrustedExes    *ebpf.MapSpec `ebpf:"trusted_exes"`
+	Events           *ebpf.MapSpec `ebpf:"events"`
+	PercpuAcceptBuf  *ebpf.MapSpec `ebpf:"percpu_accept_buf"`
+	PercpuBindBuf    *ebpf.MapSpec `ebpf:"percpu_bind_buf"`
+	PercpuBuf        *ebpf.MapSpec `ebpf:"percpu_buf"`
+	PercpuConnectBuf *ebpf.MapSpec `ebpf:"percpu_connect_buf"`
+	PercpuCredsBuf   *ebpf.MapSpec `ebpf:"percpu_creds_buf"`
+	PercpuDnsBuf     *ebpf.MapSpec `ebpf:"percpu_dns_buf"`
+	PercpuDnsData    *ebpf.MapSpec `ebpf:"percpu_dns_data"`
+	PercpuPathBuf    *ebpf.MapSpec `ebpf:"percpu_path_buf"`
+	PercpuRsBuf      *ebpf.MapSpec `ebpf:"percpu_rs_buf"`
+	TrustedExes      *ebpf.MapSpec `ebpf:"trusted_exes"`
 }
 
 // bpfObjects contains all objects after they have been loaded into the kernel.
@@ -147,19 +222,29 @@ func (o *bpfObjects) Close() error {
 //
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfMaps struct {
-	Events         *ebpf.Map `ebpf:"events"`
-	PercpuBuf      *ebpf.Map `ebpf:"percpu_buf"`
-	PercpuCredsBuf *ebpf.Map `ebpf:"percpu_creds_buf"`
-	PercpuPathBuf  *ebpf.Map `ebpf:"percpu_path_buf"`
-	PercpuRsBuf    *ebpf.Map `ebpf:"percpu_rs_buf"`
-	TrustedExes    *ebpf.Map `ebpf:"trusted_exes"`
+	Events           *ebpf.Map `ebpf:"events"`
+	PercpuAcceptBuf  *ebpf.Map `ebpf:"percpu_accept_buf"`
+	PercpuBindBuf    *ebpf.Map `ebpf:"percpu_bind_buf"`
+	PercpuBuf        *ebpf.Map `ebpf:"percpu_buf"`
+	PercpuConnectBuf *ebpf.Map `ebpf:"percpu_connect_buf"`
+	PercpuCredsBuf   *ebpf.Map `ebpf:"percpu_creds_buf"`
+	PercpuDnsBuf     *ebpf.Map `ebpf:"percpu_dns_buf"`
+	PercpuDnsData    *ebpf.Map `ebpf:"percpu_dns_data"`
+	PercpuPathBuf    *ebpf.Map `ebpf:"percpu_path_buf"`
+	PercpuRsBuf      *ebpf.Map `ebpf:"percpu_rs_buf"`
+	TrustedExes      *ebpf.Map `ebpf:"trusted_exes"`
 }
 
 func (m *bpfMaps) Close() error {
 	return _BpfClose(
 		m.Events,
+		m.PercpuAcceptBuf,
+		m.PercpuBindBuf,
 		m.PercpuBuf,
+		m.PercpuConnectBuf,
 		m.PercpuCredsBuf,
+		m.PercpuDnsBuf,
+		m.PercpuDnsData,
 		m.PercpuPathBuf,
 		m.PercpuRsBuf,
 		m.TrustedExes,
@@ -172,12 +257,14 @@ func (m *bpfMaps) Close() error {
 type bpfPrograms struct {
 	KpCommitCreds *ebpf.Program `ebpf:"kp_commit_creds"`
 	TpProcExec    *ebpf.Program `ebpf:"tp_proc_exec"`
+	TpSysExit     *ebpf.Program `ebpf:"tp_sys_exit"`
 }
 
 func (p *bpfPrograms) Close() error {
 	return _BpfClose(
 		p.KpCommitCreds,
 		p.TpProcExec,
+		p.TpSysExit,
 	)
 }
 

@@ -82,7 +82,7 @@ main.go
                            ↓
 ┌──────────────────────────────────────────────────────────────┐
 │                  TRANSPORT (传输层)                           │
-���  ├─ handleSend(): 读取 buffer → 组装 PackagedData → 发送     │
+├─ handleSend(): 读取 buffer → 组装 PackagedData → 发送         │
 │  └─ handleReceive(): 接收 Command → 转发 Task 给插件          │
 └──────────────────────────────────────────────────────────────┘
                            ↓

@@ -49,8 +49,8 @@ vendor/
 
 # 开发临时文件夹
 develop/
+scripts/
 
 # Machine ID 文件
 machine-id
 bin/agent
-
