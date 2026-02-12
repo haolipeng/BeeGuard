@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 package ebpf
 
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc clang -cflags "-O2 -g -Wall -Werror -D__TARGET_ARCH_x86" -target amd64 -type execve_event -type commit_creds_event -type reverse_shell_event bpf ./bpf/hids.bpf.c -- -I./bpf
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc clang -cflags "-O2 -g -Wall -Werror -D__TARGET_ARCH_x86" -target amd64 -type execve_event -type commit_creds_event -type reverse_shell_event -type connect_event -type bind_event -type accept_event -type dns_event -type stdio_path_buf bpf ./bpf/hids.bpf.c -- -I./bpf
 
 import (
 	"errors"
@@ -60,8 +60,19 @@ func NewLoader() (*Loader, error) {
 	}
 	l.links = append(l.links, kpLink)
 
-	// 6. 创建perf reader（8页/CPU = 32KB）
-	l.perfReader, err = perf.NewReader(objs.Events, 8*4096)
+	// 6. 附加raw_tracepoint到sys_exit（网络系统调用返回处理）
+	sysExitLink, err := link.AttachRawTracepoint(link.RawTracepointOptions{
+		Name:    "sys_exit",
+		Program: objs.TpSysExit,
+	})
+	if err != nil {
+		l.Close()
+		return nil, fmt.Errorf("failed to attach raw_tracepoint/sys_exit: %w", err)
+	}
+	l.links = append(l.links, sysExitLink)
+
+	// 7. 创建perf reader（32页/CPU = 128KB，扩展后的 execve_event ~1.4KB）
+	l.perfReader, err = perf.NewReader(objs.Events, 32*4096)
 	if err != nil {
 		l.Close()
 		return nil, fmt.Errorf("failed to create perf reader: %w", err)
