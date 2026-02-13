@@ -22,20 +22,7 @@
 | `business_plugins/ebpf_base_detector/detector/detector.go` | 规则匹配引擎 |
 | `business_plugins/ebpf_base_detector/main.go` | 事件处理与告警生成 |
 
----
-
-## 环境要求
-
-| 项目 | 要求 |
-|------|------|
-| 内核版本 | >= 5.x |
-| BTF 支持 | `/sys/kernel/btf/vmlinux` 存在 |
-| 编译依赖 | clang、llvm、libbpf-dev、linux-headers |
-| 运行权限 | root |
-
----
-
-## 编译与启动
+## 编译部署与启动
 
 ```bash
 # 1. 编译译并部署
@@ -45,13 +32,6 @@ make deploy
 
 # 2. 启动 Agent（Terminal A）
 # 检测事件输出到 stderr，Agent 运行日志输出到 /opt/cloudsec/logs/agent.log
-cd /opt/cloudsec
-sudo ./bin/agent -standalone -plugins=ebpf_base_detector -output=/opt/cloudsec/logs/agent.log -test
-```
-
-**可选**：输出到文件以便后续分析：
-
-```bash
 cd /opt/cloudsec
 sudo ./bin/agent -standalone -plugins=ebpf_base_detector -output=/opt/cloudsec/logs/agent.log -test
 ```
@@ -119,24 +99,7 @@ rule_id=DC003  rule_name=危险权限修改  severity=high
 
 ---
 
-### DC004: 计划任务修改（medium）
-
-```bash
-# 测试 1：crontab -e（打开编辑器后直接退出即可，不需要实际修改）
-crontab -e
-```
-
-**预期告警**
-
-```
-rule_id=DC005  rule_name=计划任务修改  severity=medium
-```
-
-> **注意**：`echo ... >> /etc/cron.d/` 这类命令无法被检测，原因有二：①`echo` 是 bash 内建命令，不产生 execve 事件；②`>>` 重定向由 shell 处理，不会出现在进程 argv 中。因此规则使用 `crontab`、`tee`、`cp`、`mv` 等外部命令来检测计划任务修改。
-
----
-
-### DC005: 内核模块操作（high）
+### DC004: 内核模块操作（high）
 
 ```bash
 # 测试 1：insmod（使用不存在的模块，会报错但触发检测）
@@ -177,8 +140,7 @@ rule_id=DC009  rule_name=内核模块操作  severity=high
 | 1 | DC001 | 危险删除操作 | critical | `rm -rf /tmp/dc001_test` | 告警 | | |
 | 2 | DC002 | 敏感文件访问 | high | `cat /etc/passwd` | 告警 | | |
 | 3 | DC003 | 危险权限修改 | high | `chmod 777 /tmp/test` | 告警 | | |
-| 4 | DC005 | 计划任务修改 | medium | `crontab -e` | 告警 | | |
-| 5 | DC009 | 内核模块操作 | high | `insmod /tmp/test.ko` | 告警 | | |
+| 4 | DC009 | 内核模块操作 | high | `insmod /tmp/test.ko` | 告警 | | |
 
 ---
 

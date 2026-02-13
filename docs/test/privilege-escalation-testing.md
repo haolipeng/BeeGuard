@@ -46,101 +46,27 @@ cat /proc/version
 
 ---
 
-## 3. 编译
+## 3. 编译部署与启动
 
 ```bash
-# 编译 ebpf_base_detector 插件
-make build-driver
-```
+# 1. 编译并部署
+cd /home/work/goProject/src/company/agent
+make build
+make deploy
 
-编译输出路径: `build/` 目录。
-
----
-
-## 4. 部署
-
-```bash
-# 部署 ebpf_base_detector 插件
-make deploy-driver
-
-# 确认部署
-ls -la /opt/cloudsec/plugins/ebpf_base_detector/
-ls -la /opt/cloudsec/plugins/ebpf_base_detector/config/
-```
-
-**部署目录结构:**
-
-```
-/opt/cloudsec/
-├── agent                          # agent 主程序
-└── plugins/
-    └── ebpf_base_detector/
-        ├── ebpf_base_detector                 # 插件二进制
-        └── config/
-            ├── dangerous_commands.yaml
-            └── privilege_escalation_whitelist.yaml   # 白名单配置
-```
-
----
-
-## 5. 启动 Agent
-
-Standalone 模式允许不连接 gRPC Server 进行本地测试，检测结果输出到日志或文件。
-
-### 命令行参数
-
-| 参数 | 说明 | 示例 |
-|------|------|------|
-| `-config` | 配置文件路径 | `-config=agent-standalone.yaml` |
-| `-standalone` | 启用 standalone 模式 | `-standalone` |
-| `-output` | 输出方式 (stderr/文件路径) | `-output=/opt/cloudsec/logs/agent.log` |
-| `-plugins` | 加载的插件列表 | `-plugins=ebpf_base_detector` |
-| `-test` | 测试模式（固定 agent ID） | `-test` |
-
-### 启动方式一：命令行参数（推荐）
-
-```bash
-# Agent 运行日志输出到 /opt/cloudsec/logs/agent.log
+# 2. 启动 Agent（Terminal A）
+# 检测事件输出到 stderr，Agent 运行日志输出到 /opt/cloudsec/logs/agent.log
 cd /opt/cloudsec
 sudo ./bin/agent -standalone -plugins=ebpf_base_detector -output=/opt/cloudsec/logs/agent.log -test
 ```
 
-### 启动方式二：配置文件
-
-创建 `agent-standalone.yaml`:
-
-```yaml
-# Agent Standalone 模式配置
-working_directory: "/opt/cloudsec/data/agent"
-plugins_directory: "/opt/cloudsec/plugins"
-
-standalone:
-  enabled: true
-  output: "stderr"                   # "stderr" 或文件路径（如 "/tmp/results.json"）
-  flush_interval: 1                  # 刷新间隔（秒）
-  plugins:
-    - ebpf_base_detector                         # 仅加载 ebpf_base_detector 插件
-```
-
-```bash
-cd /opt/cloudsec
-sudo ./bin/agent -config=agent-standalone.yaml -test
-```
-
-### 保存日志
-
-```bash
-cd /opt/cloudsec
-sudo ./bin/agent -standalone -plugins=ebpf_base_detector -output=/opt/cloudsec/logs/agent.log -test 2>&1 | tee ebpf_base_detector.log
-```
-
 ---
 
-## 6. 触发本地提权
+## 4. 测试用例
 
 由于本地提权涉及到特权操作，需要在授权的测试环境中进行。以下提供多种测试方法。
 
-### 方法一：SUID 程序测试（推荐）
+### 用例一：SUID 程序测试（推荐）
 
 创建一个带 SUID 位的测试程序：
 
@@ -150,11 +76,7 @@ cat > /tmp/suid_wrapper.c << 'EOF'
 #include <unistd.h>
 #include <stdio.h>
 int main() {
-    printf("Before: uid=%d euid=%d\n", getuid(), geteuid());
-    setuid(0);
-    setgid(0);
-    printf("After: uid=%d euid=%d\n", getuid(), geteuid());
-    execl("/bin/bash", "bash", "-c", "id", NULL);
+    printf("uid=%d euid=%d\n", getuid(), geteuid());
     return 0;
 }
 EOF
@@ -175,7 +97,7 @@ su - haolipeng -c "/tmp/suid_wrapper"
 
 ---
 
-### 方法二：已有 SUID 程序
+### 用例二：已有 SUID 程序
 
 使用系统中已有的 SUID 程序，复制一份到不在白名单的路径：
 
@@ -194,7 +116,7 @@ sudo chmod 4755 /tmp/test_passwd
 
 ---
 
-### 方法三：Python/Perl 命令
+### 用例三：Python/Perl 命令
 
 在某些特殊配置的测试环境中可以尝试：
 
@@ -210,23 +132,7 @@ perl -e 'use POSIX; POSIX::setuid(0); system("id")'
 
 ---
 
-### 方法四：白名单验证（反向验证）
-
-测试合法提权程序**不应**触发告警：
-
-```bash
-# 使用 sudo（应该不触发告警）
-sudo id
-
-# 使用 su（应该不触发告警）
-su - root -c "id"
-```
-
-**预期结果:** 日志中**不应该**出现 `WARN Privilege escalation detected`，因为 sudo 和 su 在白名单中。
-
----
-
-### 方法五：完整测试程序
+### 用例四：完整测试程序
 
 如果以上方法都无法触发，使用以下测试程序：
 
@@ -281,14 +187,9 @@ gcc -o /tmp/privesc_test privilege_escalation_test.c
 /tmp/privesc_test
 ```
 
-> **注意:**
-> - 在正常环境中，此程序会因权限不足而失败，这是预期行为
-> - 要触发提权检测，需要在具有 SUID 漏洞的测试环境中运行
-> - 或者使用已知的 CVE 漏洞利用工具（仅限授权的安全测试环境）
-
 ---
 
-## 7. 验证检测结果
+## 5. 验证检测结果
 
 ### 日志查看位置
 
@@ -342,7 +243,7 @@ hids: commit_creds new_uid=0 new_euid=0
 
 ---
 
-## 8. 白名单配置
+## 6. 白名单配置
 
 ### 配置文件路径
 
@@ -384,7 +285,7 @@ log_filtered_events: false  # 是否记录被过滤的事件
 
 ---
 
-## 9. 清理测试环境
+## 7. 清理测试环境
 
 ```bash
 # 清理方法一的测试文件

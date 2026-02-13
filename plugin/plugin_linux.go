@@ -30,10 +30,12 @@ func (p *Plugin) Shutdown() {
 
 	p.Info("plugin is running, will shutdown it")
 
+	// 先发 SIGTERM 通知插件优雅退出
+	syscall.Kill(-p.cmd.Process.Pid, syscall.SIGTERM)
 	p.tx.Close()
 	p.rx.Close()
 	select {
-	case <-time.After(time.Second * 30):
+	case <-time.After(time.Second * 10):
 		p.Warn("because of plugin exit's timeout, will kill it")
 		syscall.Kill(-p.cmd.Process.Pid, syscall.SIGKILL)
 		<-p.done

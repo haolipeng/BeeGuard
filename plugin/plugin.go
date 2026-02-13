@@ -258,8 +258,9 @@ func Startup(ctx context.Context, wg *sync.WaitGroup) {
 					if plg.IsExited() {
 						status = fmt.Sprintf("exited (code: %d)", plg.cmd.ProcessState.ExitCode())
 					}
-					zap.S().Infof("plugin status: name=%s, version=%s, pid=%d, status=%s",
-						plg.Name(), plg.Version(), plg.Pid(), status)
+					_ = status // TODO: 插件状态日志暂时关闭
+					// zap.S().Infof("plugin status: name=%s, version=%s, pid=%d, status=%s",
+					// 	plg.Name(), plg.Version(), plg.Pid(), status)
 				}
 			}
 		case <-ctx.Done():
