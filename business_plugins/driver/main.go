@@ -26,6 +26,7 @@ import (
 const (
 	defaultConfigPath        = "config/dangerous_commands.yaml"
 	defaultTrustedConfigPath = "config/privilege_escalation_whitelist.yaml"
+	defaultIOCConfigPath     = "config/ioc_rules.yaml"
 )
 
 func main() {
@@ -57,6 +58,17 @@ func main() {
 
 	// 3.1 初始化用户态反弹 shell 检测器
 	rsDetector := &detector.ReverseShellDetector{}
+
+	// 3.2 初始化 IOC 匹配器
+	var iocMatcher *detector.IOCMatcher
+	iocConfigPath := getIOCConfigPath()
+	iocConfig, err := detector.LoadIOCRules(iocConfigPath)
+	if err != nil {
+		logger.Warn("Failed to load IOC rules, IOC detection disabled", "error", err, "path", iocConfigPath)
+	} else {
+		iocMatcher = detector.NewIOCMatcher(iocConfig)
+		logger.Info("IOC rules loaded", "version", iocConfig.Version, "rules", iocMatcher.GetEnabledRuleCount())
+	}
 
 	// 4. 加载eBPF程序
 	loader, err := ebpf.NewLoader()
@@ -140,7 +152,17 @@ func main() {
 					continue
 				}
 
+				// 用户态补充 pid_tree（从 BPF 移到用户态，减少验证器指令数）
+				pidTreeStr := buildPidTree(evt.TGID, cstring(evt.Comm[:]))
+
+				// 用户态推导 fd_type（从 stdin_path/stdout_path 判断是否 socket）
+				evt.FDType = deriveFDType(
+					cstring(evt.StdinPath[:]),
+					cstring(evt.StdoutPath[:]),
+				)
+
 				record := evt.ToRecord()
+				record.Data.Fields["pid_tree"] = pidTreeStr
 
 				// 高危命令检测
 				if det != nil {
@@ -184,7 +206,7 @@ func main() {
 				// 用户态反弹 shell 检测
 				rsResult := rsDetector.Detect(&evt)
 				if rsResult != nil {
-					rsRecord := detector.BuildReverseShellRecord(&evt, rsResult)
+					rsRecord := detector.BuildReverseShellRecord(&evt, rsResult, pidTreeStr)
 					logger.Warn("Reverse shell detected (userspace)",
 						"rule", rsResult.RuleName,
 						"confidence", rsResult.Confidence,
@@ -194,7 +216,7 @@ func main() {
 						"exe_path", cstring(evt.ExePath[:]),
 						"stdin_path", cstring(evt.StdinPath[:]),
 						"stdout_path", cstring(evt.StdoutPath[:]),
-						"pid_tree", cstring(evt.PidTree[:]),
+						"pid_tree", pidTreeStr,
 						"tty_name", cstring(evt.TTYName[:]),
 						"socket_pid", evt.SocketPID)
 					if err := client.SendRecord(rsRecord); err != nil {
@@ -248,30 +270,6 @@ func main() {
 					logger.Error("Failed to send privilege escalation record to agent", "error", err)
 				}
 
-			case events.EventTypeReverseShell:
-				// 处理反弹Shell事件
-				var evt events.ReverseShellEvent
-				if err := evt.UnmarshalBinary(rec.RawSample); err != nil {
-					logger.Error("Failed to unmarshal reverse shell event", "error", err)
-					continue
-				}
-
-				record := evt.ToRecord()
-
-				logger.Warn("Reverse shell detected",
-					"pid", evt.PID,
-					"tgid", evt.TGID,
-					"ppid", evt.PPID,
-					"comm", cstring(evt.Comm[:]),
-					"exe_path", cstring(evt.ExePath[:]),
-					"fd_type", evt.FDType,
-					"remote_ip", record.Data.Fields["remote_ip"],
-					"remote_port", record.Data.Fields["remote_port"])
-
-				if err := client.SendRecord(record); err != nil {
-					logger.Error("Failed to send reverse shell record to agent", "error", err)
-				}
-
 			case events.EventTypeConnect:
 				// 处理出站连接事件
 				var evt events.ConnectEvent
@@ -289,6 +287,23 @@ func main() {
 					"remote_port", record.Data.Fields["remote_port"],
 					"protocol", record.Data.Fields["protocol"],
 					"retval", evt.RetVal)
+
+				// IOC 匹配
+				if iocMatcher != nil {
+					if iocResult := iocMatcher.MatchConnect(&evt); iocResult != nil {
+						iocRecord := detector.BuildIOCConnectRecord(&evt, iocResult)
+						logger.Warn("IOC hit on connect",
+							"rule_id", iocResult.RuleID,
+							"rule_name", iocResult.RuleName,
+							"threat_type", iocResult.ThreatType,
+							"matched_value", iocResult.MatchedValue,
+							"pid", evt.PID,
+							"comm", cstring(evt.Comm[:]))
+						if err := client.SendRecord(iocRecord); err != nil {
+							logger.Error("Failed to send IOC connect record to agent", "error", err)
+						}
+					}
+				}
 
 				if err := client.SendRecord(record); err != nil {
 					logger.Error("Failed to send connect record to agent", "error", err)
@@ -353,6 +368,23 @@ func main() {
 					"domain", record.Data.Fields["domain"],
 					"query_type", record.Data.Fields["query_type"],
 					"dns_server", record.Data.Fields["dns_server_ip"])
+
+				// IOC 匹配
+				if iocMatcher != nil {
+					if iocResult := iocMatcher.MatchDNS(&evt); iocResult != nil {
+						iocRecord := detector.BuildIOCDNSRecord(&evt, iocResult)
+						logger.Warn("IOC hit on DNS",
+							"rule_id", iocResult.RuleID,
+							"rule_name", iocResult.RuleName,
+							"threat_type", iocResult.ThreatType,
+							"matched_value", iocResult.MatchedValue,
+							"pid", evt.PID,
+							"comm", cstring(evt.Comm[:]))
+						if err := client.SendRecord(iocRecord); err != nil {
+							logger.Error("Failed to send IOC DNS record to agent", "error", err)
+						}
+					}
+				}
 
 				if err := client.SendRecord(record); err != nil {
 					logger.Error("Failed to send DNS record to agent", "error", err)
@@ -435,6 +467,27 @@ func getTrustedConfigPath() string {
 
 	// 回退到当前目录
 	return defaultTrustedConfigPath
+}
+
+// getIOCConfigPath 获取 IOC 规则配置文件路径
+// 优先使用环境变量，否则使用默认路径
+func getIOCConfigPath() string {
+	if path := os.Getenv("DRIVER_IOC_CONFIG_PATH"); path != "" {
+		return path
+	}
+
+	// 尝试获取可执行文件所在目录
+	execPath, err := os.Executable()
+	if err == nil {
+		dir := filepath.Dir(execPath)
+		configPath := filepath.Join(dir, defaultIOCConfigPath)
+		if _, err := os.Stat(configPath); err == nil {
+			return configPath
+		}
+	}
+
+	// 回退到当前目录
+	return defaultIOCConfigPath
 }
 
 // resolveExePath 补全可执行文件的完整路径
@@ -546,4 +599,66 @@ func argsString(b []byte) string {
 
 	// 去除尾部空格
 	return string(bytes.TrimRight(result, " "))
+}
+
+// buildPidTree 在用户态构建进程链字符串
+// 格式: "PID<comm<PID<comm<..."（与原 BPF 版本格式一致）
+// 从当前进程向上遍历最多 8 层
+func buildPidTree(tgid uint32, comm string) string {
+	var buf strings.Builder
+	buf.WriteString(fmt.Sprintf("%d<%s", tgid, comm))
+
+	pid := tgid
+	for i := 0; i < 7; i++ {
+		ppid := readPPid(pid)
+		if ppid == 0 || ppid == pid {
+			break
+		}
+		parentComm := resolveParentComm(ppid)
+		if parentComm == "" {
+			break
+		}
+		buf.WriteString(fmt.Sprintf("<%d<%s", ppid, parentComm))
+		pid = ppid
+	}
+
+	return buf.String()
+}
+
+// readPPid 从 /proc/<pid>/status 读取父进程 PID
+func readPPid(pid uint32) uint32 {
+	f, err := os.Open(fmt.Sprintf("/proc/%d/status", pid))
+	if err != nil {
+		return 0
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "PPid:") {
+			fields := strings.Fields(line)
+			if len(fields) >= 2 {
+				var ppid uint32
+				if n, _ := fmt.Sscanf(fields[1], "%d", &ppid); n == 1 {
+					return ppid
+				}
+			}
+			break
+		}
+	}
+	return 0
+}
+
+// deriveFDType 从 stdin/stdout 路径推导 fd_type
+// bit 0 = stdin 是 socket, bit 1 = stdout 是 socket
+func deriveFDType(stdinPath, stdoutPath string) uint8 {
+	var fdType uint8
+	if strings.Contains(stdinPath, "socket:") {
+		fdType |= 1
+	}
+	if strings.Contains(stdoutPath, "socket:") {
+		fdType |= 2
+	}
+	return fdType
 }

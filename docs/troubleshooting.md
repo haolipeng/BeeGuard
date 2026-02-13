@@ -19,7 +19,7 @@ netstat -tlnp | grep 50051
 telnet <server_ip> 50051
 
 # 3. 检查配置文件中 server 地址
-cat /opt/cloudsec/conf/agent.yaml | grep server
+cat /opt/cloudsec/agent.yaml | grep server
 
 # 4. 查看 Agent 日志
 tail -f /opt/cloudsec/logs/agent/agent.log
@@ -54,7 +54,8 @@ ls /sys/kernel/btf/vmlinux
 
 **排查：** 使用 Standalone 模式本地测试
 ```bash
-sudo ./build/agent -standalone -plugins=driver -output=stderr -test
+cd /opt/cloudsec
+sudo ./bin/agent -standalone -plugins=driver -output=stderr -test
 ```
 
 ---

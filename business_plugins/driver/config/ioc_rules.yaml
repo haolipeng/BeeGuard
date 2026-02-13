@@ -1,0 +1,106 @@
+# IOC 威胁情报规则配置文件
+# 说明: 此文件定义 IOC（Indicator of Compromise）检测规则，用于匹配已知恶意网络行为
+# 支持指标类型: ip（IP地址）, domain（域名）, port（端口）, ip_port（IP:端口复合）
+# 支持威胁类型: mining（挖矿）, c2（C2通信）, phishing（钓鱼）, data_leakage（数据泄露）
+
+version: "1.0"
+description: "IOC 威胁情报规则"
+
+rules:
+  # ============================================
+  # 挖矿威胁
+  # ============================================
+  - id: "IOC001"
+    name: "已知矿池IP"
+    description: "检测连接到已知加密货币矿池IP地址的行为"
+    threat_type: "mining"
+    indicator_type: "ip"
+    severity: "high"
+    enabled: true
+    indicators:
+      - "94.23.23.52"
+      - "104.140.201.18"
+      - "5.196.23.240"
+
+  - id: "IOC002"
+    name: "常见矿池端口"
+    description: "检测连接到常见加密货币挖矿端口的行为"
+    threat_type: "mining"
+    indicator_type: "port"
+    severity: "medium"
+    enabled: true
+    indicators:
+      - "3333"
+      - "4444"
+      - "5555"
+      - "7777"
+      - "8333"
+      - "14444"
+      - "14433"
+
+  - id: "IOC003"
+    name: "已知矿池域名"
+    description: "检测解析已知矿池域名的行为"
+    threat_type: "mining"
+    indicator_type: "domain"
+    severity: "high"
+    enabled: true
+    indicators:
+      - "pool.minexmr.com"
+      - "xmr.pool.minergate.com"
+      - "*.monerohash.com"
+      - "*.nanopool.org"
+      - "*.moneropool.com"
+
+  # ============================================
+  # C2 通信
+  # ============================================
+  - id: "IOC004"
+    name: "已知C2域名"
+    description: "检测解析已知C2服务器域名的行为"
+    threat_type: "c2"
+    indicator_type: "domain"
+    severity: "critical"
+    enabled: true
+    indicators:
+      - "*.cobalt-strike.example.com"
+      - "*.darkside.example.com"
+
+  - id: "IOC005"
+    name: "已知C2端点"
+    description: "检测连接到已知C2服务器IP:端口的行为"
+    threat_type: "c2"
+    indicator_type: "ip_port"
+    severity: "critical"
+    enabled: true
+    indicators:
+      - "185.141.27.100:443"
+      - "45.33.32.156:8443"
+
+  # ============================================
+  # 钓鱼网站
+  # ============================================
+  - id: "IOC006"
+    name: "已知钓鱼域名"
+    description: "检测解析已知钓鱼网站域名的行为"
+    threat_type: "phishing"
+    indicator_type: "domain"
+    severity: "high"
+    enabled: true
+    indicators:
+      - "*.phishing-example.com"
+      - "login-secure.example.net"
+
+  # ============================================
+  # 数据泄露
+  # ============================================
+  - id: "IOC007"
+    name: "已知数据泄露目标IP"
+    description: "检测连接到已知数据泄露目标服务器的行为"
+    threat_type: "data_leakage"
+    indicator_type: "ip"
+    severity: "critical"
+    enabled: true
+    indicators:
+      - "198.51.100.1"
+      - "203.0.113.50"

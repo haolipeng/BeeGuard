@@ -10,11 +10,12 @@
 
 ```bash
 # 前台启动
-sudo /opt/cloudsec/bin/agent -config /opt/cloudsec/conf/agent.yaml
+cd /opt/cloudsec
+sudo ./bin/agent
 
 # 后台启动
-sudo nohup /opt/cloudsec/bin/agent -config /opt/cloudsec/conf/agent.yaml \
-    > /opt/cloudsec/logs/agent/agent.log 2>&1 &
+cd /opt/cloudsec
+sudo nohup ./bin/agent > /opt/cloudsec/logs/agent/agent.log 2>&1 &
 ```
 
 ### 停止 Agent
@@ -31,8 +32,8 @@ sudo pkill -9 -f "/opt/cloudsec"
 
 ```bash
 sudo pkill -SIGTERM -f "/opt/cloudsec/bin/agent" && sleep 2 && \
-sudo nohup /opt/cloudsec/bin/agent -config /opt/cloudsec/conf/agent.yaml \
-    > /opt/cloudsec/logs/agent/agent.log 2>&1 &
+cd /opt/cloudsec && \
+sudo nohup ./bin/agent > /opt/cloudsec/logs/agent/agent.log 2>&1 &
 ```
 
 ---
@@ -78,11 +79,12 @@ find /opt/cloudsec/logs -name "*.log" -mtime +7 -delete
 
 ```bash
 # 1. 编辑配置
-sudo vim /opt/cloudsec/conf/agent.yaml
+sudo vim /opt/cloudsec/agent.yaml
 
 # 2. 重启生效
 sudo pkill -SIGTERM -f "/opt/cloudsec/bin/agent"
-sudo /opt/cloudsec/bin/agent -config /opt/cloudsec/conf/agent.yaml &
+cd /opt/cloudsec
+sudo ./bin/agent &
 ```
 
 ---
@@ -96,12 +98,13 @@ sudo pkill -SIGTERM -f "/opt/cloudsec/bin/agent"
 # 2. 备份（可选）
 sudo cp -r /opt/cloudsec /opt/cloudsec.bak
 
-# 3. 部署新版本
+# 3. 部署��版本
 cd /path/to/agent
 make build && make deploy
 
 # 4. 启动
-sudo /opt/cloudsec/bin/agent -config /opt/cloudsec/conf/agent.yaml &
+cd /opt/cloudsec
+sudo ./bin/agent &
 ```
 
 ---
@@ -111,7 +114,8 @@ sudo /opt/cloudsec/bin/agent -config /opt/cloudsec/conf/agent.yaml &
 ```
 /opt/cloudsec/
 ├── bin/agent              # 主程序
-├── conf/agent.yaml        # 配置文件
+├── agent.yaml             # 配置文件
+├── agent-standalone.yaml  # Standalone 模式配置文件
 ├── plugins/               # 插件目录
 ├── data/                  # 运行时数据
 └── logs/                  # 日志目录

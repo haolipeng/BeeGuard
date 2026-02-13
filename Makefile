@@ -117,7 +117,6 @@ deploy: build
 	@echo "Deploying to $(DEPLOY_DIR)..."
 	@sudo mkdir -p $(DEPLOY_DIR)/bin
 	@sudo mkdir -p $(DEPLOY_DIR)/plugins
-	@sudo mkdir -p $(DEPLOY_DIR)/conf
 	@sudo mkdir -p $(DEPLOY_DIR)/data/agent
 	@sudo mkdir -p $(DEPLOY_DIR)/data/plugins/collector
 	@sudo mkdir -p $(DEPLOY_DIR)/data/plugins/baseline
@@ -144,16 +143,12 @@ deploy: build
 	@sudo chmod 755 $(DEPLOY_DIR)/plugins/baseline/baseline
 	@sudo chmod 755 $(DEPLOY_DIR)/plugins/detector/detector
 	@sudo chmod 755 $(DEPLOY_DIR)/plugins/driver/driver
-	@if [ ! -f $(DEPLOY_DIR)/conf/agent.yaml ]; then \
-		sudo cp agent.yaml $(DEPLOY_DIR)/conf/agent.yaml; \
-		echo "Config copied to $(DEPLOY_DIR)/conf/agent.yaml"; \
-	else \
-		echo "Config already exists, skipping..."; \
-	fi
+	@sudo cp agent.yaml $(DEPLOY_DIR)/
+	@sudo cp agent-standalone.yaml $(DEPLOY_DIR)/
 	@echo "Deploy complete!"
 	@echo "  Agent:   $(DEPLOY_DIR)/bin/$(BINARY_NAME)"
 	@echo "  Plugins: $(DEPLOY_DIR)/plugins/"
-	@echo "  Config:  $(DEPLOY_DIR)/conf/agent.yaml"
+	@echo "  Config:  $(DEPLOY_DIR)/agent.yaml"
 
 # 仅部署 agent（不含插件）
 .PHONY: deploy-agent

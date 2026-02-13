@@ -116,6 +116,8 @@ build/
 /opt/cloudsec/
 ├── bin/
 │   └── agent                   # Agent 主程序
+├── agent.yaml                  # 配置文件
+├── agent-standalone.yaml       # Standalone 模式配置文件
 ├── plugins/
 │   ├── collector/
 │   │   └── collector           # 采集插件
@@ -127,8 +129,6 @@ build/
 │       ├── driver              # eBPF 驱动插件
 │       └── config/
 │           └── dangerous_commands.yaml  # 高危命令规则
-├── conf/
-│   └── agent.yaml              # 配置文件
 ├── data/
 │   ├── agent/                  # Agent 运行时数据
 │   └── plugins/
@@ -191,15 +191,20 @@ retry_interval: 5
 
 ```bash
 # 方式一：使用部署目录（推荐）
-sudo /opt/cloudsec/bin/agent -config /opt/cloudsec/conf/agent.yaml
+cd /opt/cloudsec
+sudo ./bin/agent
 
 # 方式二：使用源码目录（开发调试）
+# 日志输出到当前目录下的 logs/agent.log
 cd /home/work/goProject/src/company/agent
-sudo ./build/agent -config agent.yaml
+make build
+make deploy
+cd /opt/cloudsec
+sudo ./bin/agent
 
 # 方式三：后台运行
-sudo nohup /opt/cloudsec/bin/agent -config /opt/cloudsec/conf/agent.yaml \
-    > /opt/cloudsec/logs/agent/agent.log 2>&1 &
+cd /opt/cloudsec
+sudo nohup ./bin/agent > /opt/cloudsec/logs/agent/agent.log 2>&1 &
 ```
 
 ### 启动日志

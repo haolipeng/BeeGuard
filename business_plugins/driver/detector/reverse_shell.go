@@ -60,13 +60,12 @@ func (d *ReverseShellDetector) Detect(evt *events.ExecveEvent) *ReverseShellResu
 }
 
 // BuildReverseShellRecord 从 enriched ExecveEvent 和检测结果构建 DataType 6007 告警
-func BuildReverseShellRecord(evt *events.ExecveEvent, result *ReverseShellResult) *businessplugins.Record {
+func BuildReverseShellRecord(evt *events.ExecveEvent, result *ReverseShellResult, pidTree string) *businessplugins.Record {
 	comm := cstring(evt.Comm[:])
 	exePath := cstring(evt.ExePath[:])
 	args := argsString(evt.Args[:])
 	stdinPath := cstring(evt.StdinPath[:])
 	stdoutPath := cstring(evt.StdoutPath[:])
-	pidTree := cstring(evt.PidTree[:])
 	ttyName := cstring(evt.TTYName[:])
 
 	fields := map[string]string{
