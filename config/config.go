@@ -31,6 +31,9 @@ type Config struct {
 
 	// Standalone standalone 模式配置
 	Standalone *StandaloneConfig `yaml:"standalone,omitempty"`
+
+	// Log 日志配置
+	Log *LogConfig `yaml:"log,omitempty"`
 }
 
 // StandaloneConfig standalone 模式配置
@@ -46,6 +49,24 @@ type StandaloneConfig struct {
 
 	// FlushInterval 刷新间隔（秒）
 	FlushInterval int `yaml:"flush_interval"`
+}
+
+// LogConfig 日志配置
+type LogConfig struct {
+	// Level 日志级别: debug/info/warn/error，默认 "info"
+	Level string `yaml:"level"`
+
+	// File 日志文件路径，空或 "stderr" 则输出到 stderr
+	File string `yaml:"file"`
+
+	// MaxSize 单文件最大 MB，默认 10
+	MaxSize int `yaml:"max_size"`
+
+	// MaxBackups 保留旧文件数，默认 5
+	MaxBackups int `yaml:"max_backups"`
+
+	// Compress 是否压缩旧文件，默认 false
+	Compress bool `yaml:"compress"`
 }
 
 var (
@@ -145,6 +166,20 @@ func ValidateAndSetDefaults(cfg *Config) error {
 
 	if cfg.RetryInterval <= 0 {
 		cfg.RetryInterval = 5 // 默认重试间隔 5 秒
+	}
+
+	// 4. 设置日志默认值
+	if cfg.Log == nil {
+		cfg.Log = &LogConfig{}
+	}
+	if cfg.Log.Level == "" {
+		cfg.Log.Level = "info"
+	}
+	if cfg.Log.MaxSize <= 0 {
+		cfg.Log.MaxSize = 10
+	}
+	if cfg.Log.MaxBackups <= 0 {
+		cfg.Log.MaxBackups = 5
 	}
 
 	return nil
