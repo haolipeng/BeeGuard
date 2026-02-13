@@ -5,7 +5,6 @@
 // 事件类型标识
 #define EVENT_TYPE_EXECVE        1
 #define EVENT_TYPE_COMMIT_CREDS  2
-#define EVENT_TYPE_REVERSE_SHELL 3
 #define EVENT_TYPE_CONNECT       4
 #define EVENT_TYPE_BIND          5
 #define EVENT_TYPE_ACCEPT        6
@@ -20,12 +19,8 @@
 
 // 反弹 Shell 增强采集常量
 #define STDIO_PATH_LEN   64    // stdin/stdout 路径最大长度
-#define PIDTREE_LEN      256   // pid_tree 缓冲区大小
-#define PIDTREE_MASK     (PIDTREE_LEN - 1)
 #define TTY_NAME_LEN     64    // tty 名称最大长度
-#define SOCK_FD_LIMIT    12    // FD 扫描范围 0-11
-#define SOCK_PID_LIMIT   4     // 父进程追溯深度
-#define PIDTREE_DEPTH    8     // pid_tree 最大记录层数
+#define SOCK_FD_LIMIT    16    // FD 扫描范围 0-15
 
 // Per-CPU 路径构建缓冲区（避免栈溢出）
 struct path_buf {
@@ -57,7 +52,6 @@ struct execve_event {
     // --- 反弹 shell 增强字段 ---
     char  stdin_path[STDIO_PATH_LEN];   // FD 0 的文件路径（如 /dev/pts/0 或 socket:[xxx]）
     char  stdout_path[STDIO_PATH_LEN];  // FD 1 的文件路径
-    char  pid_tree[PIDTREE_LEN];        // 进程链：PID<comm<PID<comm<...
     char  tty_name[TTY_NAME_LEN];       // 控制终端名称
     __u32 remote_ip;     // socket 远程 IP（网络字节��）
     __u16 remote_port;   // socket 远程端口（网络字节序）
@@ -79,25 +73,6 @@ struct commit_creds_event {
     __u32 new_euid;      // 提权后的euid
     char comm[16];       // 进程名
     char exe_path[256];  // 可执行文件路径
-} __attribute__((packed));
-
-// 反弹Shell检测事件结构体
-struct reverse_shell_event {
-    __u8  event_type;     // EVENT_TYPE_REVERSE_SHELL = 3
-    __u8  fd_type;        // 触发的FD: 1=stdin, 2=stdout, 3=both
-    __u8  padding1[2];    // 对齐填充
-    __u32 pid;            // 进程ID（线程ID）
-    __u32 tgid;           // 线程组ID（进程ID）
-    __u32 ppid;           // 父进程ID
-    __u32 pgid;           // 进程组ID
-    __u32 uid;            // 用户ID
-    __u32 remote_ip;      // 远程IPv4地址（网络字节序）
-    __u16 remote_port;    // 远程端口（网络字节序）
-    __u16 local_port;     // 本地端口（主机字节序）
-    __u32 local_ip;       // 本地IPv4地址（网络字节序）
-    char  comm[16];       // 进程名
-    char  exe_path[256];  // 可执行文件路径
-    char  args[512];      // 命令行参数
 } __attribute__((packed));
 
 // connect 出站连接事件结构体

@@ -104,25 +104,6 @@ type bpfExeItem struct {
 }
 
 type bpfExecveEvent struct {
-	EventType uint8
-	Padding1  [3]uint8
-	Pid       uint32
-	Tgid      uint32
-	Ppid      uint32
-	Pgid      uint32
-	Uid       uint32
-	Padding   uint32
-	Comm      [16]int8
-	ExePath   [256]int8
-	Args      [512]int8
-}
-
-type bpfPathBuf struct {
-	Data [512]int8
-	Swap [260]int8
-}
-
-type bpfReverseShellEvent struct {
 	EventType  uint8
 	FdType     uint8
 	Padding1   [2]uint8
@@ -131,13 +112,27 @@ type bpfReverseShellEvent struct {
 	Ppid       uint32
 	Pgid       uint32
 	Uid        uint32
+	SocketPid  uint32
+	Comm       [16]int8
+	ExePath    [256]int8
+	Args       [512]int8
+	StdinPath  [64]int8
+	StdoutPath [64]int8
+	TtyName    [64]int8
 	RemoteIp   uint32
 	RemotePort uint16
 	LocalPort  uint16
 	LocalIp    uint32
-	Comm       [16]int8
-	ExePath    [256]int8
-	Args       [512]int8
+}
+
+type bpfPathBuf struct {
+	Data [512]int8
+	Swap [260]int8
+}
+
+type bpfStdioPathBuf struct {
+	Data [512]int8
+	Swap [260]int8
 }
 
 // loadBpf returns the embedded CollectionSpec for bpf.
@@ -190,17 +185,17 @@ type bpfProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfMapSpecs struct {
-	Events           *ebpf.MapSpec `ebpf:"events"`
-	PercpuAcceptBuf  *ebpf.MapSpec `ebpf:"percpu_accept_buf"`
-	PercpuBindBuf    *ebpf.MapSpec `ebpf:"percpu_bind_buf"`
-	PercpuBuf        *ebpf.MapSpec `ebpf:"percpu_buf"`
-	PercpuConnectBuf *ebpf.MapSpec `ebpf:"percpu_connect_buf"`
-	PercpuCredsBuf   *ebpf.MapSpec `ebpf:"percpu_creds_buf"`
-	PercpuDnsBuf     *ebpf.MapSpec `ebpf:"percpu_dns_buf"`
-	PercpuDnsData    *ebpf.MapSpec `ebpf:"percpu_dns_data"`
-	PercpuPathBuf    *ebpf.MapSpec `ebpf:"percpu_path_buf"`
-	PercpuRsBuf      *ebpf.MapSpec `ebpf:"percpu_rs_buf"`
-	TrustedExes      *ebpf.MapSpec `ebpf:"trusted_exes"`
+	Events             *ebpf.MapSpec `ebpf:"events"`
+	PercpuAcceptBuf    *ebpf.MapSpec `ebpf:"percpu_accept_buf"`
+	PercpuBindBuf      *ebpf.MapSpec `ebpf:"percpu_bind_buf"`
+	PercpuBuf          *ebpf.MapSpec `ebpf:"percpu_buf"`
+	PercpuConnectBuf   *ebpf.MapSpec `ebpf:"percpu_connect_buf"`
+	PercpuCredsBuf     *ebpf.MapSpec `ebpf:"percpu_creds_buf"`
+	PercpuDnsBuf       *ebpf.MapSpec `ebpf:"percpu_dns_buf"`
+	PercpuDnsData      *ebpf.MapSpec `ebpf:"percpu_dns_data"`
+	PercpuPathBuf      *ebpf.MapSpec `ebpf:"percpu_path_buf"`
+	PercpuStdioPathBuf *ebpf.MapSpec `ebpf:"percpu_stdio_path_buf"`
+	TrustedExes        *ebpf.MapSpec `ebpf:"trusted_exes"`
 }
 
 // bpfObjects contains all objects after they have been loaded into the kernel.
@@ -222,17 +217,17 @@ func (o *bpfObjects) Close() error {
 //
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfMaps struct {
-	Events           *ebpf.Map `ebpf:"events"`
-	PercpuAcceptBuf  *ebpf.Map `ebpf:"percpu_accept_buf"`
-	PercpuBindBuf    *ebpf.Map `ebpf:"percpu_bind_buf"`
-	PercpuBuf        *ebpf.Map `ebpf:"percpu_buf"`
-	PercpuConnectBuf *ebpf.Map `ebpf:"percpu_connect_buf"`
-	PercpuCredsBuf   *ebpf.Map `ebpf:"percpu_creds_buf"`
-	PercpuDnsBuf     *ebpf.Map `ebpf:"percpu_dns_buf"`
-	PercpuDnsData    *ebpf.Map `ebpf:"percpu_dns_data"`
-	PercpuPathBuf    *ebpf.Map `ebpf:"percpu_path_buf"`
-	PercpuRsBuf      *ebpf.Map `ebpf:"percpu_rs_buf"`
-	TrustedExes      *ebpf.Map `ebpf:"trusted_exes"`
+	Events             *ebpf.Map `ebpf:"events"`
+	PercpuAcceptBuf    *ebpf.Map `ebpf:"percpu_accept_buf"`
+	PercpuBindBuf      *ebpf.Map `ebpf:"percpu_bind_buf"`
+	PercpuBuf          *ebpf.Map `ebpf:"percpu_buf"`
+	PercpuConnectBuf   *ebpf.Map `ebpf:"percpu_connect_buf"`
+	PercpuCredsBuf     *ebpf.Map `ebpf:"percpu_creds_buf"`
+	PercpuDnsBuf       *ebpf.Map `ebpf:"percpu_dns_buf"`
+	PercpuDnsData      *ebpf.Map `ebpf:"percpu_dns_data"`
+	PercpuPathBuf      *ebpf.Map `ebpf:"percpu_path_buf"`
+	PercpuStdioPathBuf *ebpf.Map `ebpf:"percpu_stdio_path_buf"`
+	TrustedExes        *ebpf.Map `ebpf:"trusted_exes"`
 }
 
 func (m *bpfMaps) Close() error {
@@ -246,7 +241,7 @@ func (m *bpfMaps) Close() error {
 		m.PercpuDnsBuf,
 		m.PercpuDnsData,
 		m.PercpuPathBuf,
-		m.PercpuRsBuf,
+		m.PercpuStdioPathBuf,
 		m.TrustedExes,
 	)
 }

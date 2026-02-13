@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 package ebpf
 
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc clang -cflags "-O2 -g -Wall -Werror -D__TARGET_ARCH_x86" -target amd64 -type execve_event -type commit_creds_event -type reverse_shell_event -type connect_event -type bind_event -type accept_event -type dns_event -type stdio_path_buf bpf ./bpf/hids.bpf.c -- -I./bpf
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc clang -cflags "-O2 -g -Wall -Werror -D__TARGET_ARCH_x86" -target amd64 -type execve_event -type commit_creds_event -type connect_event -type bind_event -type accept_event -type dns_event -type stdio_path_buf bpf ./bpf/hids.bpf.c -- -I./bpf
 
 import (
 	"errors"
