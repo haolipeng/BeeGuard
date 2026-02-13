@@ -5,7 +5,7 @@ import (
 	"unsafe"
 
 	"github.com/cilium/ebpf"
-	"driver/log"
+	"ebpf_base_detector/log"
 )
 
 // PopulateTrustedExesMap 将可信任可执行文件写入 BPF map

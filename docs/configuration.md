@@ -59,7 +59,7 @@ standalone:
   output: "stderr"                   # "stderr" 或文件路径（如 "/tmp/results.json"）
   flush_interval: 1                  # 刷新间隔（秒）
   plugins:
-    - driver                         # 要加载的插件列表
+    - ebpf_base_detector             # 要加载的插件列表
 ```
 
 | 配置项 | 类型 | 说明 |
@@ -157,9 +157,9 @@ ssh_anomaly_login:
 
 ---
 
-## 三、Driver 插件配置
+## 三、ebpf_base_detector 插件配置
 
-配置目录：`/opt/cloudsec/plugins/driver/config/`
+配置目录：`/opt/cloudsec/plugins/ebpf_base_detector/config/`
 
 ### 3.1 高危命令检测规则
 
@@ -246,7 +246,7 @@ rules:
 | -test | 测试模式（固定 Agent ID） | `-test` |
 | -standalone | 启用独立模式 | `-standalone` |
 | -output | 输出方式 (stderr/文件路径) | `-output=stderr` |
-| -plugins | 加载的插件列表 | `-plugins=driver,collector` |
+| -plugins | 加载的插件列表 | `-plugins=ebpf_base_detector,collector` |
 
 ### 4.2 常用启动命令
 
@@ -255,10 +255,10 @@ rules:
 sudo ./agent -config=agent.yaml
 
 # Standalone 模式（输出到 stderr）
-sudo ./agent -standalone -plugins=driver -output=stderr -test
+sudo ./agent -standalone -plugins=ebpf_base_detector -output=stderr -test
 
 # Standalone 模式（文件输出）
-sudo ./agent -standalone -plugins=driver -output=/tmp/results.json -test
+sudo ./agent -standalone -plugins=ebpf_base_detector -output=/tmp/results.json -test
 
 # 使用配置文件启动 Standalone
 sudo ./agent -config=agent-standalone.yaml -test

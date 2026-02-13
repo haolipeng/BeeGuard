@@ -18,7 +18,7 @@ Agent 是安装在目标主机上的安全探针程序，负责：
 | collector | 资产采集 | 采集主机资产信息（进程、端口、用户等） |
 | baseline | 基线检查 | 安全基线合规检查 |
 | detector | 威胁检测 | SSH/FTP 暴力破解检测、异常登录检测 |
-| driver | eBPF 驱动 | 基于 eBPF 的进程监控、高危命令检测 |
+| ebpf_base_detector | eBPF 驱动 | 基于 eBPF 的进程监控、高危命令检测 |
 
 ---
 
@@ -29,9 +29,9 @@ Agent 是安装在目标主机上的安全探针程序，负责：
 - Go 1.25+
 - Make
 
-### eBPF 编译环境 (driver 插件)
+### eBPF 编译环境 (ebpf_base_detector 插件)
 
-driver 插件使用 eBPF 技术，编译需要以下工具：
+ebpf_base_detector 插件使用 eBPF 技术，编译需要以下工具：
 
 ```bash
 # Ubuntu/Debian
@@ -80,13 +80,13 @@ make build-plugins
 make deploy-plugins
 ```
 
-### 3.4 仅编译部署 driver 插件
+### 3.4 仅编译部署 ebpf_base_detector 插件
 
 ```bash
-# 仅编译 driver 插件 (自动生成 eBPF 代码)
+# 仅编译 ebpf_base_detector 插件 (自动生成 eBPF 代码)
 make build-driver
 
-# 仅部署 driver 插件
+# 仅部署 ebpf_base_detector 插件
 make deploy-driver
 ```
 
@@ -107,7 +107,7 @@ build/
     ├── collector               # 采集插件
     ├── baseline                # 基线检查插件
     ├── detector                # 威胁检测插件
-    └── driver                  # eBPF 驱动插件
+    └── ebpf_base_detector      # eBPF 驱动插件
 ```
 
 ### 部署后目录结构
@@ -125,8 +125,8 @@ build/
 │   │   └── baseline            # 基线检查插件
 │   ├── detector/
 │   │   └── detector            # 威胁检测插件
-│   └── driver/
-│       ├── driver              # eBPF 驱动插件
+│   └── ebpf_base_detector/
+│       ├── ebpf_base_detector  # eBPF 驱动插件
 │       └── config/
 │           └── dangerous_commands.yaml  # 高危命令规则
 ├── data/
@@ -135,14 +135,14 @@ build/
 │       ├── collector/          # 采集插件数据
 │       ├── baseline/           # 基线插件数据
 │       ├── detector/           # 检测插件数据
-│       └── driver/             # 驱动插件数据
+│       └── ebpf_base_detector/ # 驱动插件数据
 └── logs/
     ├── agent/                  # Agent 日志
     └── plugins/
         ├── collector/          # 采集插件日志
         ├── baseline/           # 基线插件日志
         ├── detector/           # 检测插件日志
-        └── driver/             # 驱动插件日志
+        └── ebpf_base_detector/ # 驱动插件日志
 ```
 
 ---
@@ -215,7 +215,7 @@ sudo nohup ./bin/agent > /opt/cloudsec/logs/agent/agent.log 2>&1 &
 2026-01-27T10:00:00.020+0800    INFO    collector plugin loaded successfully
 2026-01-27T10:00:00.030+0800    INFO    baseline plugin loaded successfully
 2026-01-27T10:00:00.040+0800    INFO    detector plugin loaded successfully
-2026-01-27T10:00:00.050+0800    INFO    driver plugin loaded successfully
+2026-01-27T10:00:00.050+0800    INFO    ebpf_base_detector plugin loaded successfully
 ```
 
 ---

@@ -1,4 +1,4 @@
-module driver
+module ebpf_base_detector
 
 go 1.25
 
