@@ -25,6 +25,9 @@ var (
 	// PluginsDirectory 插件目录
 	PluginsDirectory = "/opt/cloudsec/plugins"
 
+	// LogDirectory 日志目录
+	LogDirectory = "/opt/cloudsec/logs"
+
 	// Product 产品名称
 	Product string = "cloudsec-agent"
 

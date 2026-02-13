@@ -4,6 +4,7 @@ import (
 	"flag"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -98,9 +99,14 @@ func main() {
 	pluginClient = businessplugins.New()
 
 	// 初始化日志
+	logPath := "detector.log"
+	if logDir := os.Getenv("LOG_DIR"); logDir != "" {
+		os.MkdirAll(logDir, 0755)
+		logPath = filepath.Join(logDir, "detector.log")
+	}
 	l := log.New(log.Config{
 		MaxSize:     1,
-		Path:        "detector.log",
+		Path:        logPath,
 		FileLevel:   zapcore.InfoLevel,
 		RemoteLevel: zapcore.ErrorLevel,
 		MaxBackups:  10,

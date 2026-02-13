@@ -3,6 +3,8 @@ package main
 import (
 	"flag"
 	"math/rand"
+	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -30,10 +32,15 @@ func main() {
 	flag.Parse()
 
 	c := businessplugins.New()
+	logPath := "collector.log"
+	if logDir := os.Getenv("LOG_DIR"); logDir != "" {
+		os.MkdirAll(logDir, 0755)
+		logPath = filepath.Join(logDir, "collector.log")
+	}
 	l := log.New(
 		log.Config{
 			MaxSize:     1,
-			Path:        "collector.log",
+			Path:        logPath,
 			FileLevel:   zapcore.InfoLevel,
 			RemoteLevel: zapcore.ErrorLevel,
 			MaxBackups:  10,

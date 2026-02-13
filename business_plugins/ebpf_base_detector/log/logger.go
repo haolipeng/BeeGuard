@@ -3,6 +3,7 @@ package log
 
 import (
 	"os"
+	"path/filepath"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -15,7 +16,8 @@ type Logger struct {
 }
 
 // New 创建新的日志记录器
-func New() *Logger {
+// logDir 为日志目录，非空时日志文件写入 logDir/ebpf_base_detector.log，否则写入当前目录 ebpf_base_detector.log
+func New(logDir string) *Logger {
 	// 配置日志编码器
 	encoderConfig := zapcore.EncoderConfig{
 		TimeKey:        "time",
@@ -33,9 +35,16 @@ func New() *Logger {
 
 	encoder := zapcore.NewConsoleEncoder(encoderConfig)
 
+	// 确定日志文件路径
+	logFile := "ebpf_base_detector.log"
+	if logDir != "" {
+		os.MkdirAll(logDir, 0755)
+		logFile = filepath.Join(logDir, "ebpf_base_detector.log")
+	}
+
 	// 文件输出（带轮转）
 	fileWriter := zapcore.AddSync(&lumberjack.Logger{
-		Filename:   "driver.log",
+		Filename:   logFile,
 		MaxSize:    1,    // 每个日志文件最大 1 MB
 		MaxBackups: 10,   // 保留 10 个旧文件
 		Compress:   true, // 压缩旧文件

@@ -55,7 +55,7 @@ ls /sys/kernel/btf/vmlinux
 **排查：** 使用 Standalone 模式本地测试
 ```bash
 cd /opt/cloudsec
-sudo ./bin/agent -standalone -plugins=ebpf_base_detector -output=stderr -test
+sudo ./bin/agent -standalone -plugins=ebpf_base_detector -output=/opt/cloudsec/logs/agent.log -test
 ```
 
 ---

@@ -85,11 +85,12 @@ rules:
     match:
       type: "regex"
       patterns:
-        - "crontab\\s+-e"
-        - "crontab\\s+-r"
-        - "echo\\s+.*>>\\s*/etc/crontab"
-        - "echo\\s+.*>\\s*/var/spool/cron"
-        - "echo\\s+.*>>\\s*/etc/cron\\.d/"
+        - "crontab\\s+-[er]"
+        - "crontab\\s+[^-\\s]"
+        - "tee\\s+.*/etc/cron"
+        - "tee\\s+.*/var/spool/cron"
+        - "cp\\s+.*/etc/cron"
+        - "mv\\s+.*/etc/cron"
 
   # ============================================
   # 可疑安全工具
@@ -122,10 +123,11 @@ rules:
     match:
       type: "regex"
       patterns:
-        - "echo\\s+.*>>\\s*.*\\.ssh/authorized_keys"
-        - "cat\\s+.*>\\s*.*\\.ssh/authorized_keys"
-        - "cp\\s+.*\\.ssh/id_rsa"
+        - "tee\\s+.*\\.ssh/authorized_keys"
+        - "sed\\s+.*\\.ssh/authorized_keys"
+        - "cp\\s+.*\\.ssh/"
         - "scp\\s+.*\\.ssh/"
+        - "mv\\s+.*\\.ssh/authorized_keys"
 
   # ============================================
   # 历史记录清除
@@ -138,11 +140,10 @@ rules:
     match:
       type: "regex"
       patterns:
-        - "history\\s+-c"
-        - "echo\\s+.*>\\s*.*\\.bash_history"
-        - "rm\\s+.*\\.bash_history"
-        - "unset\\s+HISTFILE"
-        - "export\\s+HISTSIZE=0"
+        - "rm\\s+.*\\.(bash_|zsh_)?history"
+        - "truncate\\s+.*\\.(bash_|zsh_)?history"
+        - "shred\\s+.*\\.(bash_|zsh_)?history"
+        - "ln\\s+.*\\.(bash_|zsh_)?history"
 
   # ============================================
   # 内核模块操作

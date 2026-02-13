@@ -37,7 +37,7 @@ make deploy
 # Terminal A: 以 standalone 模式启动，事件输出到 stderr
 # Agent 运行日志输出到 /opt/cloudsec/logs/agent.log
 cd /opt/cloudsec
-sudo ./bin/agent -standalone -plugins=ebpf_base_detector -output=stderr -test
+sudo ./bin/agent -standalone -plugins=ebpf_base_detector -output=/opt/cloudsec/logs/agent.log -test
 ```
 
 **可选**：另开终端监控 eBPF 内核调试日志：

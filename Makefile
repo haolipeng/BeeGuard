@@ -130,14 +130,16 @@ deploy: build
 	@sudo cp $(BUILD_DIR)/$(BINARY_NAME) $(DEPLOY_DIR)/bin/
 	@sudo mkdir -p $(DEPLOY_DIR)/plugins/collector
 	@sudo mkdir -p $(DEPLOY_DIR)/plugins/baseline
-	@sudo mkdir -p $(DEPLOY_DIR)/plugins/detector
+	@sudo mkdir -p $(DEPLOY_DIR)/plugins/detector/config/rules
 	@sudo mkdir -p $(DEPLOY_DIR)/plugins/ebpf_base_detector/config
 	@sudo cp $(PLUGINS_DIR)/collector $(DEPLOY_DIR)/plugins/collector/
 	@sudo cp $(PLUGINS_DIR)/baseline $(DEPLOY_DIR)/plugins/baseline/
 	@sudo cp $(PLUGINS_DIR)/detector $(DEPLOY_DIR)/plugins/detector/
+	@sudo cp $(DETECTOR_SRC)/config/rules/*.yaml $(DEPLOY_DIR)/plugins/detector/config/rules/
 	@sudo cp $(PLUGINS_DIR)/ebpf_base_detector $(DEPLOY_DIR)/plugins/ebpf_base_detector/
 	@sudo cp $(DRIVER_SRC)/config/dangerous_commands.yaml $(DEPLOY_DIR)/plugins/ebpf_base_detector/config/
 	@sudo cp $(DRIVER_SRC)/config/privilege_escalation_whitelist.yaml $(DEPLOY_DIR)/plugins/ebpf_base_detector/config/
+	@sudo cp $(DRIVER_SRC)/config/malicious_request_rules.yaml $(DEPLOY_DIR)/plugins/ebpf_base_detector/config/
 	@sudo chmod 755 $(DEPLOY_DIR)/bin/$(BINARY_NAME)
 	@sudo chmod 755 $(DEPLOY_DIR)/plugins/collector/collector
 	@sudo chmod 755 $(DEPLOY_DIR)/plugins/baseline/baseline
@@ -149,6 +151,10 @@ deploy: build
 	@echo "  Agent:   $(DEPLOY_DIR)/bin/$(BINARY_NAME)"
 	@echo "  Plugins: $(DEPLOY_DIR)/plugins/"
 	@echo "  Config:  $(DEPLOY_DIR)/agent.yaml"
+	@echo "  Config:  $(DEPLOY_DIR)/plugins/detector/config/rules/*.yaml"
+	@echo "  Config:  $(DEPLOY_DIR)/plugins/ebpf_base_detector/config/dangerous_commands.yaml"
+	@echo "  Config:  $(DEPLOY_DIR)/plugins/ebpf_base_detector/config/privilege_escalation_whitelist.yaml"
+	@echo "  Config:  $(DEPLOY_DIR)/plugins/ebpf_base_detector/config/malicious_request_rules.yaml"
 
 # 仅部署 agent（不含插件）
 .PHONY: deploy-agent
@@ -165,14 +171,16 @@ deploy-plugins: build-plugins
 	@echo "Deploying plugins only to $(DEPLOY_DIR)..."
 	@sudo mkdir -p $(DEPLOY_DIR)/plugins/collector
 	@sudo mkdir -p $(DEPLOY_DIR)/plugins/baseline
-	@sudo mkdir -p $(DEPLOY_DIR)/plugins/detector
+	@sudo mkdir -p $(DEPLOY_DIR)/plugins/detector/config/rules
 	@sudo mkdir -p $(DEPLOY_DIR)/plugins/ebpf_base_detector/config
 	@sudo cp $(PLUGINS_DIR)/collector $(DEPLOY_DIR)/plugins/collector/
 	@sudo cp $(PLUGINS_DIR)/baseline $(DEPLOY_DIR)/plugins/baseline/
 	@sudo cp $(PLUGINS_DIR)/detector $(DEPLOY_DIR)/plugins/detector/
+	@sudo cp $(DETECTOR_SRC)/config/rules/*.yaml $(DEPLOY_DIR)/plugins/detector/config/rules/
 	@sudo cp $(PLUGINS_DIR)/ebpf_base_detector $(DEPLOY_DIR)/plugins/ebpf_base_detector/
 	@sudo cp $(DRIVER_SRC)/config/dangerous_commands.yaml $(DEPLOY_DIR)/plugins/ebpf_base_detector/config/
 	@sudo cp $(DRIVER_SRC)/config/privilege_escalation_whitelist.yaml $(DEPLOY_DIR)/plugins/ebpf_base_detector/config/
+	@sudo cp $(DRIVER_SRC)/config/malicious_request_rules.yaml $(DEPLOY_DIR)/plugins/ebpf_base_detector/config/
 	@sudo chmod 755 $(DEPLOY_DIR)/plugins/collector/collector
 	@sudo chmod 755 $(DEPLOY_DIR)/plugins/baseline/baseline
 	@sudo chmod 755 $(DEPLOY_DIR)/plugins/detector/detector
@@ -187,6 +195,7 @@ deploy-driver: build-driver
 	@sudo cp $(PLUGINS_DIR)/ebpf_base_detector $(DEPLOY_DIR)/plugins/ebpf_base_detector/
 	@sudo cp $(DRIVER_SRC)/config/dangerous_commands.yaml $(DEPLOY_DIR)/plugins/ebpf_base_detector/config/
 	@sudo cp $(DRIVER_SRC)/config/privilege_escalation_whitelist.yaml $(DEPLOY_DIR)/plugins/ebpf_base_detector/config/
+	@sudo cp $(DRIVER_SRC)/config/malicious_request_rules.yaml $(DEPLOY_DIR)/plugins/ebpf_base_detector/config/
 	@sudo chmod 755 $(DEPLOY_DIR)/plugins/ebpf_base_detector/ebpf_base_detector
 	@echo "Deploy complete: $(DEPLOY_DIR)/plugins/ebpf_base_detector/"
 

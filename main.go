@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -19,6 +20,7 @@ import (
 	"gitlab.myinterest.top/security/agent/transport"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 func main() {
@@ -32,24 +34,13 @@ func main() {
 
 	fmt.Println("agent start running!")
 
-	// 初始化 zap logger
-	logConfig := zap.NewDevelopmentConfig()
-	logConfig.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
-	logger, err := logConfig.Build()
-	if err != nil {
-		fmt.Printf("failed to init zap logger: %v\n", err)
-		os.Exit(1)
-	}
-	zap.ReplaceGlobals(logger)
-	defer logger.Sync()
-
 	// 设置测试模式（如果通过命令行指定）
 	if *testMode {
 		agent.SetTestMode()
 		fmt.Println("Test mode enabled, agent ID:", agent.TestAgentID)
 	}
 
-	// 设置配置文件路径（如果通过命令行指定）
+	// 设置配置文件路径（如果通过命令行指���）
 	if *configPath != "" {
 		config.SetConfigPath(*configPath)
 	}
@@ -74,10 +65,20 @@ func main() {
 		fmt.Println("Standalone mode enabled")
 	}
 
-	// 将配置同步到 agent 包
+	// 将配置同��到 agent 包
 	cfg, _ := config.Get()
 	agent.WorkingDirectory = cfg.WorkingDirectory
 	agent.PluginsDirectory = cfg.PluginsDirectory
+	agent.LogDirectory = cfg.LogDirectory
+
+	// 初始化 zap logger（在配置加载后，使用 LogDirectory）
+	logger, err := initLogger(cfg)
+	if err != nil {
+		fmt.Printf("failed to init zap logger: %v\n", err)
+		os.Exit(1)
+	}
+	zap.ReplaceGlobals(logger)
+	defer logger.Sync()
 
 	wg := &sync.WaitGroup{}
 	zap.S().Info("++++++++++++++++++++++++++++++running++++++++++++++++++++++++++++++")
@@ -111,4 +112,34 @@ func main() {
 
 	zap.S().Info("all goroutines exited, agent shutdown complete")
 	fmt.Println("agent stopped")
+}
+
+// initLogger 初始化 zap logger，同时输出到 stderr 和文件
+func initLogger(cfg *config.Config) (*zap.Logger, error) {
+	encoderConfig := zap.NewDevelopmentEncoderConfig()
+	encoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
+	encoder := zapcore.NewConsoleEncoder(encoderConfig)
+
+	// stderr 输出
+	stderrCore := zapcore.NewCore(encoder, zapcore.AddSync(os.Stderr), zapcore.DebugLevel)
+
+	// 如果 LogDirectory 非空，添加文件输出
+	if cfg.LogDirectory != "" {
+		logDir := filepath.Join(cfg.LogDirectory, "agent")
+		if err := os.MkdirAll(logDir, 0755); err != nil {
+			return nil, fmt.Errorf("failed to create log directory %s: %w", logDir, err)
+		}
+
+		fileWriter := zapcore.AddSync(&lumberjack.Logger{
+			Filename:   filepath.Join(logDir, "agent.log"),
+			MaxSize:    cfg.Log.MaxSize,
+			MaxBackups: cfg.Log.MaxBackups,
+			Compress:   cfg.Log.Compress,
+		})
+		fileCore := zapcore.NewCore(encoder, fileWriter, zapcore.DebugLevel)
+
+		return zap.New(zapcore.NewTee(stderrCore, fileCore), zap.AddCaller()), nil
+	}
+
+	return zap.New(stderrCore, zap.AddCaller()), nil
 }

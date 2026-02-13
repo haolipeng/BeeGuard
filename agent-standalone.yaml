@@ -5,6 +5,7 @@
 # server: "127.0.0.1:50051"
 working_directory: "/opt/cloudsec/data/agent"
 plugins_directory: "/opt/cloudsec/plugins"
+log_directory: "/opt/cloudsec/logs"
 
 # Standalone 模式配置
 standalone:

@@ -46,14 +46,14 @@ make deploy
 # 2. 启动 Agent（Terminal A）
 # 检测事件输出到 stderr，Agent 运行日志输出到 /opt/cloudsec/logs/agent.log
 cd /opt/cloudsec
-sudo ./bin/agent -standalone -plugins=ebpf_base_detector -output=stderr -test
+sudo ./bin/agent -standalone -plugins=ebpf_base_detector -output=/opt/cloudsec/logs/agent.log -test
 ```
 
 **可选**：输出到文件以便后续分析：
 
 ```bash
 cd /opt/cloudsec
-sudo ./bin/agent -standalone -plugins=ebpf_base_detector -output=/tmp/detection.json -test
+sudo ./bin/agent -standalone -plugins=ebpf_base_detector -output=/opt/cloudsec/logs/agent.log -test
 ```
 
 ---
@@ -71,9 +71,6 @@ sudo ./bin/agent -standalone -plugins=ebpf_base_detector -output=/tmp/detection.
 ```bash
 # 测试 1：rm -rf /（使用不存在的子目录，安全）
 rm -rf /tmp/dc001_nonexistent_test_dir
-
-# 测试 2：rm --no-preserve-root（仅触发规则匹配，实际不会执行危险操作）
-echo "rm --no-preserve-root /tmp/test" | cat
 ```
 
 **预期告警**：
@@ -122,123 +119,27 @@ rule_id=DC003  rule_name=危险权限修改  severity=high
 
 ---
 
-### DC004: 下载并执行（critical）
+### DC004: 计划任务修改（medium）
 
 ```bash
-# 测试 1：curl | bash 模式（连接不存在的地址，不会实际下载）
-curl http://127.0.0.1:1/test.sh 2>/dev/null | bash 2>/dev/null; true
-
-# 测试 2：wget 管道模式
-wget http://127.0.0.1:1/test.sh -O - 2>/dev/null | bash 2>/dev/null; true
+# 测试 1：crontab -e（打开编辑器后直接退出即可，不需要实际修改）
+crontab -e
 ```
 
-**预期告警**：
-
-```
-rule_id=DC004  rule_name=下载并执行  severity=critical
-```
-
-> **说明**：规则匹配的是命令行参数模式，即使实际下载失败也会触发告警。但由于 `curl | bash` 是管道组合，eBPF 捕获的是各个进程的独立 execve 事件，实际告警可能仅匹配到 `curl` 的参数部分。建议同时观察 `curl` 和 `bash` 的事件。
-
----
-
-### DC005: 计划任务修改（medium）
-
-```bash
-# 测试 1：列出当前 crontab（安全操作，但 crontab -e 会触发）
-crontab -e <<< ""
-# 按 :q! 退出 vim 不保存
-
-# 测试 2：echo 写入 cron 目录（使用不存在的文件）
-echo "test" >> /etc/cron.d/dc005_test 2>/dev/null; rm -f /etc/cron.d/dc005_test
-```
-
-**预期告警**���
+**预期告警**
 
 ```
 rule_id=DC005  rule_name=计划任务修改  severity=medium
 ```
 
----
-
-### DC006: 可疑安全工具（medium）
-
-```bash
-# 测试 1：nmap（如已安装）
-nmap --version 2>/dev/null || echo "nmap not installed, skip"
-
-# 测试 2：masscan（如已安装）
-masscan --help 2>/dev/null || echo "masscan not installed, skip"
-
-# 测试 3：使用包含关键字的命令（无需安装工具）
-/bin/echo "testing nmap detection"
-```
-
-**预期告警**：
-
-```
-rule_id=DC006  rule_name=可疑安全工具  severity=medium
-```
-
-> **说明**：`contains` 匹配类型会检查命令名是否包含关键字。`nmap --version` 会触发，但 `echo "nmap"` 不会（echo 的命令名不包含 nmap）。
+> **注意**：`echo ... >> /etc/cron.d/` 这类命令无法被检测，原因有二：①`echo` 是 bash 内建命令，不产生 execve 事件；②`>>` 重定向由 shell 处理，不会出现在进程 argv 中。因此规则使用 `crontab`、`tee`、`cp`、`mv` 等外部命令来检测计划任务修改。
 
 ---
 
-### DC007: SSH 密钥操作（high）
+### DC005: 内核模块操作（high）
 
 ```bash
-# 测试 1：向 authorized_keys 追加内容（使用临时目录）
-mkdir -p /tmp/dc007_ssh && echo "test-key" >> /tmp/dc007_ssh/authorized_keys && rm -rf /tmp/dc007_ssh
-
-# 测试 2：复制私钥
-cp /dev/null /tmp/dc007_id_rsa 2>/dev/null; rm -f /tmp/dc007_id_rsa
-```
-
-**预期告警**：
-
-```
-rule_id=DC007  rule_name=SSH密钥操作  severity=high
-```
-
-> **注意**：规则匹配命令行参数中的 `.ssh/authorized_keys` 或 `.ssh/id_rsa` 路径模式。测试用临时路径可能不包含 `.ssh/`，需要根据实际正则调整测试命令。
-
----
-
-### DC008: 历史记录清除（medium）
-
-```bash
-# 测试 1：清除历史记录
-history -c
-
-# 测试 2：设置 HISTSIZE
-export HISTSIZE=0
-
-# 测试 3：unset HISTFILE
-unset HISTFILE
-```
-
-**预期告警**：
-
-```
-rule_id=DC008  rule_name=历史记录清除  severity=medium
-```
-
-> **说明**：`history -c` 和 `export HISTSIZE=0` 是 bash 内建命令，不会触发 execve。只有通过 `bash -c "history -c"` 等方式启动新进程时才能被 eBPF 捕获。可改用以下方式测试：
-
-```bash
-bash -c "history -c"
-bash -c "unset HISTFILE"
-```
-
----
-
-### DC009: 内核模块操作（high）
-
-```bash
-# 测试 1：列出已加载的模块（安全操作，但 modprobe 命令名匹配 prefix 规则）
-modprobe --show-depends ext4
-
-# 测试 2：insmod（使用不存在的模块，会报错但触发检测）
+# 测试 1：insmod（使用不存在的模块，会报错但触发检测）
 insmod /tmp/nonexistent.ko 2>/dev/null; true
 ```
 
@@ -246,73 +147,6 @@ insmod /tmp/nonexistent.ko 2>/dev/null; true
 
 ```
 rule_id=DC009  rule_name=内核模块操作  severity=high
-```
-
----
-
-### DC010: 防火墙规则修改（medium）
-
-```bash
-# 测试 1：列出 iptables 规则（安全操作）
-# 注意：iptables -F 会清空规则，测试环境中谨慎执行
-iptables -L -n 2>/dev/null; true
-
-# 测试 2：ufw 状态查看（安全操作，但 "ufw disable" 会触发）
-ufw status 2>/dev/null; true
-```
-
-> **注意**：`iptables -F` 和 `ufw disable` 会实际修改防火墙规则，仅在隔离环境中测试。建议使用以下安全方式验证匹配规则：
-
-```bash
-# 仅验证规则匹配，不实际执行
-bash -c "echo iptables -F"
-```
-
-**预期告警**（仅当执行实际 iptables -F 时）：
-
-```
-rule_id=DC010  rule_name=防火墙规则修改  severity=medium
-```
-
----
-
-### DC011: Base64 解码执行（high）
-
-```bash
-# 测试 1：base64 解码并执行（解码内容为 "echo hello"）
-echo "ZWNobyBoZWxsbw==" | base64 -d | bash
-
-# 测试 2：echo + base64 -d + bash 管道
-echo "ZWNobyB0ZXN0" | base64 -d | bash
-```
-
-**预期告警**：
-
-```
-rule_id=DC011  rule_name=Base64解码执行  severity=high
-```
-
-> **说明**：与 DC004 类似，管道命令的每个部分是独立的 execve 事件。告警可能匹配到 `base64 -d` 的参数部分。
-
----
-
-### DC012: 脚本语言危险执行（high）
-
-```bash
-# 测试 1：Python exec（安全内容）
-python3 -c "exec('print(1+1)')"
-
-# 测试 2：Python import os（安全内容）
-python3 -c "import os; print(os.getpid())"
-
-# 测试 3：Perl system 调用
-perl -e 'system("echo perl_test")'
-```
-
-**预期告警**：
-
-```
-rule_id=DC012  rule_name=脚本语言危险执行  severity=high
 ```
 
 ---
@@ -343,15 +177,8 @@ rule_id=DC012  rule_name=脚本语言危险执行  severity=high
 | 1 | DC001 | 危险删除操作 | critical | `rm -rf /tmp/dc001_test` | 告警 | | |
 | 2 | DC002 | 敏感文件访问 | high | `cat /etc/passwd` | 告警 | | |
 | 3 | DC003 | 危险权限修改 | high | `chmod 777 /tmp/test` | 告警 | | |
-| 4 | DC004 | 下载并执行 | critical | `curl ... \| bash` | 告警 | | 管道命令注意 |
-| 5 | DC005 | 计划任务修改 | medium | `crontab -e` | 告警 | | |
-| 6 | DC006 | 可疑安全工具 | medium | `nmap --version` | 告警 | | 需要安装 nmap |
-| 7 | DC007 | SSH密钥操作 | high | `echo >> .ssh/authorized_keys` | 告警 | | |
-| 8 | DC008 | 历史记录清除 | medium | `bash -c "history -c"` | 告警 | | 内建命令需新进程 |
-| 9 | DC009 | 内核模块操作 | high | `insmod /tmp/test.ko` | 告警 | | |
-| 10 | DC010 | 防火墙规则修改 | medium | `iptables -F` | 告警 | | 隔离环境 |
-| 11 | DC011 | Base64解码执行 | high | `base64 -d \| bash` | 告警 | | 管道命令注意 |
-| 12 | DC012 | 脚本语言危险执行 | high | `python3 -c "import os"` | 告警 | | |
+| 4 | DC005 | 计划任务修改 | medium | `crontab -e` | 告警 | | |
+| 5 | DC009 | 内核模块操作 | high | `insmod /tmp/test.ko` | 告警 | | |
 
 ---
 

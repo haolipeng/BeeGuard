@@ -374,7 +374,7 @@ plugins_directory: "/opt/cloudsec/plugins"
 ```bash
 # 仅加载你的插件
 cd /opt/cloudsec
-sudo ./bin/agent -standalone -plugins=your_plugin -output=stderr -test
+sudo ./bin/agent -standalone -plugins=your_plugin -output=/opt/cloudsec/logs/agent.log -test
 ```
 
 ### 7.2 日志输出

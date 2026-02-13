@@ -23,6 +23,9 @@ type Config struct {
 	// PluginsDirectory 插件目录
 	PluginsDirectory string `yaml:"plugins_directory"`
 
+	// LogDirectory 日志目录
+	LogDirectory string `yaml:"log_directory"`
+
 	// RetryMaxCount 最大重试次数
 	RetryMaxCount int `yaml:"retry_max_count"`
 
@@ -158,6 +161,10 @@ func ValidateAndSetDefaults(cfg *Config) error {
 
 	if cfg.PluginsDirectory == "" {
 		cfg.PluginsDirectory = "/opt/cloudsec/plugins"
+	}
+
+	if cfg.LogDirectory == "" {
+		cfg.LogDirectory = "/opt/cloudsec/logs"
 	}
 
 	if cfg.RetryMaxCount <= 0 {

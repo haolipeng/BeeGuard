@@ -34,7 +34,8 @@ func main() {
 	defer client.Close()
 
 	// 2. 初始化日志组件
-	logger := log.New()
+	logDir := os.Getenv("LOG_DIR")
+	logger := log.New(logDir)
 	logger.Info("Starting eBPF driver plugin...")
 
 	// 3. 加载高危命令检测规则

@@ -2,7 +2,10 @@ package main
 
 import (
 	"encoding/json"
+	"io"
 	"log"
+	"os"
+	"path/filepath"
 	"time"
 
 	"baseline/check"
@@ -71,6 +74,16 @@ func TaskStatusSendServer(status string, token string, msg string) {
 }
 
 func main() {
+	// 设置日志输出
+	if logDir := os.Getenv("LOG_DIR"); logDir != "" {
+		os.MkdirAll(logDir, 0755)
+		logFile, err := os.OpenFile(filepath.Join(logDir, "baseline.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		if err == nil {
+			log.SetOutput(io.MultiWriter(os.Stderr, logFile))
+			defer logFile.Close()
+		}
+	}
+
 	// 初始化插件客户端
 	pluginClient = businessplugins.New()
 

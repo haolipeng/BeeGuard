@@ -59,14 +59,14 @@ make deploy
 # 2. 启动 Agent（Terminal A）
 # 检测事件输出到 stderr，Agent 运行日志输出到 /opt/cloudsec/logs/agent.log
 cd /opt/cloudsec
-sudo ./bin/agent -standalone -plugins=ebpf_base_detector -output=stderr -test
+sudo ./bin/agent -standalone -plugins=ebpf_base_detector -output=/opt/cloudsec/logs/agent.log -test
 ```
 
 **可选**：输出到文件以便后续分析：
 
 ```bash
 cd /opt/cloudsec
-sudo ./bin/agent -standalone -plugins=ebpf_base_detector -output=/tmp/malicious_request_detection.json -test
+sudo ./bin/agent -standalone -plugins=ebpf_base_detector -output=/opt/cloudsec/logs/agent.log -test
 
 # 另一终端实时查看
 tail -f /tmp/malicious_request_detection.json

@@ -245,7 +245,7 @@ rules:
 | -config | 配置文件路径 | `-config=/etc/cloudsec-agent/agent.yaml` |
 | -test | 测试模式（固定 Agent ID） | `-test` |
 | -standalone | 启用独立模式 | `-standalone` |
-| -output | 输出方式 (stderr/文件路径) | `-output=stderr` |
+| -output | 输出方式 (stderr/文件路径) | `-output=/opt/cloudsec/logs/agent.log` |
 | -plugins | 加载的插件列表 | `-plugins=ebpf_base_detector,collector` |
 
 ### 4.2 常用启动命令
@@ -254,11 +254,8 @@ rules:
 # 正常模式
 sudo ./agent -config=agent.yaml
 
-# Standalone 模式（输出到 stderr）
-sudo ./agent -standalone -plugins=ebpf_base_detector -output=stderr -test
-
-# Standalone 模式（文件输出）
-sudo ./agent -standalone -plugins=ebpf_base_detector -output=/tmp/results.json -test
+# Standalone 模式（输出到日志文件）
+sudo ./agent -standalone -plugins=ebpf_base_detector -output=/opt/cloudsec/logs/agent.log -test
 
 # 使用配置文件启动 Standalone
 sudo ./agent -config=agent-standalone.yaml -test
