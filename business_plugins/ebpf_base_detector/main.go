@@ -15,11 +15,10 @@ import (
 	"time"
 
 	businessplugins "business_plugins/lib"
-	"driver/detector"
-	"driver/ebpf"
-	"driver/events"
-	"driver/log"
-	"driver/trusted"
+	"ebpf_base_detector/ebpf"
+	"ebpf_base_detector/events"
+	"ebpf_base_detector/log"
+	"ebpf_base_detector/trusted"
 )
 
 // 默认配置文件路径
@@ -39,13 +38,13 @@ func main() {
 	logger.Info("Starting eBPF driver plugin...")
 
 	// 3. 加载高危命令检测规则
-	var det *detector.Detector
+	var det *DangerousCommandDetector
 	configPath := getConfigPath()
-	config, err := detector.LoadRules(configPath)
+	config, err := LoadRules(configPath)
 	if err != nil {
 		logger.Warn("Failed to load detection rules, detection disabled", "error", err, "path", configPath)
 	} else {
-		det, err = detector.NewDetector(config)
+		det, err = NewDangerousCommandDetector(config)
 		if err != nil {
 			logger.Warn("Failed to create detector, detection disabled", "error", err)
 			det = nil
@@ -57,16 +56,16 @@ func main() {
 	}
 
 	// 3.1 初始化用户态反弹 shell 检测器
-	rsDetector := &detector.ReverseShellDetector{}
+	rsDetector := &ReverseShellDetector{}
 
 	// 3.2 初始化 IOC 匹配器
-	var iocMatcher *detector.IOCMatcher
+	var iocMatcher *IOCMatcher
 	iocConfigPath := getIOCConfigPath()
-	iocConfig, err := detector.LoadIOCRules(iocConfigPath)
+	iocConfig, err := LoadIOCRules(iocConfigPath)
 	if err != nil {
 		logger.Warn("Failed to load IOC rules, IOC detection disabled", "error", err, "path", iocConfigPath)
 	} else {
-		iocMatcher = detector.NewIOCMatcher(iocConfig)
+		iocMatcher = NewIOCMatcher(iocConfig)
 		logger.Info("IOC rules loaded", "version", iocConfig.Version, "rules", iocMatcher.GetEnabledRuleCount())
 	}
 
@@ -175,7 +174,7 @@ func main() {
 						record.DataType = 6003
 
 						// 添加检测结果到record（保留原有字段供调试）
-						record.Data.Fields["detection_type"] = detector.DetectionTypeDangerousCommand
+						record.Data.Fields["detection_type"] = DetectionTypeDangerousCommand
 						record.Data.Fields["rule_id"] = result.RuleID
 						record.Data.Fields["rule_name"] = result.RuleName
 						record.Data.Fields["severity"] = result.Severity
@@ -206,7 +205,7 @@ func main() {
 				// 用户态反弹 shell 检测
 				rsResult := rsDetector.Detect(&evt)
 				if rsResult != nil {
-					rsRecord := detector.BuildReverseShellRecord(&evt, rsResult, pidTreeStr)
+					rsRecord := BuildReverseShellRecord(&evt, rsResult, pidTreeStr)
 					logger.Warn("Reverse shell detected (userspace)",
 						"rule", rsResult.RuleName,
 						"confidence", rsResult.Confidence,
@@ -291,7 +290,7 @@ func main() {
 				// IOC 匹配
 				if iocMatcher != nil {
 					if iocResult := iocMatcher.MatchConnect(&evt); iocResult != nil {
-						iocRecord := detector.BuildIOCConnectRecord(&evt, iocResult)
+						iocRecord := BuildIOCConnectRecord(&evt, iocResult)
 						logger.Warn("IOC hit on connect",
 							"rule_id", iocResult.RuleID,
 							"rule_name", iocResult.RuleName,
@@ -372,7 +371,7 @@ func main() {
 				// IOC 匹配
 				if iocMatcher != nil {
 					if iocResult := iocMatcher.MatchDNS(&evt); iocResult != nil {
-						iocRecord := detector.BuildIOCDNSRecord(&evt, iocResult)
+						iocRecord := BuildIOCDNSRecord(&evt, iocResult)
 						logger.Warn("IOC hit on DNS",
 							"rule_id", iocResult.RuleID,
 							"rule_name", iocResult.RuleName,

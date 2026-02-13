@@ -132,7 +132,7 @@ func Load(ctx context.Context, config proto.Config) (plg *Plugin, err error) {
 	}
 	// 判断插件是否使用标准protobuf协议（driver等eBPF插件）
 	useStandardProtocol := false
-	if config.Name == "driver" {
+	if config.Name == "ebpf_base_detector" {
 		useStandardProtocol = true
 		logger.Info("plugin will use standard protobuf protocol")
 	}

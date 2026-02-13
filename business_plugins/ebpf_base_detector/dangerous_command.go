@@ -1,4 +1,4 @@
-package detector
+package main
 
 import (
 	"fmt"
@@ -6,15 +6,15 @@ import (
 	"strings"
 )
 
-// Detector 高危命令检测器
-type Detector struct {
+// DangerousCommandDetector 高危命令检测器
+type DangerousCommandDetector struct {
 	rules    []Rule
 	compiled map[string][]*regexp.Regexp // 预编译的正则表达式，key为规则ID
 }
 
-// NewDetector 创建检测器实例
-func NewDetector(config *RuleConfig) (*Detector, error) {
-	d := &Detector{
+// NewDangerousCommandDetector 创建检测器实例
+func NewDangerousCommandDetector(config *RuleConfig) (*DangerousCommandDetector, error) {
+	d := &DangerousCommandDetector{
 		rules:    config.Rules,
 		compiled: make(map[string][]*regexp.Regexp),
 	}
@@ -45,7 +45,7 @@ func NewDetector(config *RuleConfig) (*Detector, error) {
 // comm: 进程名（如 rm, curl, wget）
 // args: 命令行参数
 // 返回: 检测结果（如果匹配）或nil（如果不匹配）
-func (d *Detector) Detect(comm, args string) *DetectionResult {
+func (d *DangerousCommandDetector) Detect(comm, args string) *DetectionResult {
 	// 构建完整命令行用于匹配
 	fullCmd := comm + " " + args
 
@@ -70,7 +70,7 @@ func (d *Detector) Detect(comm, args string) *DetectionResult {
 }
 
 // matchRule 检测命令是否匹配指定规则
-func (d *Detector) matchRule(rule *Rule, comm, fullCmd string) (matched bool, pattern string) {
+func (d *DangerousCommandDetector) matchRule(rule *Rule, comm, fullCmd string) (matched bool, pattern string) {
 	switch rule.Match.Type {
 	case MatchTypeRegex:
 		// 使用预编译的正则表达式
@@ -111,7 +111,7 @@ func (d *Detector) matchRule(rule *Rule, comm, fullCmd string) (matched bool, pa
 
 // DetectAll 检测命令是否匹配所有规则，返回所有匹配结果
 // 与Detect不同，这个方法会返回所有匹配的规则，而不是第一个
-func (d *Detector) DetectAll(comm, args string) []*DetectionResult {
+func (d *DangerousCommandDetector) DetectAll(comm, args string) []*DetectionResult {
 	var results []*DetectionResult
 	fullCmd := comm + " " + args
 
@@ -136,7 +136,7 @@ func (d *Detector) DetectAll(comm, args string) []*DetectionResult {
 }
 
 // GetEnabledRuleCount 返回启用的规则数量
-func (d *Detector) GetEnabledRuleCount() int {
+func (d *DangerousCommandDetector) GetEnabledRuleCount() int {
 	count := 0
 	for _, rule := range d.rules {
 		if rule.Enabled {
@@ -147,7 +147,7 @@ func (d *Detector) GetEnabledRuleCount() int {
 }
 
 // GetRuleIDs 返回所有启用的规则ID
-func (d *Detector) GetRuleIDs() []string {
+func (d *DangerousCommandDetector) GetRuleIDs() []string {
 	var ids []string
 	for _, rule := range d.rules {
 		if rule.Enabled {

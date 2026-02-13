@@ -2,7 +2,7 @@
 
 ## 概述
 
-本文档描述如何手动验证 driver 插件的 IOC（Indicator of Compromise）威胁情报检测功能（DataType 6008）。
+本文档描述如何手动验证 ebpf_base_detector 插件的 IOC（Indicator of Compromise）威胁情报检测功能（DataType 6008）。
 
 **检测原理**：通过 eBPF Hook `raw_tracepoint/sys_exit` 捕获 `connect`（出站连接）和 `recvfrom/recvmsg`（DNS 响应）事件，将目标 IP、端口、域名与 `ioc_rules.yaml` 中的威胁情报指标进行匹配。匹配成功时产生告警。
 
@@ -28,11 +28,11 @@
 
 | 文件 | 说明 |
 |------|------|
-| `business_plugins/driver/config/ioc_rules.yaml` | IOC 规则配置（7 条规则） |
-| `business_plugins/driver/detector/ioc_loader.go` | 规则加载 |
-| `business_plugins/driver/detector/ioc_matcher.go` | 匹配引擎 |
-| `business_plugins/driver/detector/ioc_types.go` | 类型定义 |
-| `business_plugins/driver/main.go` | 事件处理与告警生成 |
+| `business_plugins/ebpf_base_detector/config/ioc_rules.yaml` | IOC 规则配置（7 条规则） |
+| `business_plugins/ebpf_base_detector/detector/ioc_loader.go` | 规则加载 |
+| `business_plugins/ebpf_base_detector/detector/ioc_matcher.go` | 匹配引擎 |
+| `business_plugins/ebpf_base_detector/detector/ioc_types.go` | 类型定义 |
+| `business_plugins/ebpf_base_detector/main.go` | 事件处理与告警生成 |
 
 ---
 
@@ -59,14 +59,14 @@ make deploy
 # 2. 启动 Agent（Terminal A）
 # 检测事件输出到 stderr，Agent 运行日志输出到 /opt/cloudsec/logs/agent.log
 cd /opt/cloudsec
-sudo ./bin/agent -standalone -plugins=driver -output=stderr -test
+sudo ./bin/agent -standalone -plugins=ebpf_base_detector -output=stderr -test
 ```
 
 **可选**：输出到文件以便后续分析：
 
 ```bash
 cd /opt/cloudsec
-sudo ./bin/agent -standalone -plugins=driver -output=/tmp/ioc_detection.json -test
+sudo ./bin/agent -standalone -plugins=ebpf_base_detector -output=/tmp/ioc_detection.json -test
 
 # 另一终端实时查看
 tail -f /tmp/ioc_detection.json
@@ -391,7 +391,7 @@ mv build/config/ioc_rules.yaml.bak build/config/ioc_rules.yaml
 
 ## 规则配置说明
 
-规则文件路径：`config/ioc_rules.yaml`（相对于 driver 二进制所在目录）
+规则文件路径：`config/ioc_rules.yaml`（相对于 ebpf_base_detector 二进制所在目录）
 
 ### 添加自定义 IOC 规则
 

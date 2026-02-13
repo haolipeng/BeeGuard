@@ -42,7 +42,7 @@ sudo nohup ./bin/agent > /opt/cloudsec/logs/agent/agent.log 2>&1 &
 
 ```bash
 # 检查 Agent 进程
-ps aux | grep -E "agent|collector|baseline|detector|driver" | grep -v grep
+ps aux | grep -E "agent|collector|baseline|detector|ebpf_base_detector" | grep -v grep
 
 # 检查连接状态
 netstat -anp | grep agent

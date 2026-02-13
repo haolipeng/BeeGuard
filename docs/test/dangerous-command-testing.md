@@ -2,7 +2,7 @@
 
 ## 概述
 
-本文档描述如何手动验证 driver 插件的高危命令检测功能（DataType 6003）。
+本文档描述如何手动验证 ebpf_base_detector 插件的高危命令检测功能（DataType 6003）。
 
 **检测原理**：在 `sched_process_exec` Hook 中捕获所有进程执行事件，将命令行参数与 `dangerous_commands.yaml` 中的规则进行匹配。匹配成功时产生告警。
 
@@ -18,9 +18,9 @@
 
 | 文件 | 说明 |
 |------|------|
-| `business_plugins/driver/config/dangerous_commands.yaml` | 检测规则配置（12 条规则） |
-| `business_plugins/driver/detector/detector.go` | 规则匹配引擎 |
-| `business_plugins/driver/main.go` | 事件处理与告警生成 |
+| `business_plugins/ebpf_base_detector/config/dangerous_commands.yaml` | 检测规则配置（12 条规则） |
+| `business_plugins/ebpf_base_detector/detector/detector.go` | 规则匹配引擎 |
+| `business_plugins/ebpf_base_detector/main.go` | 事件处理与告警生成 |
 
 ---
 
@@ -46,14 +46,14 @@ make deploy
 # 2. 启动 Agent（Terminal A）
 # 检测事件输出到 stderr，Agent 运行日志输出到 /opt/cloudsec/logs/agent.log
 cd /opt/cloudsec
-sudo ./bin/agent -standalone -plugins=driver -output=stderr -test
+sudo ./bin/agent -standalone -plugins=ebpf_base_detector -output=stderr -test
 ```
 
 **可选**：输出到文件以便后续分析：
 
 ```bash
 cd /opt/cloudsec
-sudo ./bin/agent -standalone -plugins=driver -output=/tmp/detection.json -test
+sudo ./bin/agent -standalone -plugins=ebpf_base_detector -output=/tmp/detection.json -test
 ```
 
 ---
@@ -370,7 +370,7 @@ rule_id=DC012  rule_name=脚本语言危险执行  severity=high
 
 ## 规则配置说明
 
-规则文件路径：`config/dangerous_commands.yaml`（相对于 driver 二进制所在目录）
+规则文件路径：`config/dangerous_commands.yaml`（相对于 ebpf_base_detector 二进制所在目录）
 
 ### 添加自定义规则
 
