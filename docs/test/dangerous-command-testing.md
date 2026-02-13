@@ -38,18 +38,22 @@
 ## 编译与启动
 
 ```bash
-# 1. 编译
+# 1. 编译译并部署
 cd /home/work/goProject/src/company/agent
 make build
+make deploy
 
 # 2. 启动 Agent（Terminal A）
-sudo ./build/agent -standalone -plugins=driver -output=stderr -test
+# 检测事件输出到 stderr，Agent 运行日志输出到 /opt/cloudsec/logs/agent.log
+cd /opt/cloudsec
+sudo ./bin/agent -standalone -plugins=driver -output=stderr -test
 ```
 
 **可选**：输出到文件以便后续分析：
 
 ```bash
-sudo ./build/agent -standalone -plugins=driver -output=/tmp/detection.json -test
+cd /opt/cloudsec
+sudo ./bin/agent -standalone -plugins=driver -output=/tmp/detection.json -test
 ```
 
 ---

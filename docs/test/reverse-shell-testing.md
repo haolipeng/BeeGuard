@@ -23,18 +23,21 @@
 ## 第一步：编译
 
 ```bash
-# 1.进入源代码目录下
+# 1. 进入源代码目录下
 cd /home/work/goProject/src/company/agent
 
-# 2. 编译 agent + 所有插件
+# 2. 编译并部署
 make build
+make deploy
 ```
 
 ## 第二步：启动 Agent
 
 ```bash
 # Terminal A: 以 standalone 模式启动，事件输出到 stderr
-sudo ./build/agent -standalone -plugins=driver -output=stderr -test
+# Agent 运行日志输出到 /opt/cloudsec/logs/agent.log
+cd /opt/cloudsec
+sudo ./bin/agent -standalone -plugins=driver -output=stderr -test
 ```
 
 **可选**：另开终端监控 eBPF 内核调试日志：
