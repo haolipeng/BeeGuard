@@ -19,11 +19,8 @@
 
 // 反弹 Shell 增强采集常量
 #define STDIO_PATH_LEN   64    // stdin/stdout 路径最大长度
-#define PIDTREE_LEN      256   // pid_tree 缓冲区大小
-#define PIDTREE_MASK     (PIDTREE_LEN - 1)
 #define TTY_NAME_LEN     64    // tty 名称最大长度
 #define SOCK_FD_LIMIT    16    // FD 扫描范围 0-15
-#define PIDTREE_DEPTH    8     // pid_tree 最大记录层数
 
 // Per-CPU 路径构建缓冲区（避免栈溢出）
 struct path_buf {
@@ -55,7 +52,6 @@ struct execve_event {
     // --- 反弹 shell 增强字段 ---
     char  stdin_path[STDIO_PATH_LEN];   // FD 0 的文件路径（如 /dev/pts/0 或 socket:[xxx]）
     char  stdout_path[STDIO_PATH_LEN];  // FD 1 的文件路径
-    char  pid_tree[PIDTREE_LEN];        // 进程链：PID<comm<PID<comm<...
     char  tty_name[TTY_NAME_LEN];       // 控制终端名称
     __u32 remote_ip;     // socket 远程 IP（网络字节��）
     __u16 remote_port;   // socket 远程端口（网络字节序）

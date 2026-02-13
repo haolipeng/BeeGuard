@@ -46,7 +46,6 @@ type ExecveEvent struct {
 	Args       [512]byte  // 命令行参数
 	StdinPath  [64]byte   // FD 0 的文件路径
 	StdoutPath [64]byte   // FD 1 的文件路径
-	PidTree    [256]byte  // 进程链
 	TTYName    [64]byte   // 控制终端名称
 	RemoteIP   uint32     // socket 远程 IP（网络字节序）
 	RemotePort uint16     // socket 远程端口（网络字节序）
@@ -82,12 +81,10 @@ func (e *ExecveEvent) ToRecord() *businessplugins.Record {
 	// 新增反弹 shell 增强字段
 	stdinPath := cstring(e.StdinPath[:])
 	stdoutPath := cstring(e.StdoutPath[:])
-	pidTree := cstring(e.PidTree[:])
 	ttyName := cstring(e.TTYName[:])
 
 	fields["stdin_path"] = stdinPath
 	fields["stdout_path"] = stdoutPath
-	fields["pid_tree"] = pidTree
 	fields["tty_name"] = ttyName
 	fields["socket_pid"] = fmt.Sprintf("%d", e.SocketPID)
 	fields["fd_type"] = fmt.Sprintf("%d", e.FDType)

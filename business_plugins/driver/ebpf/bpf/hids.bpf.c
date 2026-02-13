@@ -453,8 +453,6 @@ static __noinline int handle_execve_event(
     read_fd_path(task, 0, evt->stdin_path, sizeof(evt->stdin_path));
     read_fd_path(task, 1, evt->stdout_path, sizeof(evt->stdout_path));
 
-    __builtin_memset(evt->pid_tree, 0, sizeof(evt->pid_tree));
-
     __builtin_memset(evt->tty_name, 0, sizeof(evt->tty_name));
     {
         struct signal_struct *_sig = BPF_CORE_READ(task, signal);
@@ -468,6 +466,7 @@ static __noinline int handle_execve_event(
         }
     }
 
+    // TODO: 可扩展到扫描当前进程的父进程 FD 0-15的信息
     struct sock *sk = find_sockfd(task);
     if (sk) {
         evt->socket_pid = evt->tgid;
@@ -523,13 +522,22 @@ int kp_commit_creds(struct pt_regs *ctx)
     int new_euid = BPF_CORE_READ(new_cred, euid.val);
 
     if ((old_uid != 0 || old_euid != 0) && (new_uid == 0 || new_euid == 0)) {
+#ifdef DEBUG_PRINT
+        bpf_printk("hids: PRIVILEGE ESCALATION DETECTED! Condition matched\n");
+#endif
+
         int path_len = read_full_exe_path(task, evt->exe_path, sizeof(evt->exe_path));
 
         if (path_len > 0 && exe_is_trusted(evt->exe_path, path_len)) {
-            //bpf_printk("hids: exe_path=%s is in whitelist, skipping\n", evt->exe_path);
+#ifdef DEBUG_PRINT
+            bpf_printk("hids: exe_path=%s is in whitelist, skipping\n", evt->exe_path);
+#endif
             return 0;
         }
-        bpf_printk("hids: PRIVILEGE ESCALATION DETECTED! exe_path=%s NOT in whitelist, reporting event\n", evt->exe_path);
+
+#ifdef DEBUG_PRINT
+        bpf_printk("hids: exe_path=%s NOT in whitelist, reporting event\n", evt->exe_path);
+#endif
 
         u64 id = bpf_get_current_pid_tgid();
         evt->pid = id;
@@ -549,11 +557,13 @@ int kp_commit_creds(struct pt_regs *ctx)
 
         bpf_get_current_comm(&evt->comm, sizeof(evt->comm));
 
+#ifdef DEBUG_PRINT
         bpf_printk("hids: commit_creds pid=%u tgid=%u ppid=%u\n", evt->pid, evt->tgid, evt->ppid);
         bpf_printk("hids: commit_creds uid=%u old_uid=%u old_euid=%u\n", evt->uid, evt->old_uid, evt->old_euid);
         bpf_printk("hids: commit_creds new_uid=%u new_euid=%u\n", evt->new_uid, evt->new_euid);
         bpf_printk("hids: commit_creds comm=%s\n", evt->comm);
         bpf_printk("hids: commit_creds exe_path=%s\n", evt->exe_path);
+#endif
 
         bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU,
                               evt, sizeof(*evt));
@@ -653,8 +663,6 @@ static __always_inline void query_ipv4(struct sock *sk,
         (evt)->ppid = BPF_CORE_READ(_parent, tgid); \
     bpf_get_current_comm(&(evt)->comm, 16); \
 } while (0)
-
-// ========== DNS 解析辅助函数 ==========
 
 // DNS 域名状态机解析
 // 逐字节处理 DNS 查询域名，将 3www6google3com0 转换为 .www.google.com

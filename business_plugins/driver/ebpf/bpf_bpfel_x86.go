@@ -118,7 +118,6 @@ type bpfExecveEvent struct {
 	Args       [512]int8
 	StdinPath  [64]int8
 	StdoutPath [64]int8
-	PidTree    [256]int8
 	TtyName    [64]int8
 	RemoteIp   uint32
 	RemotePort uint16

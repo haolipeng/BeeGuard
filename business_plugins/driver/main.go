@@ -154,7 +154,6 @@ func main() {
 
 				// 用户态补充 pid_tree（从 BPF 移到用户态，减少验证器指令数）
 				pidTreeStr := buildPidTree(evt.TGID, cstring(evt.Comm[:]))
-				copy(evt.PidTree[:], pidTreeStr)
 
 				// 用户态推导 fd_type（从 stdin_path/stdout_path 判断是否 socket）
 				evt.FDType = deriveFDType(
@@ -163,6 +162,7 @@ func main() {
 				)
 
 				record := evt.ToRecord()
+				record.Data.Fields["pid_tree"] = pidTreeStr
 
 				// 高危命令检测
 				if det != nil {
@@ -206,7 +206,7 @@ func main() {
 				// 用户态反弹 shell 检测
 				rsResult := rsDetector.Detect(&evt)
 				if rsResult != nil {
-					rsRecord := detector.BuildReverseShellRecord(&evt, rsResult)
+					rsRecord := detector.BuildReverseShellRecord(&evt, rsResult, pidTreeStr)
 					logger.Warn("Reverse shell detected (userspace)",
 						"rule", rsResult.RuleName,
 						"confidence", rsResult.Confidence,
@@ -216,7 +216,7 @@ func main() {
 						"exe_path", cstring(evt.ExePath[:]),
 						"stdin_path", cstring(evt.StdinPath[:]),
 						"stdout_path", cstring(evt.StdoutPath[:]),
-						"pid_tree", cstring(evt.PidTree[:]),
+						"pid_tree", pidTreeStr,
 						"tty_name", cstring(evt.TTYName[:]),
 						"socket_pid", evt.SocketPID)
 					if err := client.SendRecord(rsRecord); err != nil {
