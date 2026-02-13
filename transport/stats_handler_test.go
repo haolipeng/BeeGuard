@@ -43,7 +43,7 @@ func TestStatsHandler_GetStats(t *testing.T) {
 		updateTime: time.Now().Add(-time.Second), // 1秒前
 	}
 
-	// 模拟��据
+	// 模拟数据
 	h.HandleRPC(context.Background(), &stats.InPayload{WireLength: 1000})
 	h.HandleRPC(context.Background(), &stats.OutPayload{WireLength: 500})
 

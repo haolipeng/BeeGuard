@@ -14,34 +14,34 @@ import (
 // domainSuffixEntry 域名后缀匹配项
 type domainSuffixEntry struct {
 	suffix string   // 如 ".evil.com"
-	rule   *IOCRule
+	rule   *MaliciousRequestRule
 }
 
-// IOCMatcher IOC 匹配引擎
-type IOCMatcher struct {
+// MaliciousRequestDetector 恶意请求匹配引擎
+type MaliciousRequestDetector struct {
 	mu          sync.RWMutex
-	ipIndex     map[string]*IOCRule   // key: IP 字符串
-	domainIndex map[string]*IOCRule   // key: 精确域名
-	suffixRules []domainSuffixEntry   // 通配符域名后缀匹配
-	portIndex   map[uint16]*IOCRule   // key: 端口号
-	ipPortIndex map[string]*IOCRule   // key: "ip:port"
+	ipIndex     map[string]*MaliciousRequestRule   // key: IP 字符串
+	domainIndex map[string]*MaliciousRequestRule   // key: 精确域名
+	suffixRules []domainSuffixEntry                // 通配符域名后缀匹配
+	portIndex   map[uint16]*MaliciousRequestRule   // key: 端口号
+	ipPortIndex map[string]*MaliciousRequestRule   // key: "ip:port"
 	ruleCount   int
 }
 
-// NewIOCMatcher 从配置构建 IOC 匹配器索引
-func NewIOCMatcher(config *IOCRuleConfig) *IOCMatcher {
-	m := &IOCMatcher{
-		ipIndex:     make(map[string]*IOCRule),
-		domainIndex: make(map[string]*IOCRule),
-		portIndex:   make(map[uint16]*IOCRule),
-		ipPortIndex: make(map[string]*IOCRule),
+// NewMaliciousRequestDetector 从配置构建恶意请求匹配器索引
+func NewMaliciousRequestDetector(config *MaliciousRequestRuleConfig) *MaliciousRequestDetector {
+	m := &MaliciousRequestDetector{
+		ipIndex:     make(map[string]*MaliciousRequestRule),
+		domainIndex: make(map[string]*MaliciousRequestRule),
+		portIndex:   make(map[uint16]*MaliciousRequestRule),
+		ipPortIndex: make(map[string]*MaliciousRequestRule),
 	}
 	m.buildIndex(config)
 	return m
 }
 
 // buildIndex 构建所有类型的索引
-func (m *IOCMatcher) buildIndex(config *IOCRuleConfig) {
+func (m *MaliciousRequestDetector) buildIndex(config *MaliciousRequestRuleConfig) {
 	enabledCount := 0
 	for i := range config.Rules {
 		rule := &config.Rules[i]
@@ -51,11 +51,11 @@ func (m *IOCMatcher) buildIndex(config *IOCRuleConfig) {
 		enabledCount++
 
 		switch rule.IndicatorType {
-		case IOCTypeIP:
+		case MaliciousRequestTypeIP:
 			for _, ip := range rule.Indicators {
 				m.ipIndex[ip] = rule
 			}
-		case IOCTypeDomain:
+		case MaliciousRequestTypeDomain:
 			for _, domain := range rule.Indicators {
 				d := strings.ToLower(domain)
 				if strings.HasPrefix(d, "*.") {
@@ -68,12 +68,12 @@ func (m *IOCMatcher) buildIndex(config *IOCRuleConfig) {
 					m.domainIndex[d] = rule
 				}
 			}
-		case IOCTypePort:
+		case MaliciousRequestTypePort:
 			for _, portStr := range rule.Indicators {
 				port, _ := strconv.Atoi(portStr)
 				m.portIndex[uint16(port)] = rule
 			}
-		case IOCTypeIPPort:
+		case MaliciousRequestTypeIPPort:
 			for _, ipPort := range rule.Indicators {
 				m.ipPortIndex[ipPort] = rule
 			}
@@ -83,15 +83,15 @@ func (m *IOCMatcher) buildIndex(config *IOCRuleConfig) {
 }
 
 // GetEnabledRuleCount 返回已启用的规则数量
-func (m *IOCMatcher) GetEnabledRuleCount() int {
+func (m *MaliciousRequestDetector) GetEnabledRuleCount() int {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.ruleCount
 }
 
-// MatchConnect 对 CONNECT 事件进行 IOC 匹配
+// MatchConnect 对 CONNECT 事件进行恶意请求匹配
 // 优先级：ip_port > ip > port（最具体优先）
-func (m *IOCMatcher) MatchConnect(evt *events.ConnectEvent) *IOCMatchResult {
+func (m *MaliciousRequestDetector) MatchConnect(evt *events.ConnectEvent) *MaliciousRequestMatchResult {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -101,12 +101,12 @@ func (m *IOCMatcher) MatchConnect(evt *events.ConnectEvent) *IOCMatchResult {
 
 	// 1. ip_port 精确匹配（最高优先级）
 	if rule, ok := m.ipPortIndex[ipPortKey]; ok {
-		return &IOCMatchResult{
+		return &MaliciousRequestMatchResult{
 			RuleID:        rule.ID,
 			RuleName:      rule.Name,
 			Severity:      rule.Severity,
 			ThreatType:    rule.ThreatType,
-			IndicatorType: IOCTypeIPPort,
+			IndicatorType: MaliciousRequestTypeIPPort,
 			MatchedValue:  ipPortKey,
 			Description:   rule.Description,
 		}
@@ -114,12 +114,12 @@ func (m *IOCMatcher) MatchConnect(evt *events.ConnectEvent) *IOCMatchResult {
 
 	// 2. IP 匹配
 	if rule, ok := m.ipIndex[remoteIP]; ok {
-		return &IOCMatchResult{
+		return &MaliciousRequestMatchResult{
 			RuleID:        rule.ID,
 			RuleName:      rule.Name,
 			Severity:      rule.Severity,
 			ThreatType:    rule.ThreatType,
-			IndicatorType: IOCTypeIP,
+			IndicatorType: MaliciousRequestTypeIP,
 			MatchedValue:  remoteIP,
 			Description:   rule.Description,
 		}
@@ -127,12 +127,12 @@ func (m *IOCMatcher) MatchConnect(evt *events.ConnectEvent) *IOCMatchResult {
 
 	// 3. 端口匹配（最低优先级）
 	if rule, ok := m.portIndex[remotePort]; ok {
-		return &IOCMatchResult{
+		return &MaliciousRequestMatchResult{
 			RuleID:        rule.ID,
 			RuleName:      rule.Name,
 			Severity:      rule.Severity,
 			ThreatType:    rule.ThreatType,
-			IndicatorType: IOCTypePort,
+			IndicatorType: MaliciousRequestTypePort,
 			MatchedValue:  fmt.Sprintf("%d", remotePort),
 			Description:   rule.Description,
 		}
@@ -141,9 +141,9 @@ func (m *IOCMatcher) MatchConnect(evt *events.ConnectEvent) *IOCMatchResult {
 	return nil
 }
 
-// MatchDNS 对 DNS 事件进行 IOC 匹配
+// MatchDNS 对 DNS 事件进行恶意请求匹配
 // 先精确匹配，再后缀匹配
-func (m *IOCMatcher) MatchDNS(evt *events.DNSEvent) *IOCMatchResult {
+func (m *MaliciousRequestDetector) MatchDNS(evt *events.DNSEvent) *MaliciousRequestMatchResult {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -157,12 +157,12 @@ func (m *IOCMatcher) MatchDNS(evt *events.DNSEvent) *IOCMatchResult {
 
 	// 1. 精确域名匹配
 	if rule, ok := m.domainIndex[domain]; ok {
-		return &IOCMatchResult{
+		return &MaliciousRequestMatchResult{
 			RuleID:        rule.ID,
 			RuleName:      rule.Name,
 			Severity:      rule.Severity,
 			ThreatType:    rule.ThreatType,
-			IndicatorType: IOCTypeDomain,
+			IndicatorType: MaliciousRequestTypeDomain,
 			MatchedValue:  domain,
 			Description:   rule.Description,
 		}
@@ -171,12 +171,12 @@ func (m *IOCMatcher) MatchDNS(evt *events.DNSEvent) *IOCMatchResult {
 	// 2. 后缀匹配（通配符域名 *.evil.com）
 	for _, entry := range m.suffixRules {
 		if strings.HasSuffix(domain, entry.suffix) {
-			return &IOCMatchResult{
+			return &MaliciousRequestMatchResult{
 				RuleID:        entry.rule.ID,
 				RuleName:      entry.rule.Name,
 				Severity:      entry.rule.Severity,
 				ThreatType:    entry.rule.ThreatType,
-				IndicatorType: IOCTypeDomain,
+				IndicatorType: MaliciousRequestTypeDomain,
 				MatchedValue:  domain,
 				Description:   entry.rule.Description,
 			}
@@ -186,8 +186,8 @@ func (m *IOCMatcher) MatchDNS(evt *events.DNSEvent) *IOCMatchResult {
 	return nil
 }
 
-// BuildIOCConnectRecord 从 CONNECT 事件和匹配结果构建 DataType 6008 告警
-func BuildIOCConnectRecord(evt *events.ConnectEvent, result *IOCMatchResult) *businessplugins.Record {
+// BuildMaliciousRequestConnectRecord 从 CONNECT 事件和匹配结果构建 DataType 6008 告警
+func BuildMaliciousRequestConnectRecord(evt *events.ConnectEvent, result *MaliciousRequestMatchResult) *businessplugins.Record {
 	comm := cstring(evt.Comm[:])
 	exePath := cstring(evt.ExePath[:])
 	remoteIP := events.NetworkIPToString(evt.RemoteIP)
@@ -212,7 +212,7 @@ func BuildIOCConnectRecord(evt *events.ConnectEvent, result *IOCMatchResult) *bu
 				"uid":            fmt.Sprintf("%d", evt.UID),
 				"comm":           comm,
 				"exe_path":       exePath,
-				"detection_type": DetectionTypeIOC,
+				"detection_type": DetectionTypeMaliciousRequest,
 				"event_type":     "connect",
 				"rule_id":        result.RuleID,
 				"rule_name":      result.RuleName,
@@ -229,8 +229,8 @@ func BuildIOCConnectRecord(evt *events.ConnectEvent, result *IOCMatchResult) *bu
 	}
 }
 
-// BuildIOCDNSRecord 从 DNS 事件和匹配结果构建 DataType 6008 告警
-func BuildIOCDNSRecord(evt *events.DNSEvent, result *IOCMatchResult) *businessplugins.Record {
+// BuildMaliciousRequestDNSRecord 从 DNS 事件和匹配结果构建 DataType 6008 告警
+func BuildMaliciousRequestDNSRecord(evt *events.DNSEvent, result *MaliciousRequestMatchResult) *businessplugins.Record {
 	comm := cstring(evt.Comm[:])
 	exePath := cstring(evt.ExePath[:])
 	domain := cstring(evt.Domain[:])
@@ -247,7 +247,7 @@ func BuildIOCDNSRecord(evt *events.DNSEvent, result *IOCMatchResult) *businesspl
 				"uid":            fmt.Sprintf("%d", evt.UID),
 				"comm":           comm,
 				"exe_path":       exePath,
-				"detection_type": DetectionTypeIOC,
+				"detection_type": DetectionTypeMaliciousRequest,
 				"event_type":     "dns",
 				"rule_id":        result.RuleID,
 				"rule_name":      result.RuleName,
@@ -264,16 +264,16 @@ func BuildIOCDNSRecord(evt *events.DNSEvent, result *IOCMatchResult) *businesspl
 }
 
 // UpdateRules 原子替换规则索引
-func (m *IOCMatcher) UpdateRules(config *IOCRuleConfig) {
+func (m *MaliciousRequestDetector) UpdateRules(config *MaliciousRequestRuleConfig) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	// 重置索引
-	m.ipIndex = make(map[string]*IOCRule)
-	m.domainIndex = make(map[string]*IOCRule)
+	m.ipIndex = make(map[string]*MaliciousRequestRule)
+	m.domainIndex = make(map[string]*MaliciousRequestRule)
 	m.suffixRules = nil
-	m.portIndex = make(map[uint16]*IOCRule)
-	m.ipPortIndex = make(map[string]*IOCRule)
+	m.portIndex = make(map[uint16]*MaliciousRequestRule)
+	m.ipPortIndex = make(map[string]*MaliciousRequestRule)
 
 	m.buildIndex(config)
 }

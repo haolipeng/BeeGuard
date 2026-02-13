@@ -1,10 +1,10 @@
-# IOC 威胁情报规则配置文件
-# 说明: 此文件定义 IOC（Indicator of Compromise）检测规则，用于匹配已知恶意网络行为
+# 恶意请求检测规则配置文件
+# 说明: 此文件定义恶意请求检测规则，用于匹配已知恶意网络行为
 # 支持指标类型: ip（IP地址）, domain（域名）, port（端口）, ip_port（IP:端口复合）
 # 支持威胁类型: mining（挖矿）, c2（C2通信）, phishing（钓鱼）, data_leakage（数据泄露）
 
 version: "1.0"
-description: "IOC 威胁情报规则"
+description: "恶意请求检测规则"
 
 rules:
   # ============================================
@@ -57,7 +57,7 @@ rules:
   # ============================================
   - id: "IOC004"
     name: "已知C2域名"
-    description: "检测解析已知C2服务器域名的行为"
+    description: "检测解析已知C2服务器域名的行��"
     threat_type: "c2"
     indicator_type: "domain"
     severity: "critical"

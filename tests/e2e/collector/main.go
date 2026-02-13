@@ -163,7 +163,7 @@ func main() {
 		Cancel()
 	}()
 
-	// 运行 180 秒后自动退出（留足够时间让所有handler执���）
+	// 运行 180 秒后自动退出（留足够时间让所有handler执行退出）
 	go func() {
 		<-time.After(time.Second * 180)
 		zap.S().Info("test timeout, exiting...")

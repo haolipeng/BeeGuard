@@ -1,10 +1,10 @@
-# IOC 恶意请求检测 — 手动测试指南
+# 恶意请求检测 — 手动测试指南
 
 ## 概述
 
-本文档描述如何手动验证 ebpf_base_detector 插件的 IOC（Indicator of Compromise）威胁情报检测功能（DataType 6008）。
+本文档描述如何手动验证 ebpf_base_detector 插件的恶意请求检测功能（DataType 6008）。
 
-**检测原理**：通过 eBPF Hook `raw_tracepoint/sys_exit` 捕获 `connect`（出站连接）和 `recvfrom/recvmsg`（DNS 响应）事件，将目标 IP、端口、域名与 `ioc_rules.yaml` 中的威胁情报指标进行匹配。匹配成功时产生告警。
+**检测原理**：通过 eBPF Hook `raw_tracepoint/sys_exit` 捕获 `connect`（出站连接）和 `recvfrom/recvmsg`（DNS 响应）事件，将目标 IP、端口、域名与 `malicious_request_rules.yaml` 中的威胁情报指标进行匹配。匹配成功时产生告警。
 
 **支持的指标类型**：
 
@@ -28,10 +28,10 @@
 
 | 文件 | 说明 |
 |------|------|
-| `business_plugins/ebpf_base_detector/config/ioc_rules.yaml` | IOC 规则配置（7 条规则） |
-| `business_plugins/ebpf_base_detector/detector/ioc_loader.go` | 规则加载 |
-| `business_plugins/ebpf_base_detector/detector/ioc_matcher.go` | 匹配引擎 |
-| `business_plugins/ebpf_base_detector/detector/ioc_types.go` | 类型定义 |
+| `business_plugins/ebpf_base_detector/config/malicious_request_rules.yaml` | 恶意请求规则配置（7 条规则） |
+| `business_plugins/ebpf_base_detector/malicious_request_loader.go` | 规则加载 |
+| `business_plugins/ebpf_base_detector/malicious_request_detector.go` | 匹配引擎 |
+| `business_plugins/ebpf_base_detector/malicious_request_types.go` | 类型定义 |
 | `business_plugins/ebpf_base_detector/main.go` | 事件处理与告警生成 |
 
 ---
@@ -66,19 +66,19 @@ sudo ./bin/agent -standalone -plugins=ebpf_base_detector -output=stderr -test
 
 ```bash
 cd /opt/cloudsec
-sudo ./bin/agent -standalone -plugins=ebpf_base_detector -output=/tmp/ioc_detection.json -test
+sudo ./bin/agent -standalone -plugins=ebpf_base_detector -output=/tmp/malicious_request_detection.json -test
 
 # 另一终端实时查看
-tail -f /tmp/ioc_detection.json
+tail -f /tmp/malicious_request_detection.json
 ```
 
 ---
 
 ## 测试用例
 
-在另一个终端（Terminal B）中执���以下命令。
+在另一个终端（Terminal B）中执行以下命令。
 
-> **安全提示**：以下测试使用 IOC 规则中配置的示例地址和域名。这些地址可能不可��或已被接管，测试目的是验证检测机制是否正确触发告警，不依赖连接是否成功。
+> **安全提示**：以下测试使用恶意请求规则中配置的示例地址和域名。这些地址可能不可达或已被接管，测试目的是验证检测机制是否正确触发告警，不依赖连接是否成功。
 
 ---
 
@@ -103,12 +103,12 @@ nc -w 2 5.196.23.240 80 2>/dev/null; true
 **预期告警**：
 
 ```
-WARN  IOC hit on connect
+WARN  Malicious request detected on connect
     rule_id=IOC001  rule_name=已知矿池IP  threat_type=mining
     matched_value=94.23.23.52  pid=...  comm=nc
 ```
 
-> **说明**：当前实现仅捕获 `connect` 返回值为 0（成功）的事件。如果目标 IP 不可达，connect 返回错��码，则不会触发 IOC 匹配。可通过临时添加本机 IP 到 IOC 规则来验证功能。
+> **说明**：当前实现仅捕获 `connect` 返回值为 0（成功）的事件。如果目标 IP 不可达，connect 返回错误码，则不会触发恶意请求匹配。可通过临时添加本机 IP 到规则来验证功能。
 
 ---
 
@@ -140,7 +140,7 @@ nc -w 2 127.0.0.1 5555 2>/dev/null; true
 **预期告警**：
 
 ```
-WARN  IOC hit on connect
+WARN  Malicious request detected on connect
     rule_id=IOC002  rule_name=常见矿池端口  threat_type=mining
     matched_value=3333  pid=...  comm=nc
 ```
@@ -167,7 +167,7 @@ curl --connect-timeout 2 http://pool.minexmr.com/ 2>/dev/null; true
 **预期告警**：
 
 ```
-WARN  IOC hit on DNS
+WARN  Malicious request detected on DNS
     rule_id=IOC003  rule_name=已知矿池域名  threat_type=mining
     matched_value=pool.minexmr.com  pid=...  comm=dig
 ```
@@ -192,7 +192,7 @@ nslookup cmd.cobalt-strike.example.com 2>/dev/null; true
 **预期告警**：
 
 ```
-WARN  IOC hit on DNS
+WARN  Malicious request detected on DNS
     rule_id=IOC004  rule_name=已知C2域名  threat_type=c2  severity=critical
     matched_value=test.cobalt-strike.example.com  pid=...  comm=dig
 ```
@@ -217,7 +217,7 @@ curl --connect-timeout 2 https://185.141.27.100:443/ 2>/dev/null; true
 **预期告警**：
 
 ```
-WARN  IOC hit on connect
+WARN  Malicious request detected on connect
     rule_id=IOC005  rule_name=已知C2端点  threat_type=c2  severity=critical
     matched_value=185.141.27.100:443  pid=...  comm=nc
 ```
@@ -239,7 +239,7 @@ dig login-secure.example.net 2>/dev/null; true
 **预期告警**：
 
 ```
-WARN  IOC hit on DNS
+WARN  Malicious request detected on DNS
     rule_id=IOC006  rule_name=已知钓鱼域名  threat_type=phishing
     matched_value=login.phishing-example.com  pid=...  comm=dig
 ```
@@ -259,7 +259,7 @@ nc -w 2 203.0.113.50 80 2>/dev/null; true
 **预期告警**：
 
 ```
-WARN  IOC hit on connect
+WARN  Malicious request detected on connect
     rule_id=IOC007  rule_name=已知数据泄露目标IP  threat_type=data_leakage  severity=critical
     matched_value=198.51.100.1  pid=...  comm=nc
 ```
@@ -279,20 +279,20 @@ curl -s https://www.baidu.com > /dev/null
 nc -w 1 127.0.0.1 22 2>/dev/null; true
 ```
 
-**预期**：Terminal A **不应** 输出 IOC 相关告警。
+**预期**：Terminal A **不应** 输出恶意请求相关告警。
 
 ---
 
 ## 本地模拟测试（推荐）
 
-由于 IOC 规则中的 IP 和域名可能不可达（connect 不成功则不触发），推荐通过修改规则文件使用本地地址进行可靠测试。
+由于恶意请求规则中的 IP 和域名可能不可达（connect 不成功则不触发），推荐通过修改规则文件使用本地地址进行可靠测试。
 
 ### 步骤
 
 1. 备份原规则文件：
 
 ```bash
-cp build/config/ioc_rules.yaml build/config/ioc_rules.yaml.bak
+cp build/config/malicious_request_rules.yaml build/config/malicious_request_rules.yaml.bak
 ```
 
 2. 添加测试规则（使用本机地址）：
@@ -300,7 +300,7 @@ cp build/config/ioc_rules.yaml build/config/ioc_rules.yaml.bak
 ```yaml
   - id: "IOC_TEST"
     name: "本地测试规则"
-    description: "用于测试的本地 IOC 规则"
+    description: "用于测试的本地恶意请求规则"
     threat_type: "c2"
     indicator_type: "ip"
     severity: "high"
@@ -314,18 +314,18 @@ cp build/config/ioc_rules.yaml build/config/ioc_rules.yaml.bak
 4. 测试完成后恢复原规则文件：
 
 ```bash
-mv build/config/ioc_rules.yaml.bak build/config/ioc_rules.yaml
+mv build/config/malicious_request_rules.yaml.bak build/config/malicious_request_rules.yaml
 ```
 
 ---
 
 ## 验证告警字段
 
-### Connect 事件 IOC 告警字段
+### Connect 事件恶意请求告警字段
 
 | 字段 | 说明 | 示例值 |
 |------|------|--------|
-| `detection_type` | 检测类型 | ioc |
+| `detection_type` | 检测类型 | malicious_request |
 | `event_type` | 事件类型 | connect |
 | `rule_id` | 规则 ID | IOC001 |
 | `rule_name` | 规则名称 | 已知矿池IP |
@@ -340,11 +340,11 @@ mv build/config/ioc_rules.yaml.bak build/config/ioc_rules.yaml
 | `remote_port` | 目标端口 | 80 |
 | `protocol` | 协议 | tcp |
 
-### DNS 事件 IOC 告警字段
+### DNS 事件恶意请求告警字段
 
 | 字段 | 说明 | 示例值 |
 |------|------|--------|
-| `detection_type` | 检测类型 | ioc |
+| `detection_type` | 检测类型 | malicious_request |
 | `event_type` | 事件类型 | dns |
 | `rule_id` | 规则 ID | IOC003 |
 | `rule_name` | 规则名称 | 已知矿池域名 |
@@ -378,7 +378,7 @@ mv build/config/ioc_rules.yaml.bak build/config/ioc_rules.yaml
 
 | 问题 | 排查方法 |
 |------|----------|
-| Agent 启动后 `IOC rules loaded` 显示 0 条规则 | 检查 `ioc_rules.yaml` 文件路径和 YAML 格式；确认规则 `enabled: true` |
+| Agent 启动后 `Malicious request rules loaded` 显示 0 条规则 | 检查 `malicious_request_rules.yaml` 文件路径和 YAML 格式；确认规则 `enabled: true` |
 | IP 类型规则不触发告警 | 当前仅捕获 `connect` 成功（retval == 0）的事件；目标 IP 不可达时不会触发；使用本地模拟测试验证 |
 | 域名规则不触发告警 | DNS 检测依赖 UDP 端口 53/5353 的 recvfrom/recvmsg；检查系统是否使用 `systemd-resolved` 代理（此时 DNS 进程可能不同）|
 | 通配符域名不匹配 | 确认规则格式为 `*.example.com`，匹配所有子域名；精确域名不需要通配符 |
@@ -391,9 +391,9 @@ mv build/config/ioc_rules.yaml.bak build/config/ioc_rules.yaml
 
 ## 规则配置说明
 
-规则文件路径：`config/ioc_rules.yaml`（相对于 ebpf_base_detector 二进制所在目录）
+规则文件路径：`config/malicious_request_rules.yaml`（相对于 ebpf_base_detector 二进制所在目录）
 
-### 添加自定义 IOC 规则
+### 添加自定义恶意请求规则
 
 ```yaml
   - id: "IOC_CUSTOM"

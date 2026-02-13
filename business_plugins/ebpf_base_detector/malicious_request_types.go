@@ -10,19 +10,19 @@ const (
 
 // 指标类型常量
 const (
-	IOCTypeIP     = "ip"      // IP 地址匹配
-	IOCTypeDomain = "domain"  // 域名匹配（精确 + 后缀通配）
-	IOCTypePort   = "port"    // 端口匹配
-	IOCTypeIPPort = "ip_port" // IP:Port 复合匹配
+	MaliciousRequestTypeIP     = "ip"      // IP 地址匹配
+	MaliciousRequestTypeDomain = "domain"  // 域名匹配（精确 + 后缀通配）
+	MaliciousRequestTypePort   = "port"    // 端口匹配
+	MaliciousRequestTypeIPPort = "ip_port" // IP:Port 复��匹配
 )
 
 // 检测类型常量
 const (
-	DetectionTypeIOC = "ioc"
+	DetectionTypeMaliciousRequest = "malicious_request"
 )
 
-// IOCRule 单条 IOC 规则
-type IOCRule struct {
+// MaliciousRequestRule 单条恶意请求检测规则
+type MaliciousRequestRule struct {
 	ID            string   `yaml:"id" json:"id"`
 	Name          string   `yaml:"name" json:"name"`
 	Description   string   `yaml:"description" json:"description"`
@@ -33,15 +33,15 @@ type IOCRule struct {
 	Indicators    []string `yaml:"indicators" json:"indicators"`
 }
 
-// IOCRuleConfig YAML 配置根结构
-type IOCRuleConfig struct {
-	Version     string    `yaml:"version" json:"version"`
-	Description string    `yaml:"description" json:"description"`
-	Rules       []IOCRule `yaml:"rules" json:"rules"`
+// MaliciousRequestRuleConfig YAML 配置根结构
+type MaliciousRequestRuleConfig struct {
+	Version     string                 `yaml:"version" json:"version"`
+	Description string                 `yaml:"description" json:"description"`
+	Rules       []MaliciousRequestRule `yaml:"rules" json:"rules"`
 }
 
-// IOCMatchResult 匹配结果
-type IOCMatchResult struct {
+// MaliciousRequestMatchResult 匹配结果
+type MaliciousRequestMatchResult struct {
 	RuleID        string
 	RuleName      string
 	Severity      string

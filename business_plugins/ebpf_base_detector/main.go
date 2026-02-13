@@ -25,7 +25,7 @@ import (
 const (
 	defaultConfigPath        = "config/dangerous_commands.yaml"
 	defaultTrustedConfigPath = "config/privilege_escalation_whitelist.yaml"
-	defaultIOCConfigPath     = "config/ioc_rules.yaml"
+	defaultMaliciousRequestConfigPath = "config/malicious_request_rules.yaml"
 )
 
 func main() {
@@ -58,15 +58,15 @@ func main() {
 	// 3.1 初始化用户态反弹 shell 检测器
 	rsDetector := &ReverseShellDetector{}
 
-	// 3.2 初始化 IOC 匹配器
-	var iocMatcher *IOCMatcher
-	iocConfigPath := getIOCConfigPath()
-	iocConfig, err := LoadIOCRules(iocConfigPath)
+	// 3.2 初始化恶意请求检测器
+	var mrDetector *MaliciousRequestDetector
+	mrConfigPath := getMaliciousRequestConfigPath()
+	mrConfig, err := LoadMaliciousRequestRules(mrConfigPath)
 	if err != nil {
-		logger.Warn("Failed to load IOC rules, IOC detection disabled", "error", err, "path", iocConfigPath)
+		logger.Warn("Failed to load malicious request rules, malicious request detection disabled", "error", err, "path", mrConfigPath)
 	} else {
-		iocMatcher = NewIOCMatcher(iocConfig)
-		logger.Info("IOC rules loaded", "version", iocConfig.Version, "rules", iocMatcher.GetEnabledRuleCount())
+		mrDetector = NewMaliciousRequestDetector(mrConfig)
+		logger.Info("Malicious request rules loaded", "version", mrConfig.Version, "rules", mrDetector.GetEnabledRuleCount())
 	}
 
 	// 4. 加载eBPF程序
@@ -287,19 +287,19 @@ func main() {
 					"protocol", record.Data.Fields["protocol"],
 					"retval", evt.RetVal)
 
-				// IOC 匹配
-				if iocMatcher != nil {
-					if iocResult := iocMatcher.MatchConnect(&evt); iocResult != nil {
-						iocRecord := BuildIOCConnectRecord(&evt, iocResult)
-						logger.Warn("IOC hit on connect",
-							"rule_id", iocResult.RuleID,
-							"rule_name", iocResult.RuleName,
-							"threat_type", iocResult.ThreatType,
-							"matched_value", iocResult.MatchedValue,
+				// 恶意请求匹配
+				if mrDetector != nil {
+					if mrResult := mrDetector.MatchConnect(&evt); mrResult != nil {
+						mrRecord := BuildMaliciousRequestConnectRecord(&evt, mrResult)
+						logger.Warn("Malicious request detected on connect",
+							"rule_id", mrResult.RuleID,
+							"rule_name", mrResult.RuleName,
+							"threat_type", mrResult.ThreatType,
+							"matched_value", mrResult.MatchedValue,
 							"pid", evt.PID,
 							"comm", cstring(evt.Comm[:]))
-						if err := client.SendRecord(iocRecord); err != nil {
-							logger.Error("Failed to send IOC connect record to agent", "error", err)
+						if err := client.SendRecord(mrRecord); err != nil {
+							logger.Error("Failed to send malicious request connect record to agent", "error", err)
 						}
 					}
 				}
@@ -368,19 +368,19 @@ func main() {
 					"query_type", record.Data.Fields["query_type"],
 					"dns_server", record.Data.Fields["dns_server_ip"])
 
-				// IOC 匹配
-				if iocMatcher != nil {
-					if iocResult := iocMatcher.MatchDNS(&evt); iocResult != nil {
-						iocRecord := BuildIOCDNSRecord(&evt, iocResult)
-						logger.Warn("IOC hit on DNS",
-							"rule_id", iocResult.RuleID,
-							"rule_name", iocResult.RuleName,
-							"threat_type", iocResult.ThreatType,
-							"matched_value", iocResult.MatchedValue,
+				// 恶意请求匹配
+				if mrDetector != nil {
+					if mrResult := mrDetector.MatchDNS(&evt); mrResult != nil {
+						mrRecord := BuildMaliciousRequestDNSRecord(&evt, mrResult)
+						logger.Warn("Malicious request detected on DNS",
+							"rule_id", mrResult.RuleID,
+							"rule_name", mrResult.RuleName,
+							"threat_type", mrResult.ThreatType,
+							"matched_value", mrResult.MatchedValue,
 							"pid", evt.PID,
 							"comm", cstring(evt.Comm[:]))
-						if err := client.SendRecord(iocRecord); err != nil {
-							logger.Error("Failed to send IOC DNS record to agent", "error", err)
+						if err := client.SendRecord(mrRecord); err != nil {
+							logger.Error("Failed to send malicious request DNS record to agent", "error", err)
 						}
 					}
 				}
@@ -468,10 +468,10 @@ func getTrustedConfigPath() string {
 	return defaultTrustedConfigPath
 }
 
-// getIOCConfigPath 获取 IOC 规则配置文件路径
+// getMaliciousRequestConfigPath 获取恶意请求规则配置文件路径
 // 优先使用环境变量，否则使用默认路径
-func getIOCConfigPath() string {
-	if path := os.Getenv("DRIVER_IOC_CONFIG_PATH"); path != "" {
+func getMaliciousRequestConfigPath() string {
+	if path := os.Getenv("DRIVER_MALICIOUS_REQUEST_CONFIG_PATH"); path != "" {
 		return path
 	}
 
@@ -479,14 +479,14 @@ func getIOCConfigPath() string {
 	execPath, err := os.Executable()
 	if err == nil {
 		dir := filepath.Dir(execPath)
-		configPath := filepath.Join(dir, defaultIOCConfigPath)
+		configPath := filepath.Join(dir, defaultMaliciousRequestConfigPath)
 		if _, err := os.Stat(configPath); err == nil {
 			return configPath
 		}
 	}
 
 	// 回退到当前目录
-	return defaultIOCConfigPath
+	return defaultMaliciousRequestConfigPath
 }
 
 // resolveExePath 补全可执行文件的完整路径

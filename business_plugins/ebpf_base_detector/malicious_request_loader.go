@@ -11,27 +11,27 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// LoadIOCRules 从 YAML 文件加载 IOC 检测规则
-func LoadIOCRules(path string) (*IOCRuleConfig, error) {
+// LoadMaliciousRequestRules 从 YAML 文件加载恶意请求检测规则
+func LoadMaliciousRequestRules(path string) (*MaliciousRequestRuleConfig, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read IOC rules file: %w", err)
+		return nil, fmt.Errorf("failed to read malicious request rules file: %w", err)
 	}
 
-	var config IOCRuleConfig
+	var config MaliciousRequestRuleConfig
 	if err := yaml.Unmarshal(data, &config); err != nil {
-		return nil, fmt.Errorf("failed to parse IOC rules file: %w", err)
+		return nil, fmt.Errorf("failed to parse malicious request rules file: %w", err)
 	}
 
-	if err := validateIOCConfig(&config); err != nil {
-		return nil, fmt.Errorf("invalid IOC rules config: %w", err)
+	if err := validateMaliciousRequestConfig(&config); err != nil {
+		return nil, fmt.Errorf("invalid malicious request rules config: %w", err)
 	}
 
 	return &config, nil
 }
 
-// validateIOCConfig 校验 IOC 规则配置的有效性
-func validateIOCConfig(config *IOCRuleConfig) error {
+// validateMaliciousRequestConfig 校验恶意请求规则配置的有效性
+func validateMaliciousRequestConfig(config *MaliciousRequestRuleConfig) error {
 	if config.Version == "" {
 		return fmt.Errorf("missing version field")
 	}
@@ -60,7 +60,7 @@ func validateIOCConfig(config *IOCRuleConfig) error {
 
 		// 校验指标类型
 		switch rule.IndicatorType {
-		case IOCTypeIP, IOCTypeDomain, IOCTypePort, IOCTypeIPPort:
+		case MaliciousRequestTypeIP, MaliciousRequestTypeDomain, MaliciousRequestTypePort, MaliciousRequestTypeIPPort:
 			// 有效
 		default:
 			return fmt.Errorf("rule '%s': invalid indicator_type '%s'", rule.ID, rule.IndicatorType)
@@ -93,16 +93,16 @@ func validateIOCConfig(config *IOCRuleConfig) error {
 // validateIndicator 校验单个指标值的格式
 func validateIndicator(ruleID, indicatorType, indicator string, index int) error {
 	switch indicatorType {
-	case IOCTypeIP:
+	case MaliciousRequestTypeIP:
 		if net.ParseIP(indicator) == nil {
 			return fmt.Errorf("rule '%s': indicator %d: invalid IP address '%s'", ruleID, index, indicator)
 		}
-	case IOCTypePort:
+	case MaliciousRequestTypePort:
 		port, err := strconv.Atoi(indicator)
 		if err != nil || port < 1 || port > 65535 {
 			return fmt.Errorf("rule '%s': indicator %d: invalid port '%s'", ruleID, index, indicator)
 		}
-	case IOCTypeIPPort:
+	case MaliciousRequestTypeIPPort:
 		host, portStr, err := net.SplitHostPort(indicator)
 		if err != nil {
 			return fmt.Errorf("rule '%s': indicator %d: invalid ip:port format '%s'", ruleID, index, indicator)
@@ -114,7 +114,7 @@ func validateIndicator(ruleID, indicatorType, indicator string, index int) error
 		if err != nil || port < 1 || port > 65535 {
 			return fmt.Errorf("rule '%s': indicator %d: invalid port in '%s'", ruleID, index, indicator)
 		}
-	case IOCTypeDomain:
+	case MaliciousRequestTypeDomain:
 		// 域名允许通配符前缀 *.
 		d := strings.TrimPrefix(indicator, "*.")
 		if d == "" {
@@ -124,28 +124,28 @@ func validateIndicator(ruleID, indicatorType, indicator string, index int) error
 	return nil
 }
 
-// LoadIOCRulesOrDefault 加载 IOC 规则，如果失败则返回空配置
-func LoadIOCRulesOrDefault(path string) *IOCRuleConfig {
-	config, err := LoadIOCRules(path)
+// LoadMaliciousRequestRulesOrDefault 加载恶意请求规则，如果失败则返回空配置
+func LoadMaliciousRequestRulesOrDefault(path string) *MaliciousRequestRuleConfig {
+	config, err := LoadMaliciousRequestRules(path)
 	if err != nil {
-		return &IOCRuleConfig{
+		return &MaliciousRequestRuleConfig{
 			Version:     "1.0",
 			Description: "empty config (load failed)",
-			Rules:       []IOCRule{},
+			Rules:       []MaliciousRequestRule{},
 		}
 	}
 	return config
 }
 
-// ParseIOCRulesFromJSON 解析服务端下发的 JSON 格式 IOC 规则
-func ParseIOCRulesFromJSON(data string) (*IOCRuleConfig, error) {
-	var config IOCRuleConfig
+// ParseMaliciousRequestRulesFromJSON 解析服务端下发的 JSON 格式恶意请求规则
+func ParseMaliciousRequestRulesFromJSON(data string) (*MaliciousRequestRuleConfig, error) {
+	var config MaliciousRequestRuleConfig
 	if err := json.Unmarshal([]byte(data), &config); err != nil {
-		return nil, fmt.Errorf("failed to parse IOC rules JSON: %w", err)
+		return nil, fmt.Errorf("failed to parse malicious request rules JSON: %w", err)
 	}
 
-	if err := validateIOCConfig(&config); err != nil {
-		return nil, fmt.Errorf("invalid IOC rules config: %w", err)
+	if err := validateMaliciousRequestConfig(&config); err != nil {
+		return nil, fmt.Errorf("invalid malicious request rules config: %w", err)
 	}
 
 	return &config, nil
