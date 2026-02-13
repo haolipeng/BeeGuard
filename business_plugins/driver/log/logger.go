@@ -6,6 +6,7 @@ import (
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 // Logger zap日志封装
@@ -30,11 +31,20 @@ func New() *Logger {
 		EncodeCaller:   zapcore.ShortCallerEncoder,
 	}
 
-	// 创建核心日志记录器
-	core := zapcore.NewCore(
-		zapcore.NewConsoleEncoder(encoderConfig),
-		zapcore.AddSync(os.Stderr),
-		zapcore.InfoLevel, // 默认Info级别
+	encoder := zapcore.NewConsoleEncoder(encoderConfig)
+
+	// 文件输出（带轮转）
+	fileWriter := zapcore.AddSync(&lumberjack.Logger{
+		Filename:   "driver.log",
+		MaxSize:    1,    // 每个日志文件最大 1 MB
+		MaxBackups: 10,   // 保留 10 个旧文件
+		Compress:   true, // 压缩旧文件
+	})
+
+	// 双输出：stderr + 文件
+	core := zapcore.NewTee(
+		zapcore.NewCore(encoder, zapcore.AddSync(os.Stderr), zapcore.InfoLevel),
+		zapcore.NewCore(encoder, fileWriter, zapcore.InfoLevel),
 	)
 
 	logger := zap.New(core, zap.AddCaller(), zap.AddCallerSkip(1))
