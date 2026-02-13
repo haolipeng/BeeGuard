@@ -13,7 +13,7 @@
 | 数据采集 | 定时采集系统信息 | 优化格式 | collector |
 | 任务执行 | 接收任务并返回结果 | 优化格式 | baseline |
 | 实时检测 | 日志分析/事件检测 | 优化格式 | detector |
-| 内核监控 | eBPF 系统调用监控 | 标准 Protobuf | driver |
+| 内核监控 | eBPF 系统调用监控 | 标准 Protobuf | ebpf_base_detector |
 
 ### 1.2 通信机制
 
@@ -50,7 +50,7 @@ business_plugins/
 │
 ├── baseline/               # 基线检查插件
 ├── detector/               # 威胁检测插件
-└── driver/                 # eBPF 驱动插件
+└── ebpf_base_detector/     # eBPF 驱动插件
 ```
 
 ### 2.2 依赖库
@@ -411,6 +411,6 @@ func main() {
 | 6001-6099 | Detector 检测告警 |
 | 6100-6199 | Detector 状态/日志 |
 | 8000-8099 | Baseline 检查结果 |
-| 59 | Driver eBPF 事件 |
+| 59 | ebpf_base_detector eBPF 事件 |
 
 新插件开发时，请向项目负责人申请 DataType 范围。

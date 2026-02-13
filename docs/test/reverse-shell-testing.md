@@ -2,7 +2,7 @@
 
 ## 概述
 
-本文档描述如何手动验证 driver 插件的反弹 Shell 检测功能（DataType 6007）。
+本文档描述如何手动验证 ebpf_base_detector 插件的反弹 Shell 检测功能（DataType 6007）。
 
 **检测原理**：在 `sched_process_exec` Hook 中，当新进程执行时检查其 FD 0（stdin）和 FD 1（stdout）是否指向 IPv4 Socket。任一指向 Socket 即触发告警。
 
@@ -37,7 +37,7 @@ make deploy
 # Terminal A: 以 standalone 模式启动，事件输出到 stderr
 # Agent 运行日志输出到 /opt/cloudsec/logs/agent.log
 cd /opt/cloudsec
-sudo ./bin/agent -standalone -plugins=driver -output=stderr -test
+sudo ./bin/agent -standalone -plugins=ebpf_base_detector -output=stderr -test
 ```
 
 **可选**：另开终端监控 eBPF 内核调试日志：

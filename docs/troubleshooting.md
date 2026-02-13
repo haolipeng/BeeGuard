@@ -41,7 +41,7 @@ ls -la /opt/cloudsec/plugins/
 # 2. 检查文件权限
 chmod +x /opt/cloudsec/plugins/*/
 
-# 3. 检查依赖（driver 插件需要 eBPF 环境）
+# 3. 检查依赖（ebpf_base_detector 插件需要 eBPF 环境）
 ls /sys/kernel/btf/vmlinux
 ```
 
@@ -55,12 +55,12 @@ ls /sys/kernel/btf/vmlinux
 **排查：** 使用 Standalone 模式本地测试
 ```bash
 cd /opt/cloudsec
-sudo ./bin/agent -standalone -plugins=driver -output=stderr -test
+sudo ./bin/agent -standalone -plugins=ebpf_base_detector -output=stderr -test
 ```
 
 ---
 
-## 三、eBPF/Driver 问题
+## 三、eBPF/ebpf_base_detector 问题
 
 ### eBPF 加载失败
 
@@ -83,10 +83,10 @@ whoami
 **排查步骤：**
 ```bash
 # 1. 检查规则配置
-cat /opt/cloudsec/plugins/driver/config/dangerous_commands.yaml
+cat /opt/cloudsec/plugins/ebpf_base_detector/config/dangerous_commands.yaml
 
-# 2. 确认 driver 已启动
-ps aux | grep driver
+# 2. 确认 ebpf_base_detector 已启动
+ps aux | grep ebpf_base_detector
 ```
 
 ---
@@ -99,7 +99,7 @@ ps aux | grep driver
 | Collector | `/opt/cloudsec/logs/plugins/collector/collector.log` |
 | Baseline | `/opt/cloudsec/logs/plugins/baseline/baseline.log` |
 | Detector | `/opt/cloudsec/logs/plugins/detector/detector.log` |
-| Driver | `/opt/cloudsec/logs/plugins/driver/driver.log` |
+| ebpf_base_detector | `/opt/cloudsec/logs/plugins/ebpf_base_detector/ebpf_base_detector.log` |
 
 ---
 
@@ -110,7 +110,7 @@ ps aux | grep driver
 ps aux | grep agent
 
 # 检查插件进程
-ps aux | grep -E "collector|baseline|detector|driver"
+ps aux | grep -E "collector|baseline|detector|ebpf_base_detector"
 
 # 查看最近错误
 grep -i error /opt/cloudsec/logs/agent/agent.log | tail -20

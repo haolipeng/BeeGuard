@@ -1,4 +1,4 @@
-package detector
+package main
 
 // 威胁类型常量
 const (

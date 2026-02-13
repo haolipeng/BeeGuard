@@ -1,4 +1,4 @@
-package detector
+package main
 
 import (
 	"fmt"
@@ -8,7 +8,7 @@ import (
 	"time"
 
 	businessplugins "business_plugins/lib"
-	"driver/events"
+	"ebpf_base_detector/events"
 )
 
 // domainSuffixEntry 域名后缀匹配项

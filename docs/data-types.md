@@ -13,7 +13,7 @@
 | 6001-6005 | detector | 威胁检测告警 |
 | 6010-6011 | detector | 检测器状态 |
 | 8000-8010 | baseline | 基线检查结果 |
-| 59 | driver | eBPF 进程事件 |
+| 59 | ebpf_base_detector | eBPF 进程事件 |
 
 ---
 
@@ -239,7 +239,7 @@
 
 ---
 
-## 五、Driver 插件 DataType
+## 五、ebpf_base_detector 插件 DataType
 
 ### 59 - eBPF 进程执行事件
 

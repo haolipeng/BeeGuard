@@ -13,7 +13,7 @@ PLUGINS_SRC_DIR=business_plugins
 COLLECTOR_SRC=$(PLUGINS_SRC_DIR)/collector
 BASELINE_SRC=$(PLUGINS_SRC_DIR)/baseline
 DETECTOR_SRC=$(PLUGINS_SRC_DIR)/detector
-DRIVER_SRC=$(PLUGINS_SRC_DIR)/driver
+DRIVER_SRC=$(PLUGINS_SRC_DIR)/ebpf_base_detector
 
 # 部署目录
 DEPLOY_DIR=/opt/cloudsec
@@ -53,28 +53,28 @@ build-plugins: generate-ebpf
 	@cd $(BASELINE_SRC) && $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/baseline .
 	@echo "  Building detector plugin..."
 	@cd $(DETECTOR_SRC) && $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/detector .
-	@echo "  Building driver plugin..."
-	@cd $(DRIVER_SRC) && $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/driver .
+	@echo "  Building ebpf_base_detector plugin..."
+	@cd $(DRIVER_SRC) && $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/ebpf_base_detector .
 	@echo "All plugins built successfully"
 	@echo "  $(PLUGINS_DIR)/collector"
 	@echo "  $(PLUGINS_DIR)/baseline"
 	@echo "  $(PLUGINS_DIR)/detector"
-	@echo "  $(PLUGINS_DIR)/driver"
+	@echo "  $(PLUGINS_DIR)/ebpf_base_detector"
 
-# 生成 eBPF 代码 (driver 插件依赖)
+# 生成 eBPF 代码 (ebpf_base_detector 插件依赖)
 .PHONY: generate-ebpf
 generate-ebpf:
 	@echo "Generating eBPF code..."
 	@cd $(DRIVER_SRC)/ebpf && $(GO) generate ./...
 	@echo "eBPF code generation complete"
 
-# 编译 driver 插件
+# 编译 ebpf_base_detector 插件
 .PHONY: build-driver
 build-driver: generate-ebpf
-	@echo "Building driver plugin..."
+	@echo "Building ebpf_base_detector plugin..."
 	@mkdir -p $(PLUGINS_DIR)
-	@cd $(DRIVER_SRC) && $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/driver .
-	@echo "Build complete: $(PLUGINS_DIR)/driver"
+	@cd $(DRIVER_SRC) && $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/ebpf_base_detector .
+	@echo "Build complete: $(PLUGINS_DIR)/ebpf_base_detector"
 
 # 编译所有组件 (agent + plugins)
 .PHONY: build
@@ -121,28 +121,28 @@ deploy: build
 	@sudo mkdir -p $(DEPLOY_DIR)/data/plugins/collector
 	@sudo mkdir -p $(DEPLOY_DIR)/data/plugins/baseline
 	@sudo mkdir -p $(DEPLOY_DIR)/data/plugins/detector
-	@sudo mkdir -p $(DEPLOY_DIR)/data/plugins/driver
+	@sudo mkdir -p $(DEPLOY_DIR)/data/plugins/ebpf_base_detector
 	@sudo mkdir -p $(DEPLOY_DIR)/logs/agent
 	@sudo mkdir -p $(DEPLOY_DIR)/logs/plugins/collector
 	@sudo mkdir -p $(DEPLOY_DIR)/logs/plugins/baseline
 	@sudo mkdir -p $(DEPLOY_DIR)/logs/plugins/detector
-	@sudo mkdir -p $(DEPLOY_DIR)/logs/plugins/driver
+	@sudo mkdir -p $(DEPLOY_DIR)/logs/plugins/ebpf_base_detector
 	@sudo cp $(BUILD_DIR)/$(BINARY_NAME) $(DEPLOY_DIR)/bin/
 	@sudo mkdir -p $(DEPLOY_DIR)/plugins/collector
 	@sudo mkdir -p $(DEPLOY_DIR)/plugins/baseline
 	@sudo mkdir -p $(DEPLOY_DIR)/plugins/detector
-	@sudo mkdir -p $(DEPLOY_DIR)/plugins/driver/config
+	@sudo mkdir -p $(DEPLOY_DIR)/plugins/ebpf_base_detector/config
 	@sudo cp $(PLUGINS_DIR)/collector $(DEPLOY_DIR)/plugins/collector/
 	@sudo cp $(PLUGINS_DIR)/baseline $(DEPLOY_DIR)/plugins/baseline/
 	@sudo cp $(PLUGINS_DIR)/detector $(DEPLOY_DIR)/plugins/detector/
-	@sudo cp $(PLUGINS_DIR)/driver $(DEPLOY_DIR)/plugins/driver/
-	@sudo cp $(DRIVER_SRC)/config/dangerous_commands.yaml $(DEPLOY_DIR)/plugins/driver/config/
-	@sudo cp $(DRIVER_SRC)/config/privilege_escalation_whitelist.yaml $(DEPLOY_DIR)/plugins/driver/config/
+	@sudo cp $(PLUGINS_DIR)/ebpf_base_detector $(DEPLOY_DIR)/plugins/ebpf_base_detector/
+	@sudo cp $(DRIVER_SRC)/config/dangerous_commands.yaml $(DEPLOY_DIR)/plugins/ebpf_base_detector/config/
+	@sudo cp $(DRIVER_SRC)/config/privilege_escalation_whitelist.yaml $(DEPLOY_DIR)/plugins/ebpf_base_detector/config/
 	@sudo chmod 755 $(DEPLOY_DIR)/bin/$(BINARY_NAME)
 	@sudo chmod 755 $(DEPLOY_DIR)/plugins/collector/collector
 	@sudo chmod 755 $(DEPLOY_DIR)/plugins/baseline/baseline
 	@sudo chmod 755 $(DEPLOY_DIR)/plugins/detector/detector
-	@sudo chmod 755 $(DEPLOY_DIR)/plugins/driver/driver
+	@sudo chmod 755 $(DEPLOY_DIR)/plugins/ebpf_base_detector/ebpf_base_detector
 	@sudo cp agent.yaml $(DEPLOY_DIR)/
 	@sudo cp agent-standalone.yaml $(DEPLOY_DIR)/
 	@echo "Deploy complete!"
@@ -166,29 +166,29 @@ deploy-plugins: build-plugins
 	@sudo mkdir -p $(DEPLOY_DIR)/plugins/collector
 	@sudo mkdir -p $(DEPLOY_DIR)/plugins/baseline
 	@sudo mkdir -p $(DEPLOY_DIR)/plugins/detector
-	@sudo mkdir -p $(DEPLOY_DIR)/plugins/driver/config
+	@sudo mkdir -p $(DEPLOY_DIR)/plugins/ebpf_base_detector/config
 	@sudo cp $(PLUGINS_DIR)/collector $(DEPLOY_DIR)/plugins/collector/
 	@sudo cp $(PLUGINS_DIR)/baseline $(DEPLOY_DIR)/plugins/baseline/
 	@sudo cp $(PLUGINS_DIR)/detector $(DEPLOY_DIR)/plugins/detector/
-	@sudo cp $(PLUGINS_DIR)/driver $(DEPLOY_DIR)/plugins/driver/
-	@sudo cp $(DRIVER_SRC)/config/dangerous_commands.yaml $(DEPLOY_DIR)/plugins/driver/config/
-	@sudo cp $(DRIVER_SRC)/config/privilege_escalation_whitelist.yaml $(DEPLOY_DIR)/plugins/driver/config/
+	@sudo cp $(PLUGINS_DIR)/ebpf_base_detector $(DEPLOY_DIR)/plugins/ebpf_base_detector/
+	@sudo cp $(DRIVER_SRC)/config/dangerous_commands.yaml $(DEPLOY_DIR)/plugins/ebpf_base_detector/config/
+	@sudo cp $(DRIVER_SRC)/config/privilege_escalation_whitelist.yaml $(DEPLOY_DIR)/plugins/ebpf_base_detector/config/
 	@sudo chmod 755 $(DEPLOY_DIR)/plugins/collector/collector
 	@sudo chmod 755 $(DEPLOY_DIR)/plugins/baseline/baseline
 	@sudo chmod 755 $(DEPLOY_DIR)/plugins/detector/detector
-	@sudo chmod 755 $(DEPLOY_DIR)/plugins/driver/driver
+	@sudo chmod 755 $(DEPLOY_DIR)/plugins/ebpf_base_detector/ebpf_base_detector
 	@echo "Deploy complete: $(DEPLOY_DIR)/plugins/"
 
-# 仅部署 driver 插件
+# 仅部署 ebpf_base_detector 插件
 .PHONY: deploy-driver
 deploy-driver: build-driver
-	@echo "Deploying driver plugin only to $(DEPLOY_DIR)..."
-	@sudo mkdir -p $(DEPLOY_DIR)/plugins/driver/config
-	@sudo cp $(PLUGINS_DIR)/driver $(DEPLOY_DIR)/plugins/driver/
-	@sudo cp $(DRIVER_SRC)/config/dangerous_commands.yaml $(DEPLOY_DIR)/plugins/driver/config/
-	@sudo cp $(DRIVER_SRC)/config/privilege_escalation_whitelist.yaml $(DEPLOY_DIR)/plugins/driver/config/
-	@sudo chmod 755 $(DEPLOY_DIR)/plugins/driver/driver
-	@echo "Deploy complete: $(DEPLOY_DIR)/plugins/driver/"
+	@echo "Deploying ebpf_base_detector plugin only to $(DEPLOY_DIR)..."
+	@sudo mkdir -p $(DEPLOY_DIR)/plugins/ebpf_base_detector/config
+	@sudo cp $(PLUGINS_DIR)/ebpf_base_detector $(DEPLOY_DIR)/plugins/ebpf_base_detector/
+	@sudo cp $(DRIVER_SRC)/config/dangerous_commands.yaml $(DEPLOY_DIR)/plugins/ebpf_base_detector/config/
+	@sudo cp $(DRIVER_SRC)/config/privilege_escalation_whitelist.yaml $(DEPLOY_DIR)/plugins/ebpf_base_detector/config/
+	@sudo chmod 755 $(DEPLOY_DIR)/plugins/ebpf_base_detector/ebpf_base_detector
+	@echo "Deploy complete: $(DEPLOY_DIR)/plugins/ebpf_base_detector/"
 
 # 代码格式化
 .PHONY: fmt
@@ -242,7 +242,7 @@ help:
 	@echo "  make build              - Build agent + all plugins"
 	@echo "  make build-agent        - Build agent only"
 	@echo "  make build-plugins      - Build all plugins"
-	@echo "  make build-driver       - Build driver plugin only"
+	@echo "  make build-driver       - Build ebpf_base_detector plugin only"
 	@echo "  make generate-ebpf      - Generate eBPF code (requires clang, libbpf)"
 	@echo "  make clean              - Clean build artifacts"
 	@echo ""
@@ -250,7 +250,7 @@ help:
 	@echo "  make deploy             - Deploy agent + plugins + config"
 	@echo "  make deploy-agent       - Deploy agent only"
 	@echo "  make deploy-plugins     - Deploy plugins only"
-	@echo "  make deploy-driver      - Deploy driver plugin only"
+	@echo "  make deploy-driver      - Deploy ebpf_base_detector plugin only"
 	@echo ""
 	@echo "Run & Test:"
 	@echo "  make run                - Build and run agent"

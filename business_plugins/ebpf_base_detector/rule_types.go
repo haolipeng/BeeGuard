@@ -1,4 +1,4 @@
-package detector
+package main
 
 // DetectionResult 检测结果
 type DetectionResult struct {

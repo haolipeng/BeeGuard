@@ -12,4 +12,4 @@ standalone:
   output: "stderr"                                    # "stderr" 输出到控制台, 或文件路径（如 "/tmp/results.json"）
   flush_interval: 1                                  # 刷新间隔（秒）
   plugins:
-    - driver                                         # 仅加载 driver 插件
+    - ebpf_base_detector                             # 仅加载 ebpf_base_detector 插件
