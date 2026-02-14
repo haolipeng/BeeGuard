@@ -51,4 +51,5 @@ const (
 // 检测类型常量
 const (
 	DetectionTypeDangerousCommand = "dangerous_command" // 高危命令
+	DetectionTypeSensitiveFile    = "sensitive_file"    // 敏感文件
 )

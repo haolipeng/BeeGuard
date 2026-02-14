@@ -1,0 +1,94 @@
+version: "1.0"
+description: "敏感文件操作检测规则"
+
+rules:
+  - id: "SF001"
+    name: "Crontab 文件修改"
+    description: "检测对计划任务配置文件的创建或重命名操作"
+    severity: "high"
+    enabled: true
+    match:
+      type: "regex"
+      patterns:
+        - "^/etc/cron"
+        - "^/var/spool/cron"
+
+  - id: "SF002"
+    name: "SSH 配置文件修改"
+    description: "检测对 SSH 配置和密钥文件的创建操作"
+    severity: "high"
+    enabled: true
+    match:
+      type: "regex"
+      patterns:
+        - "/\\.ssh/authorized_keys"
+        - "/\\.ssh/config"
+        - "^/etc/ssh/sshd_config"
+
+  - id: "SF003"
+    name: "动态链接器劫持"
+    description: "检测对 ld.so.preload 等动态链接配置的修改"
+    severity: "critical"
+    enabled: true
+    match:
+      type: "regex"
+      patterns:
+        - "^/etc/ld\\.so\\.preload$"
+        - "^/etc/ld\\.so\\.conf"
+
+  - id: "SF004"
+    name: "系统服务文件��建"
+    description: "检测在系统服务目录下创建新的 service 文件"
+    severity: "high"
+    enabled: true
+    match:
+      type: "regex"
+      patterns:
+        - "^/etc/systemd/system/.*\\.service$"
+        - "^/usr/lib/systemd/system/.*\\.service$"
+        - "^/etc/init\\.d/"
+
+  - id: "SF005"
+    name: "内核模块文件创建"
+    description: "检测内核模块文件的创建"
+    severity: "critical"
+    enabled: true
+    match:
+      type: "regex"
+      patterns:
+        - "\\.ko$"
+        - "^/lib/modules/"
+
+  - id: "SF006"
+    name: "Web Shell 文件创建"
+    description: "检测 Web 目录下可疑脚本文件的创建"
+    severity: "critical"
+    enabled: true
+    match:
+      type: "regex"
+      patterns:
+        - "^/var/www/.*\\.(php|jsp|asp|aspx|cgi)$"
+        - "^/usr/share/nginx/.*\\.(php|jsp)$"
+
+  - id: "SF007"
+    name: "PAM 模块文件创建"
+    description: "检测 PAM 认证模块文件的创建或替换"
+    severity: "critical"
+    enabled: true
+    match:
+      type: "regex"
+      patterns:
+        - "^/etc/pam\\.d/"
+        - "^/lib.*/security/pam_"
+
+  - id: "SF008"
+    name: "passwd/shadow 文件修改"
+    description: "检测用户账户文件的创建或重命名（可能是替换攻击）"
+    severity: "critical"
+    enabled: true
+    match:
+      type: "regex"
+      patterns:
+        - "^/etc/passwd"
+        - "^/etc/shadow"
+        - "^/etc/sudoers"

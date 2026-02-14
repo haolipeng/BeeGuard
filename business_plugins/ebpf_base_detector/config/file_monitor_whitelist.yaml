@@ -1,0 +1,12 @@
+version: "1.0"
+description: "文件监控白名单"
+enabled: true
+log_filtered_events: false
+trusted_executables:
+  - "/usr/bin/apt"
+  - "/usr/bin/dpkg"
+  - "/usr/bin/yum"
+  - "/usr/bin/rpm"
+  - "/usr/lib/systemd/systemd"
+  - "/usr/bin/pip"
+  - "/usr/bin/pip3"

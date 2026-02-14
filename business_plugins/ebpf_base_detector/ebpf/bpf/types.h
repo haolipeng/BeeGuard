@@ -9,6 +9,14 @@
 #define EVENT_TYPE_BIND          5
 #define EVENT_TYPE_ACCEPT        6
 #define EVENT_TYPE_DNS           7
+#define EVENT_TYPE_FILE          8   // 文件操作事件
+
+// 文件操作 action 常量
+#define FILE_ACTION_CREATE  1   // 文件创建
+#define FILE_ACTION_RENAME  2   // 文件重命名
+
+// 文件系统 ID 常量
+#define FS_ID_LEN  32   // 文件系统 ID 最大长度（与内核 s_id 一致）
 
 // 路径相关常量
 #define PATH_MAX_ENTS   16    // dentry 链最大遍历深度
@@ -163,6 +171,27 @@ struct exe_item {
 	__u32 sid;      // 预留字段
 	__u64 hash;     // Murmur OAAT64 哈希
 	char  name[CMDLINE_LEN];  // 可执行文件路径
+} __attribute__((packed));
+
+// 文件操作事件结构体（文件创建/重命名监控）
+struct file_event {
+    __u8  event_type;       // EVENT_TYPE_FILE = 8
+    __u8  action;           // FILE_ACTION_CREATE=1, FILE_ACTION_RENAME=2
+    __u8  padding1[2];
+    __u32 pid;
+    __u32 tgid;
+    __u32 ppid;
+    __u32 uid;
+    __u32 socket_pid;       // 持有 socket 的进程 PID（仅创建事件）
+    __u32 remote_ip;        // socket 远程 IP（网络字节序）
+    __u16 remote_port;      // socket 远程端口（网络字节序）
+    __u16 local_port;       // socket 本地端口
+    __u32 local_ip;         // socket 本地 IP（网络字节序）
+    char  comm[16];
+    char  exe_path[256];    // 操作进程的可执行文件路径
+    char  new_path[PATH_BUF_SIZE]; // 创建：文件路径；重命名：新路径
+    char  old_path[PATH_BUF_SIZE]; // 仅重命名：旧路径（创建时全零）
+    char  s_id[FS_ID_LEN];  // 文件系统 ID��ext4/xfs/tmpfs 等）
 } __attribute__((packed));
 
 #endif // __TYPES_H

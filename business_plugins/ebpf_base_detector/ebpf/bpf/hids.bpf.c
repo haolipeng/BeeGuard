@@ -99,6 +99,30 @@ struct {
     __uint(max_entries, 1);
 } percpu_dns_data SEC(".maps");
 
+// Per-CPU buffer for file_event（避免栈溢出）
+struct {
+    __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
+    __type(key, u32);
+    __type(value, struct file_event);
+    __uint(max_entries, 1);
+} percpu_file_buf SEC(".maps");
+
+// 文件监控独立白名单
+struct {
+    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __uint(max_entries, 2048);
+    __type(key, __u64);
+    __type(value, struct exe_item);
+} file_trusted_exes SEC(".maps");
+
+// 文件路径构建用的第二个 per-CPU path_buf（重命名事件需要两次路径构建）
+struct {
+    __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
+    __type(key, u32);
+    __type(value, struct path_buf);
+    __uint(max_entries, 1);
+} percpu_file_path_buf SEC(".maps");
+
 // ========== 路径构建函数 ==========
 // 向路径缓冲区追加路径分量 (缓冲区末尾反向写入，正向计数长度)
 // data: 路径缓冲区, len: 已累积长度(含末尾\0), entry: 路径分量, num: 分量字节数
@@ -184,7 +208,13 @@ static __noinline char *build_d_path(char *data, char *swap,
 }
 
 // 读取可执行文件完整路径 (支持跨挂载点)
-// 返回不含 \0 的路径长度，0 表示失败
+// 功能: 从 task_struct 中获取当前进程对应的可执行文件在磁盘上的完整路径，如 /usr/bin/nginx
+// 返回: 不含 \0 的路径长度，0 表示失败
+//
+// 原理简述:
+//   Linux 中每个打开的文件由 struct file 表示，file->f_path 包含 (dentry, vfsmount)。
+//   dentry 是目录项，形成树状结构；从文件的 dentry 沿 d_parent 向上遍历到根，
+//   可拼接出路径。遇到 bind mount、overlay 等需跨挂载点，build_d_path 负责处理。
 static __always_inline int read_full_exe_path(struct task_struct *task, char *out_buf, int out_size)
 {
     u32 key = 0;
@@ -196,23 +226,30 @@ static __always_inline int read_full_exe_path(struct task_struct *task, char *ou
 
     __builtin_memset(out_buf, 0, out_size);
 
+    // 从 Per-CPU Map 获取路径构建缓冲区（eBPF 栈只有 512 字节，大缓冲区必须放 Map 里）
     pbuf = bpf_map_lookup_elem(&percpu_path_buf, &key);
     if (!pbuf)
         return 0;
 
+    // task->mm->exe_file 指向该进程的可执行文件对应的 struct file
+    // f_path.mnt: 挂载点，f_path.dentry: 文件对应的目录项
     exe_mnt = BPF_CORE_READ(task, mm, exe_file, f_path.mnt);
     exe_dentry = BPF_CORE_READ(task, mm, exe_file, f_path.dentry);
     if (!exe_mnt || !exe_dentry)
         return 0;
 
+    // build_d_path: 从 dentry 向上遍历到根，拼接出完整路径，支持跨挂载点
+    // 路径在 pbuf->data 中反向写入（先写文件名，再写父目录），path_start 指向实际起始位置
     path_start = build_d_path(pbuf->data, pbuf->swap, exe_dentry, exe_mnt, &path_len);
 
+    // path_len 含末尾 \0，<=1 表示空路径，>out_size 则放不下
     if (path_len <= 1 || path_len > (__u32)out_size)
         return 0;
 
+    // 将内核缓冲区中的路径拷贝到输出缓冲区
     bpf_probe_read_kernel(out_buf, path_len & PATH_BUF_MASK, path_start);
 
-    return (int)(path_len - 1);
+    return (int)(path_len - 1);  // 返回不含 \0 的字符数
 }
 
 // ========== 辅助函数 ==========
@@ -277,6 +314,53 @@ static __noinline int exe_is_trusted(const char *exe_path, int path_len)
     ei = bpf_map_lookup_elem(&trusted_exes, &hash);
 
     return (ei && ei->len == path_len);
+}
+
+// ========== 文件监控辅助函数 ==========
+
+// 检查可执行文件是否在文件监控白名单中（使用独立的 file_trusted_exes map）
+static __noinline int file_exe_is_trusted(const char *exe_path, int path_len)
+{
+    __u64 hash = hash_murmur_OAAT64(exe_path, path_len);
+    struct exe_item *ei;
+
+    ei = bpf_map_lookup_elem(&file_trusted_exes, &hash);
+
+    return (ei && ei->len == path_len);
+}
+
+// query_s_id_by_dentry: 从 dentry 获取文件系统 ID（如 ext4/xfs/tmpfs）
+// 通过 dentry->d_sb->s_id 读取超级块的文���系统标识符
+static __noinline int query_s_id_by_dentry(char *s_id, struct dentry *de)
+{
+    char *id = (char *)BPF_CORE_READ(de, d_sb, s_id);
+    if (id)
+        return bpf_probe_read_kernel_str(s_id, FS_ID_LEN, id);
+    s_id[0] = 0;
+    return 0;
+}
+
+// dentry_path: 纯 dentry 链遍历构建路径（不依赖 vfsmount）
+// 适用于 security_inode_create/rename 等只有 dentry 参数的 LSM hook
+// 返回路径在 data 中的起始指针，sz 返回总长度（含 \0）
+static __noinline char *dentry_path(char *data, char *swap,
+                                     struct dentry *de, __u32 *sz)
+{
+    __u32 len = 1;
+    data[PATH_BUF_MASK] = 0;
+    swap[3] = '/';
+
+    for (int i = 0; i < PATH_MAX_ENTS; i++) {
+        struct dentry *parent = BPF_CORE_READ(de, d_parent);
+        if (!parent || parent == de)
+            break;
+        if (prepend_entry(data, &len, swap, de))
+            break;
+        de = parent;
+    }
+
+    *sz = len;
+    return &data[(PATH_BUF_SIZE - len) & PATH_BUF_MASK];
 }
 
 // ========== 反弹 Shell 增强采集辅助函数 ==========
@@ -402,6 +486,37 @@ static __noinline struct sock *find_sockfd(struct task_struct *task)
     return NULL;
 }
 
+// process_socket: 向上查找当前进程及父进程链的 socket
+// 扫描当前进程 → 父进程 → 祖父进程的 FD 表，查找已连接的 IPv4 socket
+// 返回 sock 指针，out_pid 记录持有 socket 的进程 PID
+static __noinline struct sock *process_socket(struct task_struct *task, __u32 *out_pid)
+{
+    struct sock *sk;
+    struct task_struct *parent;
+
+    sk = find_sockfd(task);
+    if (sk) {
+        *out_pid = BPF_CORE_READ(task, tgid);
+        return sk;
+    }
+    parent = BPF_CORE_READ(task, real_parent);
+    if (!parent || parent == task) return NULL;
+    sk = find_sockfd(parent);
+    if (sk) {
+        *out_pid = BPF_CORE_READ(parent, tgid);
+        return sk;
+    }
+    task = parent;
+    parent = BPF_CORE_READ(task, real_parent);
+    if (!parent || parent == task) return NULL;
+    sk = find_sockfd(parent);
+    if (sk) {
+        *out_pid = BPF_CORE_READ(parent, tgid);
+        return sk;
+    }
+    return NULL;
+}
+
 // ========== eBPF 程序入口 ==========
 
 // handle_execve_event: 采集并输出 execve 事件（包含 socket 信息 enrich）
@@ -453,6 +568,46 @@ static __noinline int handle_execve_event(
     read_fd_path(task, 0, evt->stdin_path, sizeof(evt->stdin_path));
     read_fd_path(task, 1, evt->stdout_path, sizeof(evt->stdout_path));
 
+    {
+        struct file **_fda = BPF_CORE_READ(task, files, fdt, fd);
+        if (_fda) {
+            struct file *_fp;
+            unsigned short _mode;
+
+            bpf_probe_read_kernel(&_fp, sizeof(_fp), &_fda[0]);
+            if (_fp) {
+                _mode = BPF_CORE_READ(_fp, f_inode, i_mode);
+                if ((_mode & 0170000) == 0140000) {
+                    struct socket *_sock = (struct socket *)BPF_CORE_READ(_fp, private_data);
+                    if (_sock) {
+                        struct sock *_sk = BPF_CORE_READ(_sock, sk);
+                        if (_sk) {
+                            unsigned short _family = BPF_CORE_READ(_sk, __sk_common.skc_family);
+                            if (_family == 2 || _family == 10)
+                                evt->fd_type |= 1;
+                        }
+                    }
+                }
+            }
+
+            bpf_probe_read_kernel(&_fp, sizeof(_fp), &_fda[1]);
+            if (_fp) {
+                _mode = BPF_CORE_READ(_fp, f_inode, i_mode);
+                if ((_mode & 0170000) == 0140000) {
+                    struct socket *_sock = (struct socket *)BPF_CORE_READ(_fp, private_data);
+                    if (_sock) {
+                        struct sock *_sk = BPF_CORE_READ(_sock, sk);
+                        if (_sk) {
+                            unsigned short _family = BPF_CORE_READ(_sk, __sk_common.skc_family);
+                            if (_family == 2 || _family == 10)
+                                evt->fd_type |= 2;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     __builtin_memset(evt->tty_name, 0, sizeof(evt->tty_name));
     {
         struct signal_struct *_sig = BPF_CORE_READ(task, signal);
@@ -475,7 +630,6 @@ static __noinline int handle_execve_event(
         evt->local_ip = BPF_CORE_READ(sk, __sk_common.skc_rcv_saddr);
         evt->local_port = BPF_CORE_READ(sk, __sk_common.skc_num);
     }
-
 
     bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU,
                           evt, sizeof(*evt));
@@ -664,49 +818,55 @@ static __always_inline void query_ipv4(struct sock *sk,
     bpf_get_current_comm(&(evt)->comm, 16); \
 } while (0)
 
-// DNS 域名状态机解析
-// 逐字节处理 DNS 查询域名，将 3www6google3com0 转换为 .www.google.com
-// 返回 1=继续, 0=结束
-static __noinline int process_domain_name(char *data, char *name, int *flag, int i)
-{
-    char rc = *(data + 12 + i);
-    int v = *flag;
-    if (0 == rc) return 0;
-    if (v == 0) {
-        v = rc;
-        name[i - 1] = 46;
-    } else {
-        name[i - 1] = rc;
-        v = v - 1;
-    }
-    *flag = v;
-    return 1;
-}
-
 // DNS 解析主循环
 // 从 DNS 原始数据中提取域名和查询类型
+// 将长度前缀编码的域名 (如 3www6google3com0) 转换为点分格式 (www.google.com)
 // 返回: 0=成功, -1=失败
 static __noinline int query_dns_record(char *data, int data_len, char *domain, int domain_size, __u16 *query_type)
 {
     if (data_len < 12)
         return -1;
 
-    int flag = 0;
-    int i;
+    int read_pos = 12;
+    int write_pos = 0;
+    int remain = 0;
+    int first_label = 1;
 
-    for (i = 1; i < 64; i++) {
-        if (12 + i >= data_len || i >= domain_size)
+    #pragma unroll
+    for (int i = 0; i < 64; i++) {
+        if (read_pos >= data_len || write_pos >= domain_size)
             break;
-        if (!process_domain_name(data, domain, &flag, i))
-            break;
+
+        __u8 byte = *(__u8*)(data + read_pos);
+
+        if (remain == 0) {
+            if (byte == 0) {
+                break;
+            }
+            if (byte > 63) {
+                return -1;
+            }
+
+            if (!first_label && write_pos < domain_size) {
+                domain[write_pos++] = '.';
+            }
+            first_label = 0;
+            remain = byte;
+            read_pos++;
+        } else {
+            if (write_pos < domain_size) {
+                domain[write_pos++] = byte;
+            }
+            read_pos++;
+            remain--;
+        }
     }
 
-    if (i > 0 && i < domain_size)
-        domain[i - 1] = 0;
+    if (write_pos < domain_size)
+        domain[write_pos] = 0;
 
-    int qtype_offset = 12 + i + 1;
-    if (qtype_offset + 2 <= data_len && qtype_offset + 2 <= DNS_RECORD_MAX) {
-        *query_type = ((__u16)(__u8)data[qtype_offset] << 8) | (__u8)data[qtype_offset + 1];
+    if (read_pos + 2 <= data_len && read_pos + 2 <= DNS_RECORD_MAX) {
+        *query_type = ((__u16)(__u8)data[read_pos] << 8) | (__u8)data[read_pos + 1];
     }
 
     return 0;
@@ -941,6 +1101,177 @@ int tp_sys_exit(struct bpf_raw_tracepoint_args *ctx)
     }
 
     return 0;
+}
+
+// ========== 文件监控 kprobe ==========
+
+// handle_inode_create: 处理文件创建事件
+// 独立 __noinline subprogram，有独立 1M 指令预算
+static __noinline int handle_inode_create(struct pt_regs *ctx)
+{
+    u32 key = 0;
+    struct task_struct *task;
+    struct task_struct *parent;
+
+    struct file_event *evt = bpf_map_lookup_elem(&percpu_file_buf, &key);
+    if (!evt)
+        return 0;
+
+    evt->event_type = EVENT_TYPE_FILE;
+    evt->action = FILE_ACTION_CREATE;
+    evt->padding1[0] = 0;
+    evt->padding1[1] = 0;
+    evt->pid = 0;
+    evt->tgid = 0;
+    evt->ppid = 0;
+    evt->uid = 0;
+    evt->socket_pid = 0;
+    evt->remote_ip = 0;
+    evt->remote_port = 0;
+    evt->local_port = 0;
+    evt->local_ip = 0;
+    evt->new_path[0] = 0;
+    evt->old_path[0] = 0;
+    evt->s_id[0] = 0;
+
+    task = (struct task_struct *)bpf_get_current_task();
+
+    int path_len = read_full_exe_path(task, evt->exe_path, sizeof(evt->exe_path));
+    if (path_len > 0 && file_exe_is_trusted(evt->exe_path, path_len))
+        return 0;
+
+    u64 id = bpf_get_current_pid_tgid();
+    evt->pid = id;
+    evt->tgid = id >> 32;
+    evt->uid = bpf_get_current_uid_gid();
+    parent = BPF_CORE_READ(task, real_parent);
+    if (parent)
+        evt->ppid = BPF_CORE_READ(parent, tgid);
+    bpf_get_current_comm(&evt->comm, sizeof(evt->comm));
+
+    struct dentry *de = (struct dentry *)PT_REGS_PARM2_CORE(ctx);
+    if (!de)
+        return 0;
+
+    query_s_id_by_dentry(evt->s_id, de);
+
+    struct path_buf *pbuf = bpf_map_lookup_elem(&percpu_file_path_buf, &key);
+    if (!pbuf)
+        return 0;
+
+    __u32 fpath_len = 0;
+    char *fpath_start = dentry_path(pbuf->data, pbuf->swap, de, &fpath_len);
+
+    if (fpath_len > 1 && fpath_len <= PATH_BUF_SIZE)
+        bpf_probe_read_kernel(evt->new_path, fpath_len & PATH_BUF_MASK, fpath_start);
+
+    __u32 sock_pid = 0;
+    struct sock *sk = process_socket(task, &sock_pid);
+    if (sk) {
+        evt->socket_pid = sock_pid;
+        evt->remote_ip = BPF_CORE_READ(sk, __sk_common.skc_daddr);
+        evt->remote_port = BPF_CORE_READ(sk, __sk_common.skc_dport);
+        evt->local_ip = BPF_CORE_READ(sk, __sk_common.skc_rcv_saddr);
+        evt->local_port = BPF_CORE_READ(sk, __sk_common.skc_num);
+    }
+
+    bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, evt, sizeof(*evt));
+
+    return 0;
+}
+
+// 监听文件创建事件
+// Hook点: security_inode_create(struct inode *dir, struct dentry *dentry, umode_t mode)
+SEC("kprobe/security_inode_create")
+int kp_inode_create(struct pt_regs *ctx)
+{
+    return handle_inode_create(ctx);
+}
+
+// handle_inode_rename: 处理文件重命名事件
+// 独立 __noinline subprogram，有独立 1M 指令预算
+static __noinline int handle_inode_rename(struct pt_regs *ctx)
+{
+    u32 key = 0;
+    struct task_struct *task;
+    struct task_struct *parent;
+
+    struct file_event *evt = bpf_map_lookup_elem(&percpu_file_buf, &key);
+    if (!evt)
+        return 0;
+
+    evt->event_type = EVENT_TYPE_FILE;
+    evt->action = FILE_ACTION_RENAME;
+    evt->padding1[0] = 0;
+    evt->padding1[1] = 0;
+    evt->pid = 0;
+    evt->tgid = 0;
+    evt->ppid = 0;
+    evt->uid = 0;
+    evt->socket_pid = 0;
+    evt->remote_ip = 0;
+    evt->remote_port = 0;
+    evt->local_port = 0;
+    evt->local_ip = 0;
+    evt->new_path[0] = 0;
+    evt->old_path[0] = 0;
+    evt->s_id[0] = 0;
+
+    task = (struct task_struct *)bpf_get_current_task();
+
+    int path_len = read_full_exe_path(task, evt->exe_path, sizeof(evt->exe_path));
+    if (path_len > 0 && file_exe_is_trusted(evt->exe_path, path_len))
+        return 0;
+
+    u64 id = bpf_get_current_pid_tgid();
+    evt->pid = id;
+    evt->tgid = id >> 32;
+    evt->uid = bpf_get_current_uid_gid();
+    parent = BPF_CORE_READ(task, real_parent);
+    if (parent)
+        evt->ppid = BPF_CORE_READ(parent, tgid);
+    bpf_get_current_comm(&evt->comm, sizeof(evt->comm));
+
+    struct dentry *old_de = (struct dentry *)PT_REGS_PARM2_CORE(ctx);
+    struct dentry *new_de = (struct dentry *)PT_REGS_PARM4_CORE(ctx);
+
+    if (!old_de || !new_de)
+        return 0;
+
+    query_s_id_by_dentry(evt->s_id, new_de);
+
+    struct path_buf *pbuf1 = bpf_map_lookup_elem(&percpu_file_path_buf, &key);
+    if (!pbuf1)
+        return 0;
+
+    __u32 old_path_len = 0;
+    char *old_path_start = dentry_path(pbuf1->data, pbuf1->swap, old_de, &old_path_len);
+
+    if (old_path_len > 1 && old_path_len <= PATH_BUF_SIZE)
+        bpf_probe_read_kernel(evt->old_path, old_path_len & PATH_BUF_MASK, old_path_start);
+
+    struct path_buf *pbuf2 = bpf_map_lookup_elem(&percpu_path_buf, &key);
+    if (!pbuf2)
+        return 0;
+
+    __u32 new_path_len = 0;
+    char *new_path_start = dentry_path(pbuf2->data, pbuf2->swap, new_de, &new_path_len);
+
+    if (new_path_len > 1 && new_path_len <= PATH_BUF_SIZE)
+        bpf_probe_read_kernel(evt->new_path, new_path_len & PATH_BUF_MASK, new_path_start);
+
+    bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, evt, sizeof(*evt));
+
+    return 0;
+}
+
+// 监听文件重命名事件
+// Hook点: security_inode_rename(struct inode *old_dir, struct dentry *old_dentry,
+//                               struct inode *new_dir, struct dentry *new_dentry, unsigned int flags)
+SEC("kprobe/security_inode_rename")
+int kp_inode_rename(struct pt_regs *ctx)
+{
+    return handle_inode_rename(ctx);
 }
 
 char LICENSE[] SEC("license") = "GPL";

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 package ebpf
 
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc clang -cflags "-O2 -g -Wall -Werror -D__TARGET_ARCH_x86" -target amd64 -type execve_event -type commit_creds_event -type connect_event -type bind_event -type accept_event -type dns_event -type stdio_path_buf bpf ./bpf/hids.bpf.c -- -I./bpf
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc clang -cflags "-O2 -g -Wall -Werror -D__TARGET_ARCH_x86" -target amd64 -type execve_event -type commit_creds_event -type connect_event -type bind_event -type accept_event -type dns_event -type stdio_path_buf -type file_event bpf ./bpf/hids.bpf.c -- -I./bpf
 
 import (
 	"errors"
@@ -71,7 +71,23 @@ func NewLoader() (*Loader, error) {
 	}
 	l.links = append(l.links, sysExitLink)
 
-	// 7. 创建perf reader（32页/CPU = 128KB，扩展后的 execve_event ~1.4KB）
+	// 8. 附加kprobe到security_inode_create（文件创建监控）
+	fileCreateLink, err := link.Kprobe("security_inode_create", objs.KpInodeCreate, nil)
+	if err != nil {
+		l.Close()
+		return nil, fmt.Errorf("failed to attach kprobe to security_inode_create: %w", err)
+	}
+	l.links = append(l.links, fileCreateLink)
+
+	// 9. 附加kprobe到security_inode_rename（文件重命名监控）
+	fileRenameLink, err := link.Kprobe("security_inode_rename", objs.KpInodeRename, nil)
+	if err != nil {
+		l.Close()
+		return nil, fmt.Errorf("failed to attach kprobe to security_inode_rename: %w", err)
+	}
+	l.links = append(l.links, fileRenameLink)
+
+	// 10. 创建perf reader（32页/CPU = 128KB，扩展后的 execve_event ~1.4KB）
 	l.perfReader, err = perf.NewReader(objs.Events, 32*4096)
 	if err != nil {
 		l.Close()
@@ -122,4 +138,10 @@ func (l *Loader) Close() error {
 // 供用户态程序填充可信任可执行文件列表
 func (l *Loader) GetTrustedExesMap() *ebpf.Map {
 	return l.objs.TrustedExes
+}
+
+// GetFileTrustedExesMap 返回 file_trusted_exes BPF map 句柄
+// 供用户态程序填充文件监控白名单
+func (l *Loader) GetFileTrustedExesMap() *ebpf.Map {
+	return l.objs.FileTrustedExes
 }

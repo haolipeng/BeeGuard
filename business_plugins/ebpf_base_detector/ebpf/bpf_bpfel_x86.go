@@ -125,6 +125,26 @@ type bpfExecveEvent struct {
 	LocalIp    uint32
 }
 
+type bpfFileEvent struct {
+	EventType  uint8
+	Action     uint8
+	Padding1   [2]uint8
+	Pid        uint32
+	Tgid       uint32
+	Ppid       uint32
+	Uid        uint32
+	SocketPid  uint32
+	RemoteIp   uint32
+	RemotePort uint16
+	LocalPort  uint16
+	LocalIp    uint32
+	Comm       [16]int8
+	ExePath    [256]int8
+	NewPath    [512]int8
+	OldPath    [512]int8
+	S_id       [32]int8
+}
+
 type bpfPathBuf struct {
 	Data [512]int8
 	Swap [260]int8
@@ -177,6 +197,8 @@ type bpfSpecs struct {
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfProgramSpecs struct {
 	KpCommitCreds *ebpf.ProgramSpec `ebpf:"kp_commit_creds"`
+	KpInodeCreate *ebpf.ProgramSpec `ebpf:"kp_inode_create"`
+	KpInodeRename *ebpf.ProgramSpec `ebpf:"kp_inode_rename"`
 	TpProcExec    *ebpf.ProgramSpec `ebpf:"tp_proc_exec"`
 	TpSysExit     *ebpf.ProgramSpec `ebpf:"tp_sys_exit"`
 }
@@ -186,6 +208,7 @@ type bpfProgramSpecs struct {
 // It can be passed ebpf.CollectionSpec.Assign.
 type bpfMapSpecs struct {
 	Events             *ebpf.MapSpec `ebpf:"events"`
+	FileTrustedExes    *ebpf.MapSpec `ebpf:"file_trusted_exes"`
 	PercpuAcceptBuf    *ebpf.MapSpec `ebpf:"percpu_accept_buf"`
 	PercpuBindBuf      *ebpf.MapSpec `ebpf:"percpu_bind_buf"`
 	PercpuBuf          *ebpf.MapSpec `ebpf:"percpu_buf"`
@@ -193,6 +216,8 @@ type bpfMapSpecs struct {
 	PercpuCredsBuf     *ebpf.MapSpec `ebpf:"percpu_creds_buf"`
 	PercpuDnsBuf       *ebpf.MapSpec `ebpf:"percpu_dns_buf"`
 	PercpuDnsData      *ebpf.MapSpec `ebpf:"percpu_dns_data"`
+	PercpuFileBuf      *ebpf.MapSpec `ebpf:"percpu_file_buf"`
+	PercpuFilePathBuf  *ebpf.MapSpec `ebpf:"percpu_file_path_buf"`
 	PercpuPathBuf      *ebpf.MapSpec `ebpf:"percpu_path_buf"`
 	PercpuStdioPathBuf *ebpf.MapSpec `ebpf:"percpu_stdio_path_buf"`
 	TrustedExes        *ebpf.MapSpec `ebpf:"trusted_exes"`
@@ -218,6 +243,7 @@ func (o *bpfObjects) Close() error {
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfMaps struct {
 	Events             *ebpf.Map `ebpf:"events"`
+	FileTrustedExes    *ebpf.Map `ebpf:"file_trusted_exes"`
 	PercpuAcceptBuf    *ebpf.Map `ebpf:"percpu_accept_buf"`
 	PercpuBindBuf      *ebpf.Map `ebpf:"percpu_bind_buf"`
 	PercpuBuf          *ebpf.Map `ebpf:"percpu_buf"`
@@ -225,6 +251,8 @@ type bpfMaps struct {
 	PercpuCredsBuf     *ebpf.Map `ebpf:"percpu_creds_buf"`
 	PercpuDnsBuf       *ebpf.Map `ebpf:"percpu_dns_buf"`
 	PercpuDnsData      *ebpf.Map `ebpf:"percpu_dns_data"`
+	PercpuFileBuf      *ebpf.Map `ebpf:"percpu_file_buf"`
+	PercpuFilePathBuf  *ebpf.Map `ebpf:"percpu_file_path_buf"`
 	PercpuPathBuf      *ebpf.Map `ebpf:"percpu_path_buf"`
 	PercpuStdioPathBuf *ebpf.Map `ebpf:"percpu_stdio_path_buf"`
 	TrustedExes        *ebpf.Map `ebpf:"trusted_exes"`
@@ -233,6 +261,7 @@ type bpfMaps struct {
 func (m *bpfMaps) Close() error {
 	return _BpfClose(
 		m.Events,
+		m.FileTrustedExes,
 		m.PercpuAcceptBuf,
 		m.PercpuBindBuf,
 		m.PercpuBuf,
@@ -240,6 +269,8 @@ func (m *bpfMaps) Close() error {
 		m.PercpuCredsBuf,
 		m.PercpuDnsBuf,
 		m.PercpuDnsData,
+		m.PercpuFileBuf,
+		m.PercpuFilePathBuf,
 		m.PercpuPathBuf,
 		m.PercpuStdioPathBuf,
 		m.TrustedExes,
@@ -251,6 +282,8 @@ func (m *bpfMaps) Close() error {
 // It can be passed to loadBpfObjects or ebpf.CollectionSpec.LoadAndAssign.
 type bpfPrograms struct {
 	KpCommitCreds *ebpf.Program `ebpf:"kp_commit_creds"`
+	KpInodeCreate *ebpf.Program `ebpf:"kp_inode_create"`
+	KpInodeRename *ebpf.Program `ebpf:"kp_inode_rename"`
 	TpProcExec    *ebpf.Program `ebpf:"tp_proc_exec"`
 	TpSysExit     *ebpf.Program `ebpf:"tp_sys_exit"`
 }
@@ -258,6 +291,8 @@ type bpfPrograms struct {
 func (p *bpfPrograms) Close() error {
 	return _BpfClose(
 		p.KpCommitCreds,
+		p.KpInodeCreate,
+		p.KpInodeRename,
 		p.TpProcExec,
 		p.TpSysExit,
 	)

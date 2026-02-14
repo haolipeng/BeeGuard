@@ -23,9 +23,11 @@ import (
 
 // 默认配置文件路径
 const (
-	defaultConfigPath        = "config/dangerous_commands.yaml"
-	defaultTrustedConfigPath = "config/privilege_escalation_whitelist.yaml"
+	defaultConfigPath                 = "config/dangerous_commands.yaml"
+	defaultTrustedConfigPath          = "config/privilege_escalation_whitelist.yaml"
 	defaultMaliciousRequestConfigPath = "config/malicious_request_rules.yaml"
+	defaultSensitiveFileConfigPath    = "config/sensitive_file_rules.yaml"
+	defaultFileMonitorWhitelistPath   = "config/file_monitor_whitelist.yaml"
 )
 
 func main() {
@@ -70,6 +72,24 @@ func main() {
 		logger.Info("Malicious request rules loaded", "version", mrConfig.Version, "rules", mrDetector.GetEnabledRuleCount())
 	}
 
+	// 3.3 初始化敏感文件检测器
+	var sfDetector *SensitiveFileDetector
+	sfConfigPath := getSensitiveFileConfigPath()
+	sfConfig, err := LoadRules(sfConfigPath)
+	if err != nil {
+		logger.Warn("Failed to load sensitive file rules, sensitive file detection disabled", "error", err, "path", sfConfigPath)
+	} else {
+		sfDetector, err = NewSensitiveFileDetector(sfConfig)
+		if err != nil {
+			logger.Warn("Failed to create sensitive file detector, detection disabled", "error", err)
+			sfDetector = nil
+		} else {
+			logger.Info("Sensitive file rules loaded successfully",
+				"version", sfConfig.Version,
+				"rules", sfDetector.GetEnabledRuleCount())
+		}
+	}
+
 	// 4. 加载eBPF程序
 	loader, err := ebpf.NewLoader()
 	if err != nil {
@@ -96,6 +116,24 @@ func main() {
 			logger.Info("Trusted executables whitelist loaded",
 				"count", count,
 				"enabled", trustedConfig.Enabled)
+		}
+	}
+
+	// 5.1 加载文件监控白名单
+	fileWhitelistPath := getFileMonitorWhitelistPath()
+	fileWhitelistConfig, err := trusted.LoadConfig(fileWhitelistPath)
+	if err != nil {
+		logger.Warn("Failed to load file monitor whitelist config, whitelist disabled",
+			"error", err, "path", fileWhitelistPath)
+	} else {
+		fileTrustedMap := loader.GetFileTrustedExesMap()
+		count, err := trusted.PopulateTrustedExesMap(fileTrustedMap, fileWhitelistConfig, logger)
+		if err != nil {
+			logger.Warn("Failed to populate file monitor whitelist map", "error", err)
+		} else {
+			logger.Info("File monitor whitelist loaded",
+				"count", count,
+				"enabled", fileWhitelistConfig.Enabled)
 		}
 	}
 
@@ -155,11 +193,7 @@ func main() {
 				// 用户态补充 pid_tree（从 BPF 移到用户态，减少验证器指令数）
 				pidTreeStr := buildPidTree(evt.TGID, cstring(evt.Comm[:]))
 
-				// 用户态推导 fd_type（从 stdin_path/stdout_path 判断是否 socket）
-				evt.FDType = deriveFDType(
-					cstring(evt.StdinPath[:]),
-					cstring(evt.StdoutPath[:]),
-				)
+				// fd_type 已由内核通过 i_mode 检查直接推导，无需用户态处理
 
 				record := evt.ToRecord()
 				record.Data.Fields["pid_tree"] = pidTreeStr
@@ -390,6 +424,70 @@ func main() {
 					logger.Error("Failed to send DNS record to agent", "error", err)
 				}
 
+			case events.EventTypeFile:
+				// 处理文件操作事件
+				var evt events.FileEvent
+				if err := evt.UnmarshalBinary(rec.RawSample); err != nil {
+					logger.Error("Failed to unmarshal file event", "error", err)
+					continue
+				}
+
+				// 构建基础 Record (DataType=64)
+				record := evt.ToRecord()
+
+				// 用户态补充 pid_tree
+				pidTreeStr := buildPidTree(evt.TGID, cstring(evt.Comm[:]))
+				record.Data.Fields["pid_tree"] = pidTreeStr
+
+				newPath := cstring(evt.NewPath[:])
+				actionStr := "create"
+				if evt.Action == events.FileActionRename {
+					actionStr = "rename"
+				}
+
+				logger.Info("File event",
+					"pid", evt.PID,
+					"comm", cstring(evt.Comm[:]),
+					"action", actionStr,
+					"new_path", newPath,
+					"old_path", cstring(evt.OldPath[:]),
+					"s_id", cstring(evt.SID[:]))
+
+				// 敏感文件检测
+				if sfDetector != nil {
+					result := sfDetector.Detect(newPath)
+					if result != nil {
+						// 发送告警 Record (DataType=6009)
+						alertRecord := evt.ToRecord()
+						alertRecord.DataType = 6009
+						alertRecord.Data.Fields["detection_type"] = DetectionTypeSensitiveFile
+						alertRecord.Data.Fields["rule_id"] = result.RuleID
+						alertRecord.Data.Fields["rule_name"] = result.RuleName
+						alertRecord.Data.Fields["severity"] = result.Severity
+						alertRecord.Data.Fields["rule_description"] = result.Description
+						alertRecord.Data.Fields["matched_pattern"] = result.MatchedPattern
+						alertRecord.Data.Fields["pid_tree"] = pidTreeStr
+
+						logger.Warn("Sensitive file operation detected",
+							"rule_id", result.RuleID,
+							"rule_name", result.RuleName,
+							"severity", result.Severity,
+							"action", actionStr,
+							"new_path", newPath,
+							"pid", evt.PID,
+							"comm", cstring(evt.Comm[:]))
+
+						if err := client.SendRecord(alertRecord); err != nil {
+							logger.Error("Failed to send sensitive file alert record to agent", "error", err)
+						}
+					}
+				}
+
+				// 发送基础事件 Record
+				if err := client.SendRecord(record); err != nil {
+					logger.Error("Failed to send file event record to agent", "error", err)
+				}
+
 			default:
 				logger.Warn("Unknown event type", "type", eventType)
 			}
@@ -488,6 +586,44 @@ func getMaliciousRequestConfigPath() string {
 
 	// 回退到当前目录
 	return defaultMaliciousRequestConfigPath
+}
+
+// getSensitiveFileConfigPath 获取敏感文件规则配置文件路径
+// 优先使用环境变量，否则使用默认路径
+func getSensitiveFileConfigPath() string {
+	if path := os.Getenv("DRIVER_SENSITIVE_FILE_CONFIG_PATH"); path != "" {
+		return path
+	}
+
+	execPath, err := os.Executable()
+	if err == nil {
+		dir := filepath.Dir(execPath)
+		configPath := filepath.Join(dir, defaultSensitiveFileConfigPath)
+		if _, err := os.Stat(configPath); err == nil {
+			return configPath
+		}
+	}
+
+	return defaultSensitiveFileConfigPath
+}
+
+// getFileMonitorWhitelistPath 获取文件监控白名单配置文件路径
+// 优先使用环境变量，否则使用默认路径
+func getFileMonitorWhitelistPath() string {
+	if path := os.Getenv("DRIVER_FILE_MONITOR_WHITELIST_PATH"); path != "" {
+		return path
+	}
+
+	execPath, err := os.Executable()
+	if err == nil {
+		dir := filepath.Dir(execPath)
+		configPath := filepath.Join(dir, defaultFileMonitorWhitelistPath)
+		if _, err := os.Stat(configPath); err == nil {
+			return configPath
+		}
+	}
+
+	return defaultFileMonitorWhitelistPath
 }
 
 // resolveExePath 补全可执行文件的完整路径
@@ -650,15 +786,3 @@ func readPPid(pid uint32) uint32 {
 	return 0
 }
 
-// deriveFDType 从 stdin/stdout 路径推导 fd_type
-// bit 0 = stdin 是 socket, bit 1 = stdout 是 socket
-func deriveFDType(stdinPath, stdoutPath string) uint8 {
-	var fdType uint8
-	if strings.Contains(stdinPath, "socket:") {
-		fdType |= 1
-	}
-	if strings.Contains(stdoutPath, "socket:") {
-		fdType |= 2
-	}
-	return fdType
-}

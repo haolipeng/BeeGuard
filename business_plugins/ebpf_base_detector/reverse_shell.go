@@ -3,7 +3,6 @@ package main
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	businessplugins "business_plugins/lib"
@@ -24,12 +23,11 @@ type ReverseShellResult struct {
 // Detect 对 enriched ExecveEvent 执行反弹 shell 检测规则
 // 返回 nil 表示未命中任何规则
 func (d *ReverseShellDetector) Detect(evt *events.ExecveEvent) *ReverseShellResult {
-	stdinPath := cstring(evt.StdinPath[:])
-	stdoutPath := cstring(evt.StdoutPath[:])
 	ttyName := cstring(evt.TTYName[:])
 
 	// 基础规则: stdin 是 socket（高置信度）
-	if strings.Contains(stdinPath, "socket:") {
+	// fd_type 由内核 i_mode 检查直接推导，bit 0 = stdin 是 S_IFSOCK
+	if evt.FDType&1 != 0 {
 		return &ReverseShellResult{
 			RuleName:    "stdin_socket",
 			Confidence:  "high",
@@ -38,7 +36,8 @@ func (d *ReverseShellDetector) Detect(evt *events.ExecveEvent) *ReverseShellResu
 	}
 
 	// 基础规则: stdout 是 socket（高置信度）
-	if strings.Contains(stdoutPath, "socket:") {
+	// fd_type bit 1 = stdout 是 S_IFSOCK
+	if evt.FDType&2 != 0 {
 		return &ReverseShellResult{
 			RuleName:    "stdout_socket",
 			Confidence:  "high",
