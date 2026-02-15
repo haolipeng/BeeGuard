@@ -14,6 +14,7 @@ COLLECTOR_SRC=$(PLUGINS_SRC_DIR)/collector
 BASELINE_SRC=$(PLUGINS_SRC_DIR)/baseline
 DETECTOR_SRC=$(PLUGINS_SRC_DIR)/detector
 DRIVER_SRC=$(PLUGINS_SRC_DIR)/ebpf_base_detector
+NIDS_SRC=$(PLUGINS_SRC_DIR)/nids
 
 # 部署目录
 DEPLOY_DIR=/opt/cloudsec
@@ -55,11 +56,14 @@ build-plugins: generate-ebpf
 	@cd $(DETECTOR_SRC) && $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/detector .
 	@echo "  Building ebpf_base_detector plugin..."
 	@cd $(DRIVER_SRC) && $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/ebpf_base_detector .
+	@echo "  Building nids plugin..."
+	@cd $(NIDS_SRC) && $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/nids .
 	@echo "All plugins built successfully"
 	@echo "  $(PLUGINS_DIR)/collector"
 	@echo "  $(PLUGINS_DIR)/baseline"
 	@echo "  $(PLUGINS_DIR)/detector"
 	@echo "  $(PLUGINS_DIR)/ebpf_base_detector"
+	@echo "  $(PLUGINS_DIR)/nids"
 
 # 生成 eBPF 代码 (ebpf_base_detector 插件依赖)
 .PHONY: generate-ebpf
@@ -75,6 +79,14 @@ build-driver: generate-ebpf
 	@mkdir -p $(PLUGINS_DIR)
 	@cd $(DRIVER_SRC) && $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/ebpf_base_detector .
 	@echo "Build complete: $(PLUGINS_DIR)/ebpf_base_detector"
+
+# 编译 nids 插件
+.PHONY: build-nids
+build-nids:
+	@echo "Building nids plugin..."
+	@mkdir -p $(PLUGINS_DIR)
+	@cd $(NIDS_SRC) && $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/nids .
+	@echo "Build complete: $(PLUGINS_DIR)/nids"
 
 # 编译所有组件 (agent + plugins)
 .PHONY: build
@@ -122,16 +134,19 @@ deploy: build
 	@sudo mkdir -p $(DEPLOY_DIR)/data/plugins/baseline
 	@sudo mkdir -p $(DEPLOY_DIR)/data/plugins/detector
 	@sudo mkdir -p $(DEPLOY_DIR)/data/plugins/ebpf_base_detector
+	@sudo mkdir -p $(DEPLOY_DIR)/data/plugins/nids
 	@sudo mkdir -p $(DEPLOY_DIR)/logs/agent
 	@sudo mkdir -p $(DEPLOY_DIR)/logs/plugins/collector
 	@sudo mkdir -p $(DEPLOY_DIR)/logs/plugins/baseline
 	@sudo mkdir -p $(DEPLOY_DIR)/logs/plugins/detector
 	@sudo mkdir -p $(DEPLOY_DIR)/logs/plugins/ebpf_base_detector
+	@sudo mkdir -p $(DEPLOY_DIR)/logs/plugins/nids
 	@sudo cp $(BUILD_DIR)/$(BINARY_NAME) $(DEPLOY_DIR)/bin/
 	@sudo mkdir -p $(DEPLOY_DIR)/plugins/collector
 	@sudo mkdir -p $(DEPLOY_DIR)/plugins/baseline
 	@sudo mkdir -p $(DEPLOY_DIR)/plugins/detector/config/rules
 	@sudo mkdir -p $(DEPLOY_DIR)/plugins/ebpf_base_detector/config
+	@sudo mkdir -p $(DEPLOY_DIR)/plugins/nids/config
 	@sudo cp $(PLUGINS_DIR)/collector $(DEPLOY_DIR)/plugins/collector/
 	@sudo cp $(PLUGINS_DIR)/baseline $(DEPLOY_DIR)/plugins/baseline/
 	@sudo cp $(PLUGINS_DIR)/detector $(DEPLOY_DIR)/plugins/detector/
@@ -140,11 +155,15 @@ deploy: build
 	@sudo cp $(DRIVER_SRC)/config/dangerous_commands.yaml $(DEPLOY_DIR)/plugins/ebpf_base_detector/config/
 	@sudo cp $(DRIVER_SRC)/config/privilege_escalation_whitelist.yaml $(DEPLOY_DIR)/plugins/ebpf_base_detector/config/
 	@sudo cp $(DRIVER_SRC)/config/malicious_request_rules.yaml $(DEPLOY_DIR)/plugins/ebpf_base_detector/config/
+	@sudo cp $(PLUGINS_DIR)/nids $(DEPLOY_DIR)/plugins/nids/
+	@sudo cp $(NIDS_SRC)/config/nids.yaml $(DEPLOY_DIR)/plugins/nids/config/
+	@sudo cp $(NIDS_SRC)/config/nids.rules $(DEPLOY_DIR)/plugins/nids/config/
 	@sudo chmod 755 $(DEPLOY_DIR)/bin/$(BINARY_NAME)
 	@sudo chmod 755 $(DEPLOY_DIR)/plugins/collector/collector
 	@sudo chmod 755 $(DEPLOY_DIR)/plugins/baseline/baseline
 	@sudo chmod 755 $(DEPLOY_DIR)/plugins/detector/detector
 	@sudo chmod 755 $(DEPLOY_DIR)/plugins/ebpf_base_detector/ebpf_base_detector
+	@sudo chmod 755 $(DEPLOY_DIR)/plugins/nids/nids
 	@sudo cp agent.yaml $(DEPLOY_DIR)/
 	@sudo cp agent-standalone.yaml $(DEPLOY_DIR)/
 	@echo "Deploy complete!"
@@ -173,6 +192,7 @@ deploy-plugins: build-plugins
 	@sudo mkdir -p $(DEPLOY_DIR)/plugins/baseline
 	@sudo mkdir -p $(DEPLOY_DIR)/plugins/detector/config/rules
 	@sudo mkdir -p $(DEPLOY_DIR)/plugins/ebpf_base_detector/config
+	@sudo mkdir -p $(DEPLOY_DIR)/plugins/nids/config
 	@sudo cp $(PLUGINS_DIR)/collector $(DEPLOY_DIR)/plugins/collector/
 	@sudo cp $(PLUGINS_DIR)/baseline $(DEPLOY_DIR)/plugins/baseline/
 	@sudo cp $(PLUGINS_DIR)/detector $(DEPLOY_DIR)/plugins/detector/
@@ -181,10 +201,14 @@ deploy-plugins: build-plugins
 	@sudo cp $(DRIVER_SRC)/config/dangerous_commands.yaml $(DEPLOY_DIR)/plugins/ebpf_base_detector/config/
 	@sudo cp $(DRIVER_SRC)/config/privilege_escalation_whitelist.yaml $(DEPLOY_DIR)/plugins/ebpf_base_detector/config/
 	@sudo cp $(DRIVER_SRC)/config/malicious_request_rules.yaml $(DEPLOY_DIR)/plugins/ebpf_base_detector/config/
+	@sudo cp $(PLUGINS_DIR)/nids $(DEPLOY_DIR)/plugins/nids/
+	@sudo cp $(NIDS_SRC)/config/nids.yaml $(DEPLOY_DIR)/plugins/nids/config/
+	@sudo cp $(NIDS_SRC)/config/nids.rules $(DEPLOY_DIR)/plugins/nids/config/
 	@sudo chmod 755 $(DEPLOY_DIR)/plugins/collector/collector
 	@sudo chmod 755 $(DEPLOY_DIR)/plugins/baseline/baseline
 	@sudo chmod 755 $(DEPLOY_DIR)/plugins/detector/detector
 	@sudo chmod 755 $(DEPLOY_DIR)/plugins/ebpf_base_detector/ebpf_base_detector
+	@sudo chmod 755 $(DEPLOY_DIR)/plugins/nids/nids
 	@echo "Deploy complete: $(DEPLOY_DIR)/plugins/"
 
 # 仅部署 ebpf_base_detector 插件
@@ -198,6 +222,19 @@ deploy-driver: build-driver
 	@sudo cp $(DRIVER_SRC)/config/malicious_request_rules.yaml $(DEPLOY_DIR)/plugins/ebpf_base_detector/config/
 	@sudo chmod 755 $(DEPLOY_DIR)/plugins/ebpf_base_detector/ebpf_base_detector
 	@echo "Deploy complete: $(DEPLOY_DIR)/plugins/ebpf_base_detector/"
+
+# 仅部署 nids 插件
+.PHONY: deploy-nids
+deploy-nids: build-nids
+	@echo "Deploying nids plugin only to $(DEPLOY_DIR)..."
+	@sudo mkdir -p $(DEPLOY_DIR)/data/plugins/nids
+	@sudo mkdir -p $(DEPLOY_DIR)/logs/plugins/nids
+	@sudo mkdir -p $(DEPLOY_DIR)/plugins/nids/config
+	@sudo cp $(PLUGINS_DIR)/nids $(DEPLOY_DIR)/plugins/nids/
+	@sudo cp $(NIDS_SRC)/config/nids.yaml $(DEPLOY_DIR)/plugins/nids/config/
+	@sudo cp $(NIDS_SRC)/config/nids.rules $(DEPLOY_DIR)/plugins/nids/config/
+	@sudo chmod 755 $(DEPLOY_DIR)/plugins/nids/nids
+	@echo "Deploy complete: $(DEPLOY_DIR)/plugins/nids/"
 
 # 代码格式化
 .PHONY: fmt
@@ -252,6 +289,7 @@ help:
 	@echo "  make build-agent        - Build agent only"
 	@echo "  make build-plugins      - Build all plugins"
 	@echo "  make build-driver       - Build ebpf_base_detector plugin only"
+	@echo "  make build-nids         - Build nids plugin only"
 	@echo "  make generate-ebpf      - Generate eBPF code (requires clang, libbpf)"
 	@echo "  make clean              - Clean build artifacts"
 	@echo ""
@@ -260,6 +298,7 @@ help:
 	@echo "  make deploy-agent       - Deploy agent only"
 	@echo "  make deploy-plugins     - Deploy plugins only"
 	@echo "  make deploy-driver      - Deploy ebpf_base_detector plugin only"
+	@echo "  make deploy-nids        - Deploy nids plugin only"
 	@echo ""
 	@echo "Run & Test:"
 	@echo "  make run                - Build and run agent"

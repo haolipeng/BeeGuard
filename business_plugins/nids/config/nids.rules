@@ -1,0 +1,51 @@
+# ===== Log4j2 JNDI 注入 (CVE-2021-44228) =====
+
+alert http any any -> any any (msg:"ET EXPLOIT Apache Log4j2 RCE - JNDI Injection in Header"; content:"${jndi:"; nocase; http.header; sid:1001; rev:1; severity:1; classtype:attempted-admin; reference:cve,2021-44228;)
+
+alert http any any -> any any (msg:"ET EXPLOIT Apache Log4j2 RCE - JNDI Injection in URI"; content:"${jndi:"; nocase; http.uri; sid:1002; rev:1; severity:1; classtype:attempted-admin; reference:cve,2021-44228;)
+
+alert http any any -> any any (msg:"ET EXPLOIT Apache Log4j2 RCE - JNDI Injection in Body"; content:"${jndi:"; nocase; http.request_body; sid:1003; rev:1; severity:1; classtype:attempted-admin; reference:cve,2021-44228;)
+
+alert http any any -> any any (msg:"ET EXPLOIT Apache Log4j2 RCE - JNDI Obfuscated"; pcre:"/\$\{[a-z]*:.*\$\{.*j.*n.*d.*i.*:/i"; http.header; sid:1004; rev:1; severity:1; classtype:attempted-admin; reference:cve,2021-44228;)
+
+# ===== SQL 注入 =====
+
+alert http any any -> any any (msg:"SQL Injection - UNION SELECT in URI"; pcre:"/union\s+(all\s+)?select\s+/i"; http.uri; sid:2001; rev:1; severity:2; classtype:web-application-attack; reference:url,owasp.org/www-community/attacks/SQL_Injection;)
+
+alert http any any -> any any (msg:"SQL Injection - OR 1=1 in URI"; pcre:"/['\"]\s*(or|OR)\s+[\d]+=[\d]+/"; http.uri; sid:2002; rev:1; severity:2; classtype:web-application-attack; reference:url,owasp.org/www-community/attacks/SQL_Injection;)
+
+alert http any any -> any any (msg:"SQL Injection - UNION SELECT in Body"; pcre:"/union\s+(all\s+)?select\s+/i"; http.request_body; sid:2003; rev:1; severity:2; classtype:web-application-attack; reference:url,owasp.org/www-community/attacks/SQL_Injection;)
+
+alert http any any -> any any (msg:"SQL Injection - Sleep/Benchmark in URI"; pcre:"/(sleep|benchmark)\s*\(\s*\d+/i"; http.uri; sid:2004; rev:1; severity:2; classtype:web-application-attack; reference:url,owasp.org/www-community/attacks/SQL_Injection;)
+
+# ===== 命令注入 =====
+
+alert http any any -> any any (msg:"OS Command Injection - Common Commands in URI"; pcre:"/[;|`]\s*(cat|id|whoami|uname|ls|pwd|ifconfig|wget|curl)\s/"; http.uri; sid:3001; rev:1; severity:1; classtype:attempted-admin; reference:url,owasp.org/www-community/attacks/Command_Injection;)
+
+alert http any any -> any any (msg:"OS Command Injection - Common Commands in Body"; pcre:"/[;|`]\s*(cat|id|whoami|uname|ls|pwd|ifconfig|wget|curl)\s/"; http.request_body; sid:3002; rev:1; severity:1; classtype:attempted-admin; reference:url,owasp.org/www-community/attacks/Command_Injection;)
+
+alert http any any -> any any (msg:"OS Command Injection - Backtick Execution"; pcre:"/`[^`]*`/"; http.uri; sid:3003; rev:1; severity:2; classtype:attempted-admin; reference:url,owasp.org/www-community/attacks/Command_Injection;)
+
+# ===== 路径遍历 =====
+
+alert http any any -> any any (msg:"Path Traversal - etc/passwd Access"; content:"../etc/passwd"; http.uri; sid:4001; rev:1; severity:2; classtype:attempted-recon; reference:url,owasp.org/www-community/attacks/Path_Traversal;)
+
+alert http any any -> any any (msg:"Path Traversal - Windows Boot.ini Access"; content:"..\\boot.ini"; nocase; http.uri; sid:4002; rev:1; severity:2; classtype:attempted-recon; reference:url,owasp.org/www-community/attacks/Path_Traversal;)
+
+alert http any any -> any any (msg:"Path Traversal - Deep Traversal"; pcre:"/(\.\.[\/\\]){3,}/"; http.uri; sid:4003; rev:1; severity:2; classtype:attempted-recon; reference:url,owasp.org/www-community/attacks/Path_Traversal;)
+
+# ===== Web 框架 RCE =====
+
+alert http any any -> any any (msg:"Apache Struts2 RCE - OGNL Injection"; content:"%{"; http.uri; sid:5001; rev:1; severity:1; classtype:attempted-admin; reference:cve,2017-5638;)
+
+alert http any any -> any any (msg:"Spring4Shell RCE - Class Loader Manipulation"; content:"class.module.classLoader"; http.request_body; sid:5002; rev:1; severity:1; classtype:attempted-admin; reference:cve,2022-22965;)
+
+alert http any any -> any any (msg:"Fastjson RCE - AutoType Deserialization"; pcre:"/@type.*com\.sun\./i"; http.request_body; sid:5003; rev:1; severity:1; classtype:attempted-admin; reference:cve,2022-25845;)
+
+alert http any any -> any any (msg:"ThinkPHP RCE - Invokefunction"; content:"invokefunction"; nocase; http.uri; sid:5004; rev:1; severity:1; classtype:attempted-admin; reference:cve,2018-20062;)
+
+# ===== 扫描探测 =====
+
+alert http any any -> any any (msg:"Scanner Detection - SQLMap User-Agent"; content:"sqlmap"; nocase; http.header; sid:6001; rev:1; severity:3; classtype:attempted-recon; reference:url,sqlmap.org;)
+
+alert http any any -> any any (msg:"Scanner Detection - Nmap/Dirbuster/Nikto User-Agent"; pcre:"/(nmap|dirbuster|nikto|masscan|zgrab)/i"; http.header; sid:6002; rev:1; severity:3; classtype:attempted-recon; reference:url,nmap.org;)

@@ -1,0 +1,17 @@
+# NIDS 插件配置
+# 抓包网卡（测试时使用 lo，生产环境改为实际网卡如 eth0/ens33）
+interface: "lo"
+# BPF 过滤器（限定监控端口）
+bpf_filter: "tcp port 80 or tcp port 8080"
+# 抓包每帧最大字节数
+snaplen: 65535
+# TCP 流重组参数
+tcp_reassembly:
+  # 每个流最大缓冲区（字节）
+  max_buffer_size: 262144
+  # 最大并发流数
+  max_streams: 10000
+  # 流超时时间
+  stream_timeout: 120s
+# Suricata 规则文件路径（相对于可执行文件目录）
+rules_file: "config/nids.rules"
