@@ -1,10 +1,9 @@
 package infra
 
 import (
-	"os"
-
 	"github.com/spf13/viper"
 	"gopkg.in/yaml.v2"
+	"os"
 )
 
 // BindYaml parsing of yaml files

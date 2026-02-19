@@ -1,44 +1,39 @@
 package main
 
 import (
-	"encoding/json"
-	"io"
-	"log"
-	"os"
-	"path/filepath"
-	"time"
-
 	"baseline/check"
+	"baseline/infra"
+	"baseline/linux"
+	"encoding/json"
+	"math/rand"
+	"runtime"
+	"time"
 
 	businessplugins "business_plugins/lib"
 )
 
 var (
-	// BaseLineDataType 基线检查数据类型
-	BaseLineDataType = int32(8000)
-	// BaseLineTaskStatusDataType 任务状态数据类型
+	BaseLineDataType           = int32(8000)
 	BaseLineTaskStatusDataType = int32(8010)
-	// TaskStatusSuccess 任务成功状态
-	TaskStatusSuccess = "succeed"
-	// TaskStatusFailed 任务失败状态
-	TaskStatusFailed = "failed"
-	// pluginClient 插件客户端
-	pluginClient *businessplugins.Client
+	TaskStatusSuccess          = "succeed"
+	TaskStatusFailed           = "failed"
+	CentosDefaultList          = []int{1200}
+	DebianDefaultList          = []int{1300}
+	UbuntuDefaultList          = []int{1400}
+	pluginClient               *businessplugins.Client
 )
 
-// SendServer 发送基线检查结果到 server
+// SendServer send result to server
 func SendServer(retCheckInfo check.RetBaselineInfo, token string) (err error) {
 	record := businessplugins.Record{}
 	record.DataType = BaseLineDataType
 	record.Timestamp = time.Now().Unix()
 
-	// 将检查结果序列化为 JSON
 	dataInfo, err := json.Marshal(retCheckInfo)
 	if err != nil {
 		return err
 	}
 
-	// 创建 Payload
 	payload := businessplugins.Payload{}
 	field := make(map[string]string, 0)
 	field["data"] = string(dataInfo)
@@ -46,7 +41,6 @@ func SendServer(retCheckInfo check.RetBaselineInfo, token string) (err error) {
 	payload.Fields = field
 	record.Data = &payload
 
-	// 发送记录
 	err = pluginClient.SendRecord(&record)
 	if err != nil {
 		return err
@@ -54,7 +48,7 @@ func SendServer(retCheckInfo check.RetBaselineInfo, token string) (err error) {
 	return nil
 }
 
-// TaskStatusSendServer 发送任务状态到 server
+// TaskStatusSendServer send task result to server
 func TaskStatusSendServer(status string, token string, msg string) {
 	record := businessplugins.Record{}
 	record.DataType = BaseLineTaskStatusDataType
@@ -74,43 +68,30 @@ func TaskStatusSendServer(status string, token string, msg string) {
 }
 
 func main() {
-	// 设置日志输出
-	if logDir := os.Getenv("LOG_DIR"); logDir != "" {
-		os.MkdirAll(logDir, 0755)
-		logFile, err := os.OpenFile(filepath.Join(logDir, "baseline.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-		if err == nil {
-			log.SetOutput(io.MultiWriter(os.Stderr, logFile))
-			defer logFile.Close()
-		}
-	}
-
-	// 初始化插件客户端
+	runtime.GOMAXPROCS(4)
 	pluginClient = businessplugins.New()
 
-	// 循环接收任务
 	go func() {
 		for {
-			// 从 agent 接收任务
+			// get result from leader
 			pluginsTask, err := pluginClient.ReceiveTask()
 			if err != nil {
-				log.Printf("ReceiveTask error: %v\n", err)
+				infra.Loger.Println("getTask error:", err.Error())
 				break
 			}
-
-			// 在 goroutine 中处理任务
 			go func() {
-				// 执行基线分析
+				// start baseline analysis
 				retBaselineInfo, analysisErr := check.Analysis(pluginsTask.Data)
 
-				// 发送检查结果到 server
+				// send request to server
 				err = SendServer(retBaselineInfo, pluginsTask.Token)
 				if err != nil {
-					log.Printf("SendServer error: %v\n", err)
+					infra.Loger.Println("sendServer error:", err)
 				} else {
-					log.Printf("SendServer success: baseline_id=%d\n", retBaselineInfo.BaselineId)
+					infra.Loger.Println("sendServer success:", retBaselineInfo.BaselineId)
 				}
 
-				// 发送任务状态
+				// report task result
 				if analysisErr != nil {
 					TaskStatusSendServer(TaskStatusFailed, pluginsTask.Token, analysisErr.Error())
 				} else {
@@ -120,6 +101,52 @@ func main() {
 		}
 	}()
 
-	// 保持主程序运行
-	select {}
+	// cronjob
+	init := true
+	dailyTicker := time.NewTicker(time.Until(time.Date(time.Now().Year(), time.Now().Month(), time.Now().Day()+1, rand.Intn(6), rand.Intn(60), rand.Intn(60), 0, time.Now().Location())))
+
+	defer dailyTicker.Stop()
+	for {
+		select {
+		// daily task
+		case <-dailyTicker.C:
+			if init {
+				dailyTicker.Reset(time.Hour * 24)
+				init = false
+			}
+
+			var baselineIdList []int
+			// start analysis by system
+			switch linux.GetSystemType() {
+			case "centos":
+				baselineIdList = CentosDefaultList
+			case "debian":
+				baselineIdList = DebianDefaultList
+			case "ubuntu":
+				baselineIdList = UbuntuDefaultList
+			default:
+				return
+			}
+
+			// start analysis
+			for _, baselineId := range baselineIdList {
+				retBaselineInfo, analysisErr := check.Analysis(baselineId)
+
+				// send request to sever
+				err := SendServer(retBaselineInfo, "")
+				if err != nil {
+					infra.Loger.Println("sendServer error", err)
+				} else {
+					infra.Loger.Println("sendServer success:", retBaselineInfo)
+				}
+
+				// report task result
+				if analysisErr != nil {
+					TaskStatusSendServer(TaskStatusFailed, "", analysisErr.Error())
+				} else {
+					TaskStatusSendServer(TaskStatusSuccess, "", "")
+				}
+			}
+		}
+	}
 }

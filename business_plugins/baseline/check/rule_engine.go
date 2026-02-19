@@ -1,10 +1,11 @@
 package check
 
 import (
-	"bufio"
+	"baseline/infra"
+	"errors"
 	"fmt"
-	"os"
-	"os/exec"
+	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -50,284 +51,287 @@ const (
 	ErrorFile        = -3 // File read and write exception
 )
 
-// AnalysisRule Rule parsing engine
-// 实现三种检测方式：
-// 1. 检测 root 启动的业务进程比例
-// 2. 检测非系统进程是否由 root 启动
-// 3. 检测不安全服务是否已禁用
-func AnalysisRule(check BaselineCheck) (ifPass bool, err error) {
-	// 根据规则类型进行检测
-	for _, rule := range check.Rules {
-		switch rule.Type {
-		case "root_process_ratio":
-			// 检测 1: root 启动的业务进程比例
-			ratio, err := checkRootProcessRatio()
-			if err != nil {
-				return false, err
-			}
-			// 从配置文件 rule.Result 读取阈值
-			if rule.Result == nil {
-				return false, fmt.Errorf("threshold not configured in rule.Result for root_process_ratio")
-			}
+// StringMatch String match, including regular
+// subStr : Returns a substring if the regular expression is grouped regular, otherwise ""
+func StringMatch(str string, reg string) (subStr string, ifMatch bool, err error) {
+	regCom, err := regexp.Compile(reg)
+	if err != nil {
+		return "", false, err
+	}
+	matchList := regCom.FindStringSubmatch(str)
+	if len(matchList) == 0 {
+		return "", false, err
+	} else if len(matchList) == 1 {
+		return "", true, err
+	} else {
+		return matchList[1], true, err
+	}
+}
 
-			var threshold float64
-			var parseErr error
-			if thresholdStr, ok := rule.Result.(string); ok {
-				threshold, parseErr = strconv.ParseFloat(thresholdStr, 64)
-			} else if thresholdNum, ok := rule.Result.(float64); ok {
-				threshold = thresholdNum
-			} else if thresholdInt, ok := rule.Result.(int); ok {
-				threshold = float64(thresholdInt)
+// Handling rule relational operators
+func DealMathCompute(funcRes interface{}, ruleRes string) (ifPass bool, err error) {
+	reg := "\\$\\((.+)\\)"
+
+	// Determine if a relational operator exists in a rule
+	operator, ifMatch, err := StringMatch(ruleRes, reg)
+
+	if ifMatch {
+		// Convert both parties to int
+		var (
+			ruleInt int
+			funcInt int
+		)
+		rule := ruleRes[len(operator)+3:]
+		ruleInt, err = strconv.Atoi(rule)
+
+		switch funcRes.(type) {
+		case int:
+			funcInt = funcRes.(int)
+		case string:
+			funcInt, err = strconv.Atoi(funcRes.(string))
+			if err != nil {
+				errStr := fmt.Sprintf("%d:need get num,but get %s", ErrorConfigWrite, funcRes)
+				return ifPass, errors.New(errStr)
+			}
+		default:
+			errStr := fmt.Sprintf("%d:need get num,but get unkown type", ErrorConfigWrite)
+			return ifPass, errors.New(errStr)
+		}
+
+		// Logical operation
+		switch operator {
+		case "<":
+			if funcInt < ruleInt {
+				ifPass = true
+			}
+		case "<=":
+			if funcInt <= ruleInt {
+				ifPass = true
+			}
+		case ">":
+			if funcInt > ruleInt {
+				ifPass = true
+			}
+		case ">=":
+			if funcInt >= ruleInt {
+				ifPass = true
+			}
+		}
+	}
+	return ifPass, err
+}
+
+// Determine whether the rule result is passed
+func ResultMatch(ruleStruct RuleStruct, funcRes interface{}) (ifPass bool, err error) {
+	ruleRes := ruleStruct.Result
+
+	if ruleRes == nil {
+		ruleRes = true
+	}
+
+	funcType := reflect.TypeOf(funcRes).Kind()
+	switch ruleRes.(type) {
+	case bool:
+		if funcType == reflect.Bool {
+			if ruleRes == funcRes {
+				return true, err
 			} else {
-				return false, fmt.Errorf("invalid threshold type in rule.Result: %T, expected string, float64, or int", rule.Result)
-			}
-
-			if parseErr != nil {
-				return false, fmt.Errorf("failed to parse threshold: %v", parseErr)
-			}
-
-			if ratio > threshold {
-				return false, fmt.Errorf("root process ratio %.2f%% exceeds threshold %.2f%%", ratio, threshold)
-			}
-
-		case "non_system_root_process":
-			// 检测 2: 非系统进程是否由 root 启动
-			hasNonSystemRoot, err := checkNonSystemRootProcess()
-			if err != nil {
 				return false, err
 			}
-			if hasNonSystemRoot {
-				return false, fmt.Errorf("found non-system processes running as root")
+		} else {
+			errStr := fmt.Sprintf("%d:rule is bool, but get other type", ErrorConfigWrite)
+			return false, errors.New(errStr)
+		}
+	case int:
+		// format
+		if funcType == reflect.String {
+			funcInt, err := strconv.Atoi(funcRes.(string))
+			if err == nil {
+				funcRes = funcInt
+			} else {
+				errStr := fmt.Sprintf("%d:rule is int,but get string : %s", ErrorConfigWrite, funcRes.(string))
+				return false, errors.New(errStr)
+			}
+		} else if funcType == reflect.Int {
+		} else {
+			errStr := fmt.Sprintf("%d:rule is int, but get other type", ErrorConfigWrite)
+			return false, errors.New(errStr)
+		}
+
+		// match
+		if ruleRes == funcRes {
+			return true, err
+		} else {
+			return false, err
+		}
+	case string:
+
+		// Formatting rules and function results
+		ruleString := ruleRes.(string)
+		if funcType == reflect.Int {
+			funcRes = strconv.Itoa(funcRes.(int))
+			funcType = reflect.String
+		} else if funcType == reflect.String {
+		} else if funcType == reflect.Bool {
+			return funcRes.(bool), err
+		} else {
+			errStr := fmt.Sprintf("%d:rule is string, but get other type", ErrorConfigWrite)
+			return false, errors.New(errStr)
+		}
+
+		// Filter rules
+		ruleFilter := ruleStruct.Filter
+		subStr := ""
+		if ruleFilter != "" && funcType == reflect.String {
+			ifMatch := false
+			subStr, ifMatch, err = StringMatch(funcRes.(string), ruleFilter)
+			if err != nil || !ifMatch {
+				errStr := fmt.Sprintf("%d:rule filter error : funcRes:%s, rule:%s", ErrorConfigWrite, funcRes.(string), ruleFilter)
+				return ifPass, errors.New(errStr)
+			}
+		}
+
+		// Handling logical operators
+		var ruleArray []string
+		if strings.Contains(ruleString, "$(&&)") {
+			ruleArray = strings.Split(ruleString, "$(&&)")
+		} else {
+			ruleArray = append(ruleArray, ruleString)
+		}
+
+		// Traverse the subrules and return directly if false occurs
+		for _, rule := range ruleArray {
+			// Whether the result of this subrule is reversed $ (not)
+			reverse := false
+			if strings.HasPrefix(rule, "$(not)") {
+				reverse = true
+				rule = rule[len("$(not)"):]
 			}
 
-		case "insecure_services":
-			// 检测 3: 不安全服务是否已禁用
-			services := []string{"telnet", "rsh", "ftp", "tftp", "smb"}
-			if len(rule.Param) > 0 && rule.Param[0] != "" {
-				services = strings.Split(rule.Param[0], ",")
-				for i := range services {
-					services[i] = strings.TrimSpace(services[i])
+			// Determine if the subrules match
+			if strings.HasPrefix(rule, "$(") {
+				// Handling relational operators
+				if subStr != "" {
+					ifPass, err = DealMathCompute(subStr, rule)
+				} else {
+					ifPass, err = DealMathCompute(funcRes, rule)
+				}
+				if err != nil {
+					return false, err
+				}
+
+			} else {
+				// Ordinary regular matching
+				// If the substring is not an int but a string, use substring matching
+				_, err = strconv.Atoi(funcRes.(string))
+				if err != nil {
+					_, ifPass, err = StringMatch(subStr, rule)
+				}
+				if funcType == reflect.String {
+					_, ifPass, err = StringMatch(funcRes.(string), rule)
 				}
 			}
-			enabled, err := checkInsecureServices(services)
-			if err != nil {
+			// Determine the result of the subrule, if one fails, it will directly return false.
+			if reverse {
+				ifPass = !ifPass
+			}
+			if ifPass == false {
 				return false, err
 			}
-			if enabled {
-				return false, fmt.Errorf("insecure services are enabled")
-			}
+		}
+	}
 
+	ifPass = true
+	return ifPass, err
+}
+
+// CheckRule check rule result
+func CheckRule(ruleStruct RuleStruct) (ifPass bool, err error) {
+	var funcRes interface{}
+
+	// Determine if there are rule prerequisites
+	if ruleStruct.Require != "" {
+		switch ruleStruct.Require {
 		default:
-			// 其他类型规则，默认通过
-			return true, nil
+			break
 		}
 	}
 
-	return true, nil
-}
+	// Send to different matching functions according to type
+	switch ruleStruct.Type {
+	case "command_check":
+		// Get command line results
+		funcRes, err = CommandCheck(ruleStruct.Param)
+	case "if_file_exist":
+		// Determine if the file exists
+		funcRes, err = IfFileExist(ruleStruct.Param)
+	case "file_permission":
+		// Determine whether file permissions are reasonable
+		funcRes, err = FilePermission(ruleStruct.Param)
+	case "file_user_group":
+		// Determine if the file user group is reasonable
+		funcRes, err = FileUserGroup(ruleStruct.Param)
+	case "file_line_check":
+		funcRes, err = FileLineCheck(ruleStruct, ResultMatch)
+	case "func_check":
+		funcRes, err = FuncCheck(ruleStruct.Param)
+	case "file_md5_check":
+		// Calculate whether the file MD5 is consistent
+		funcRes, err = FileMd5Check(ruleStruct.Param)
 
-// checkRootProcessRatio 检测 root 启动的业务进程比例
-func checkRootProcessRatio() (ratio float64, err error) {
-	// 获取所有进程信息
-	cmd := exec.Command("ps", "aux")
-	output, err := cmd.Output()
+	default:
+		errStr := fmt.Sprintf("%d:unknown rule type:%s", ErrorConfigWrite, ruleStruct.Type)
+		return false, errors.New(errStr)
+	}
 	if err != nil {
-		return 0, fmt.Errorf("failed to get process list: %v", err)
+		infra.Loger.Println(err)
+		return false, err
 	}
 
-	lines := strings.Split(string(output), "\n")
-	totalProcesses := 0
-	rootProcesses := 0
-
-	// 系统进程关键字
-	systemKeywords := []string{
-		"kernel", "systemd", "init", "kthreadd", "ksoftirqd",
-		"migration", "rcu_", "watchdog", "kworker", "kswapd",
-		"khugepaged", "netns", "cgroup", "devtmpfs",
+	// if file_line_check，Match line by line
+	switch ruleStruct.Type {
+	case "file_line_check":
+		ifPass = funcRes.(bool)
+	default:
+		ifPass, err = ResultMatch(ruleStruct, funcRes)
 	}
-
-	for i, line := range lines {
-		if i == 0 {
-			continue // 跳过表头
-		}
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-
-		fields := strings.Fields(line)
-		if len(fields) < 11 {
-			continue
-		}
-
-		user := fields[0]
-		command := strings.Join(fields[10:], " ")
-
-		// 判断是否为系统进程
-		isSystemProcess := false
-		for _, keyword := range systemKeywords {
-			if strings.Contains(command, keyword) {
-				isSystemProcess = true
-				break
-			}
-		}
-
-		// 只统计业务进程
-		if !isSystemProcess {
-			totalProcesses++
-			if user == "root" {
-				rootProcesses++
-			}
-		}
-	}
-
-	if totalProcesses == 0 {
-		return 0, nil
-	}
-
-	ratio = float64(rootProcesses) * 100.0 / float64(totalProcesses)
-	return ratio, nil
-}
-
-// checkNonSystemRootProcess 检测非系统进程是否由 root 启动
-func checkNonSystemRootProcess() (hasNonSystemRoot bool, err error) {
-	// 获取所有进程信息
-	cmd := exec.Command("ps", "aux")
-	output, err := cmd.Output()
 	if err != nil {
-		return false, fmt.Errorf("failed to get process list: %v", err)
+		infra.Loger.Println(err)
+		return false, err
 	}
 
-	lines := strings.Split(string(output), "\n")
-
-	// 系统进程关键字
-	systemKeywords := []string{
-		"kernel", "systemd", "init", "kthreadd", "ksoftirqd",
-		"migration", "rcu_", "watchdog", "kworker", "kswapd",
-		"khugepaged", "netns", "cgroup", "devtmpfs",
-		"sshd", "rsyslog", "cron", "dbus", "NetworkManager",
-	}
-
-	for i, line := range lines {
-		if i == 0 {
-			continue // 跳过表头
-		}
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-
-		fields := strings.Fields(line)
-		if len(fields) < 11 {
-			continue
-		}
-
-		user := fields[0]
-		command := strings.Join(fields[10:], " ")
-
-		// 判断是否为系统进程
-		isSystemProcess := false
-		for _, keyword := range systemKeywords {
-			if strings.Contains(command, keyword) {
-				isSystemProcess = true
-				break
-			}
-		}
-
-		// 如果非系统进程且以 root 运行，返回 true
-		if !isSystemProcess && user == "root" {
-			return true, nil
-		}
-	}
-
-	return false, nil
+	return ifPass, err
 }
 
-// checkInsecureServices 检测不安全服务是否已禁用
-func checkInsecureServices(services []string) (enabled bool, err error) {
-	enabledServices := []string{}
+// AnalysisRule Rule parsing engine
+func AnalysisRule(check BaselineCheck) (ifPass bool, err error) {
+	condition := check.Condition
+	if condition == "" {
+		condition = "all"
+	}
 
-	// 检查 systemd 服务
-	for _, service := range services {
-		// 检查常见的服务名称变体
-		serviceNames := []string{
-			service,
-			service + ".service",
-			service + "d",
-			service + "d.service",
+	for _, rule := range check.Rules {
+		ifCheck, err := CheckRule(rule)
+		if err != nil {
+			infra.Loger.Println(err)
+			return false, err
 		}
-
-		for _, serviceName := range serviceNames {
-			// 使用 systemctl 检查服务状态
-			cmd := exec.Command("systemctl", "is-enabled", serviceName)
-			output, err := cmd.Output()
-			if err != nil {
-				// 服务不存在或无法检查，跳过
-				continue
+		if ifCheck {
+			if condition == "any" {
+				return true, err
+			} else if condition == "none" {
+				return false, err
 			}
-
-			status := strings.TrimSpace(string(output))
-			if status == "enabled" || status == "enabled-runtime" {
-				enabledServices = append(enabledServices, serviceName)
+		} else {
+			if condition == "all" {
+				return false, err
 			}
 		}
-
-		// 也检查 inetd/xinetd 服务
-		if checkInetdService(service) {
-			enabledServices = append(enabledServices, service+" (inetd/xinetd)")
-		}
 	}
 
-	// 如果找到启用的服务，返回 true
-	return len(enabledServices) > 0, nil
-}
-
-// checkInetdService 检查 inetd/xinetd 配置中的服务
-func checkInetdService(service string) bool {
-	// 检查 /etc/inetd.conf
-	if checkInetdConfig("/etc/inetd.conf", service) {
-		return true
+	if condition == "any" {
+		return false, err
+	} else {
+		return true, err
 	}
-
-	// 检查 /etc/xinetd.d/ 目录下的配置文件
-	dir := "/etc/xinetd.d/"
-	files, err := os.ReadDir(dir)
-	if err != nil {
-		return false
-	}
-
-	for _, file := range files {
-		if file.IsDir() {
-			continue
-		}
-		filePath := dir + file.Name()
-		if checkInetdConfig(filePath, service) {
-			return true
-		}
-	}
-
-	return false
-}
-
-// checkInetdConfig 检查 inetd 配置文件
-func checkInetdConfig(filePath string, service string) bool {
-	file, err := os.Open(filePath)
-	if err != nil {
-		return false
-	}
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		// 跳过注释和空行
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		// 检查是否包含服务名称且未注释
-		if strings.Contains(line, service) && !strings.HasPrefix(line, "#") {
-			return true
-		}
-	}
-	return false
 }

@@ -30,14 +30,12 @@ type RetCheckInfo struct {
 	Msg           string `json:"msg" bson:"msg"`
 }
 
-// TaskData 任务数据结构
 type TaskData struct {
 	BaselineId  int   `json:"baseline_id"`
 	CheckIdList []int `json:"check_id_list"`
 }
 
-// 基线状态
-const (
+var (
 	BaselineStatusError   = "error"
 	BaselineStatusSuccess = "success"
 )
@@ -59,7 +57,9 @@ func getBaselineConfigData(baselineId int) (baselineInfo BaselineInfo, err error
 	return
 }
 
+// AnalysisBaseline start baseline task
 func AnalysisBaseline(taskData TaskData) (retBaselineInfo RetBaselineInfo, err error) {
+
 	// analysis params
 	baselineId := taskData.BaselineId
 	checkIdList := taskData.CheckIdList
@@ -122,32 +122,23 @@ func AnalysisBaseline(taskData TaskData) (retBaselineInfo RetBaselineInfo, err e
 	return retBaselineInfo, err
 }
 
-// Analysis 分析基线检查任务
-// 接收任务数据（string 或 int），返回检查结果
+// Analysis config file
 func Analysis(data interface{}) (retBaselineInfo RetBaselineInfo, err error) {
 	var taskData TaskData
-
-	// 解析任务数据
-	switch v := data.(type) {
+	switch data.(type) {
 	case int:
-		// 如果直接是 int，作为 baseline_id
-		taskData.BaselineId = v
+		taskData.BaselineId = data.(int)
 	case string:
-		// 如果是 string，尝试解析参数
-		err = json.Unmarshal([]byte(v), &taskData)
+		// analysis parameter
+		err = json.Unmarshal([]byte(data.(string)), &taskData)
 		if err != nil {
 			retBaselineInfo.Status = BaselineStatusError
-			retBaselineInfo.Msg = fmt.Sprintf("parse task data error: %v", err)
+			retBaselineInfo.Msg = err.Error()
 			return retBaselineInfo, err
 		}
-	default:
-		// 不支持其他数据类型
-		retBaselineInfo.Status = BaselineStatusError
-		retBaselineInfo.Msg = fmt.Sprintf("unsupported data type: %T", data)
-		return retBaselineInfo, fmt.Errorf("unsupported data type: %T", data)
 	}
 
-	// 调用基线分析的函数
+	// start analysis
 	retBaselineInfo, err = AnalysisBaseline(taskData)
 	if err != nil {
 		retBaselineInfo.Status = BaselineStatusError
@@ -155,6 +146,5 @@ func Analysis(data interface{}) (retBaselineInfo RetBaselineInfo, err error) {
 	} else {
 		retBaselineInfo.Status = BaselineStatusSuccess
 	}
-
-	return retBaselineInfo, nil
+	return retBaselineInfo, err
 }
