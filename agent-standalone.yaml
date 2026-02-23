@@ -14,3 +14,4 @@ standalone:
   flush_interval: 1                                  # 刷新间隔（秒）
   plugins:
     - ebpf_base_detector                             # 仅加载 ebpf_base_detector 插件
+    # - scanner                                      # 恶意文件扫描插件（需要 libclamav）

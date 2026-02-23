@@ -129,6 +129,21 @@
 | image_build_time | string | 镜像构建时间 |
 | runtime | string | 运行时 (docker/containerd) |
 
+### 5059 - 镜像软件包
+
+**Handler:** ImagePackageHandler
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| image_id | string | 镜像 ID |
+| image_name | string | 镜像名称 |
+| container_id | string | 采集时使用的容器 ID |
+| package_name | string | 软件包名称 |
+| package_version | string | 软件包版本 |
+| package_type | string | 包管理器类型 (dpkg/rpm/apk) |
+| os_version | string | 容器内 OS 版本 |
+| package_seq | string | 采集批次序列号 |
+
 ### 5060 - Web 服务
 
 **Handler:** WebServiceHandler

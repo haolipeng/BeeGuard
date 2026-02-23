@@ -1,0 +1,53 @@
+scanner:
+  engine:
+    db_path: "db"
+    max_file_size: 18874368
+    max_scan_time: 5
+  cronjob:
+    dir_scan_interval: "24h"
+    proc_scan_interval: "1h"
+    throttle: "1s"
+  scan_dirs:
+    - path: "/root"
+      max_depth: 3
+    - path: "/bin"
+      max_depth: 2
+    - path: "/sbin"
+      max_depth: 2
+    - path: "/usr/bin"
+      max_depth: 2
+    - path: "/usr/sbin"
+      max_depth: 2
+    - path: "/usr/local"
+      max_depth: 3
+    - path: "/etc"
+      max_depth: 2
+    - path: "/var/www"
+      max_depth: 20
+  filter:
+    path_whitelist:
+      - "/dev"
+      - "/proc"
+      - "/sys"
+      - "/boot"
+      - "/opt/cloudsec"
+      - "/usr/bin/upx"
+      - "/usr/bin/nc"
+    skip_file_types:
+      - "video"
+      - "audio"
+      - "image"
+    min_file_size: 4
+    max_file_size: 18874368
+  fullscan:
+    max_workers: 6
+    max_memory_mb: 512
+    max_cpu_percent: 600
+    quick_timeout: "1h"
+    full_timeout: "48h"
+  cgroup:
+    enabled: true
+    normal_memory_mb: 180
+    normal_cpu_quota: 10000
+    fullscan_memory_mb: 512
+    fullscan_cpu_quota: 600000

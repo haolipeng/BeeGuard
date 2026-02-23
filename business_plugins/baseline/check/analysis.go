@@ -31,8 +31,9 @@ type RetCheckInfo struct {
 }
 
 type TaskData struct {
-	BaselineId  int   `json:"baseline_id"`
-	CheckIdList []int `json:"check_id_list"`
+	BaselineId   int           `json:"baseline_id"`
+	CheckIdList  []int         `json:"check_id_list"`
+	BaselineInfo *BaselineInfo `json:"baseline_info,omitempty"` // 服务端下发的完整规则
 }
 
 var (
@@ -65,10 +66,17 @@ func AnalysisBaseline(taskData TaskData) (retBaselineInfo RetBaselineInfo, err e
 	checkIdList := taskData.CheckIdList
 	retBaselineInfo.BaselineId = baselineId
 
-	baselineInfo, err := getBaselineConfigData(baselineId)
-	if err != nil {
-		infra.Loger.Println("getBaselineConfigData error:", err)
-		return retBaselineInfo, err
+	var baselineInfo BaselineInfo
+	if taskData.BaselineInfo != nil {
+		// 使用服务端下发的完���规则
+		baselineInfo = *taskData.BaselineInfo
+	} else {
+		// 使用本地 YAML 配置（原有逻辑）
+		baselineInfo, err = getBaselineConfigData(baselineId)
+		if err != nil {
+			infra.Loger.Println("getBaselineConfigData error:", err)
+			return retBaselineInfo, err
+		}
 	}
 
 	retBaselineInfo.BaselineVersion = baselineInfo.BaselineVersion

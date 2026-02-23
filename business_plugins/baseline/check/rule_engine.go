@@ -11,36 +11,36 @@ import (
 )
 
 type RuleStruct struct {
-	Type    string      `yaml:"type" bson:"type"`
-	Param   []string    `yaml:"param" bson:"param"`
-	Filter  string      `yaml:"filter" bson:"filter"`
-	Require string      `yaml:"require" bson:"require"`
-	Result  interface{} `yaml:"result" bson:"result"`
+	Type    string      `yaml:"type" json:"type" bson:"type"`
+	Param   []string    `yaml:"param" json:"param" bson:"param"`
+	Filter  string      `yaml:"filter" json:"filter" bson:"filter"`
+	Require string      `yaml:"require" json:"require" bson:"require"`
+	Result  interface{} `yaml:"result" json:"result" bson:"result"`
 }
 
 type BaselineCheck struct {
-	Condition string       `yaml:"condition" bson:"condition"`
-	Rules     []RuleStruct `yaml:"rules" bson:"rules"`
+	Condition string       `yaml:"condition" json:"condition" bson:"condition"`
+	Rules     []RuleStruct `yaml:"rules" json:"rules" bson:"rules"`
 }
 
 type CheckInfo struct {
-	CheckId       int           `yaml:"check_id" bson:"check_id"`
-	Type          string        `yaml:"type" bson:"type"`
-	Title         string        `yaml:"title" bson:"title"`
-	TitleCn       string        `yaml:"title_cn" bson:"title_cn"`
-	Description   string        `yaml:"description" bson:"description"`
-	Solution      string        `yaml:"solution" bson:"solution"`
-	Security      string        `yaml:"security" bson:"security"`
-	TypeCn        string        `yaml:"type_cn" bson:"type_cn"`
-	DescriptionCn string        `yaml:"description_cn" bson:"description_cn"`
-	SolutionCn    string        `yaml:"solution_cn" bson:"solution_cn"`
-	Check         BaselineCheck `yaml:"check" bson:"check"`
+	CheckId       int           `yaml:"check_id" json:"check_id" bson:"check_id"`
+	Type          string        `yaml:"type" json:"type" bson:"type"`
+	Title         string        `yaml:"title" json:"title" bson:"title"`
+	TitleCn       string        `yaml:"title_cn" json:"title_cn" bson:"title_cn"`
+	Description   string        `yaml:"description" json:"description" bson:"description"`
+	Solution      string        `yaml:"solution" json:"solution" bson:"solution"`
+	Security      string        `yaml:"security" json:"security" bson:"security"`
+	TypeCn        string        `yaml:"type_cn" json:"type_cn" bson:"type_cn"`
+	DescriptionCn string        `yaml:"description_cn" json:"description_cn" bson:"description_cn"`
+	SolutionCn    string        `yaml:"solution_cn" json:"solution_cn" bson:"solution_cn"`
+	Check         BaselineCheck `yaml:"check" json:"check" bson:"check"`
 }
 
 type BaselineInfo struct {
-	BaselineId      int         `yaml:"baseline_id" bson:"baseline_id"`
-	BaselineVersion string      `yaml:"baseline_version" bson:"baseline_version"`
-	CheckList       []CheckInfo `yaml:"check_list" bson:"check_list"`
+	BaselineId      int         `yaml:"baseline_id" json:"baseline_id" bson:"baseline_id"`
+	BaselineVersion string      `yaml:"baseline_version" json:"baseline_version" bson:"baseline_version"`
+	CheckList       []CheckInfo `yaml:"check_list" json:"check_list" bson:"check_list"`
 }
 
 const (

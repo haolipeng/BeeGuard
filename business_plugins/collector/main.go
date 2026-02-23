@@ -61,6 +61,7 @@ func main() {
 	e.AddHandler(time.Hour*6, &EnvSuspiciousHandler{}) //可疑环境变量检测
 	e.AddHandler(time.Hour*6, &ContainerHandler{})     //容器
 	e.AddHandler(time.Hour*6, &ImageHandler{})         //镜像资产
+	e.AddHandler(time.Hour*6, &ImagePackageHandler{})  //镜像软件包
 	e.AddHandler(time.Hour*6, &DatabaseHandler{})      //数据库服务
 	e.AddHandler(time.Hour*6, &WebServiceHandler{})    //Web服务
 
