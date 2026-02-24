@@ -68,7 +68,7 @@ func AnalysisBaseline(taskData TaskData) (retBaselineInfo RetBaselineInfo, err e
 
 	var baselineInfo BaselineInfo
 	if taskData.BaselineInfo != nil {
-		// 使用服务端下发的完���规则
+		// 使用服务端下发的完整规则
 		baselineInfo = *taskData.BaselineInfo
 	} else {
 		// 使用本地 YAML 配置（原有逻辑）

@@ -13,7 +13,7 @@ const (
 	MaliciousRequestTypeIP     = "ip"      // IP 地址匹配
 	MaliciousRequestTypeDomain = "domain"  // 域名匹配（精确 + 后缀通配）
 	MaliciousRequestTypePort   = "port"    // 端口匹配
-	MaliciousRequestTypeIPPort = "ip_port" // IP:Port 复��匹配
+	MaliciousRequestTypeIPPort = "ip_port" // IP:Port 复合匹配
 )
 
 // 检测类型常量

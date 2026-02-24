@@ -40,7 +40,7 @@ func main() {
 		fmt.Println("Test mode enabled, agent ID:", agent.TestAgentID)
 	}
 
-	// 设置配置文件路径（如果通过命令行指���）
+	// 设置配置文件路径（如果通过命令行指定）
 	if *configPath != "" {
 		config.SetConfigPath(*configPath)
 	}
@@ -65,7 +65,7 @@ func main() {
 		fmt.Println("Standalone mode enabled")
 	}
 
-	// 将配置同��到 agent 包
+	// 将配置同步到 agent 包
 	cfg, _ := config.Get()
 	agent.WorkingDirectory = cfg.WorkingDirectory
 	agent.PluginsDirectory = cfg.PluginsDirectory

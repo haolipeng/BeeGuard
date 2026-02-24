@@ -37,7 +37,7 @@ rules:
         - "^/etc/ld\\.so\\.conf"
 
   - id: "SF004"
-    name: "系统服务文件��建"
+    name: "系统服务文件创建"
     description: "检测在系统服务目录下创建新的 service 文件"
     severity: "high"
     enabled: true

@@ -120,7 +120,7 @@ func parseOSRelease(content string) string {
 	return id
 }
 
-// collectPackages ��测容器内包管理器并列出已安装包
+// collectPackages 检测容器内包管理器并列出已安装包
 func (h *ImagePackageHandler) collectPackages(ctx context.Context, client container.Client, containerID string) (string, []imgPkgInfo) {
 	// 尝试 dpkg（Debian/Ubuntu）
 	if output, err := client.Exec(ctx, containerID, "dpkg-query", "-W", "-f", "${Package}\t${Version}\n"); err == nil {

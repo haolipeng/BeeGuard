@@ -15,7 +15,7 @@
 | `ip_port` | IP:端口 复合 | connect 出站连接 |
 | `domain` | DNS 查询域名 | DNS 响应（recvfrom/recvmsg） |
 
-**关键源文���**：
+**关键源文件**：
 
 | 文件 | 说明 |
 |------|------|

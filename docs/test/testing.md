@@ -199,7 +199,7 @@ ls -la /opt/cloudsec/plugins/ebpf_base_detector/config/
 | 配置文件 | 路径 | 用途 |
 |---------|------|------|
 | 高危命令规则 | `/opt/cloudsec/plugins/ebpf_base_detector/config/dangerous_commands.yaml` | 定义 12 条高危命令检测规则 |
-| 可信任程序白名单 | `/opt/cloudsec/plugins/ebpf_base_detector/config/privilege_escalation_whitelist.yaml` | 本地提权检测���名单（sudo、su 等） |
+| 可信任程序白名单 | `/opt/cloudsec/plugins/ebpf_base_detector/config/privilege_escalation_whitelist.yaml` | 本地提权检测白名单（sudo、su 等） |
 
 **数据类型（DataType）：**
 
@@ -710,7 +710,7 @@ log_filtered_events: false       # 是否记录被过滤的事件
 sudo cat /sys/kernel/debug/tracing/trace_pipe | grep hids
 ```
 
-**内��日志示例:**
+**内核日志示例:**
 ```
 hids: commit_creds pid=12345 tgid=12345 ppid=12344
 hids: commit_creds uid=1000 old_uid=1000 old_euid=1000

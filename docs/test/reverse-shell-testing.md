@@ -2,7 +2,7 @@
 
 ## 概述
 
-本文档描述如何手动验证 ebpf_base_detector 插件的反弹 Shell 检测功能（DataType 6007）。
+本文档描述如何手动验证 ebpf_base_detector 插件的反弹 Shell 检测功能（DataType 6004）。
 
 **检测原理**：在 `sched_process_exec` Hook 中，当新进程执行时检查其 FD 0（stdin）和 FD 1（stdout）是否指向 IPv4 Socket。任一指向 Socket 即触发告警。
 

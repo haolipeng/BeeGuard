@@ -144,7 +144,7 @@ func main() {
 	// 使用 WaitGroup 等待 goroutine 退出
 	var wg sync.WaitGroup
 
-	// 6. 启���事件读取循环
+	// 6. 启动事件读取循环
 	wg.Add(1)
 	go func() {
 		defer wg.Done()

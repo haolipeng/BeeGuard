@@ -1,7 +1,7 @@
 package engine
 
 const (
-	// DefaultMaxFileSize 默认��大扫描文件大小（18MB）
+	// DefaultMaxFileSize 默认最大扫描文件大小（18MB）
 	DefaultMaxFileSize = 18874368
 
 	// DefaultMaxScanTime 默认单文件扫描超时（秒）

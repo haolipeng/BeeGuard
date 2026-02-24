@@ -63,7 +63,7 @@ func (l *Logger) Info(msg string, keysAndValues ...interface{}) {
 	l.SugaredLogger.Infow(msg, keysAndValues...)
 }
 
-// Warn 记录警告日志（结构化 key-value 格��）
+// Warn 记录警告日志（结构化 key-value 格式）
 func (l *Logger) Warn(msg string, keysAndValues ...interface{}) {
 	l.SugaredLogger.Warnw(msg, keysAndValues...)
 }

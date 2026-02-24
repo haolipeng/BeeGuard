@@ -20,7 +20,7 @@
 
 // 路径相关常量
 #define PATH_MAX_ENTS   16    // dentry 链最大遍历深度
-#define PATH_BUF_SIZE   512   // 路径重建工作缓冲区大小���必须为2的幂）
+#define PATH_BUF_SIZE   512   // 路径重建工作缓冲区大小（必须为2的幂）
 #define PATH_BUF_MASK   (PATH_BUF_SIZE - 1)  // 位掩码，用于安全索引
 #define PATH_NAME_LEN   256   // 单个 dentry 名称最大长度（必须为2的幂）
 #define PATH_NAME_MASK  (PATH_NAME_LEN - 1)  // 位掩码，满足 BPF 验证器要求
@@ -61,7 +61,7 @@ struct execve_event {
     char  stdin_path[STDIO_PATH_LEN];   // FD 0 的文件路径（如 /dev/pts/0 或 socket:[xxx]）
     char  stdout_path[STDIO_PATH_LEN];  // FD 1 的文件路径
     char  tty_name[TTY_NAME_LEN];       // 控制终端名称
-    __u32 remote_ip;     // socket 远程 IP（网络字节��）
+    __u32 remote_ip;     // socket 远程 IP（网络字节序）
     __u16 remote_port;   // socket 远程端口（网络字节序）
     __u16 local_port;    // socket 本地端口（主机字节序）
     __u32 local_ip;      // socket 本地 IP（网络字节序）
@@ -191,7 +191,7 @@ struct file_event {
     char  exe_path[256];    // 操作进程的可执行文件路径
     char  new_path[PATH_BUF_SIZE]; // 创建：文件路径；重命名：新路径
     char  old_path[PATH_BUF_SIZE]; // 仅重命名：旧路径（创建时全零）
-    char  s_id[FS_ID_LEN];  // 文件系统 ID��ext4/xfs/tmpfs 等）
+    char  s_id[FS_ID_LEN];  // 文件系统 ID（ext4/xfs/tmpfs 等）
 } __attribute__((packed));
 
 #endif // __TYPES_H

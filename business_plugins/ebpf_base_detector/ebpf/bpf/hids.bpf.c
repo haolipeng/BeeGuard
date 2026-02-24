@@ -330,7 +330,7 @@ static __noinline int file_exe_is_trusted(const char *exe_path, int path_len)
 }
 
 // query_s_id_by_dentry: 从 dentry 获取文件系统 ID（如 ext4/xfs/tmpfs）
-// 通过 dentry->d_sb->s_id 读取超级块的文���系统标识符
+// 通过 dentry->d_sb->s_id 读取超级块的文件系统标识符
 static __noinline int query_s_id_by_dentry(char *s_id, struct dentry *de)
 {
     char *id = (char *)BPF_CORE_READ(de, d_sb, s_id);

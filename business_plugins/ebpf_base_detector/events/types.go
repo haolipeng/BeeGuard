@@ -426,7 +426,7 @@ type FileEvent struct {
 	RemoteIP   uint32     // socket 远程 IP（网络字节序）
 	RemotePort uint16     // socket 远程端口（网络字节序）
 	LocalPort  uint16     // socket 本地端口
-	LocalIP    uint32     // socket 本地 IP（���络字节序）
+	LocalIP    uint32     // socket 本地 IP（网络字节序）
 	Comm       [16]byte
 	ExePath    [256]byte  // 操作进程的可执行文件路径
 	NewPath    [512]byte  // 创建：文件路径；重命名：新路径

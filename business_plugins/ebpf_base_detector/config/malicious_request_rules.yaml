@@ -57,7 +57,7 @@ rules:
   # ============================================
   - id: "IOC004"
     name: "已知C2域名"
-    description: "检测解析已知C2服务器域名的行��"
+    description: "检测解析已知C2服务器域名的行为"
     threat_type: "c2"
     indicator_type: "domain"
     severity: "critical"

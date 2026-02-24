@@ -58,7 +58,7 @@ func main() {
 	}
 	logger.Info("Virus database loaded", "path", dbPath)
 
-	// 6. ���建文件过滤器和扫描器
+	// 6. 构建文件过滤器和扫描器
 	filter := scanner.NewFilter(
 		cfg.Scanner.Filter.PathWhitelist,
 		cfg.Scanner.Filter.SkipFileTypes,

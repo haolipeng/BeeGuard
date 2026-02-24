@@ -98,7 +98,7 @@ sudo pkill -SIGTERM -f "/opt/cloudsec/bin/agent"
 # 2. 备份（可选）
 sudo cp -r /opt/cloudsec /opt/cloudsec.bak
 
-# 3. 部署��版本
+# 3. 部署新版本
 cd /path/to/agent
 make build && make deploy
 

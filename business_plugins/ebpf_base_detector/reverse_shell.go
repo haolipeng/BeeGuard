@@ -57,7 +57,7 @@ func (d *ReverseShellDetector) Detect(evt *events.ExecveEvent) *ReverseShellResu
 	return nil
 }
 
-// BuildReverseShellRecord 从 enriched ExecveEvent 和检测结果构建 DataType 6007 告警
+// BuildReverseShellRecord 从 enriched ExecveEvent 和检测结果构建 DataType 6004 告警
 func BuildReverseShellRecord(evt *events.ExecveEvent, result *ReverseShellResult, pidTree string) *businessplugins.Record {
 	comm := cstring(evt.Comm[:])
 	exePath := cstring(evt.ExePath[:])
@@ -94,7 +94,7 @@ func BuildReverseShellRecord(evt *events.ExecveEvent, result *ReverseShellResult
 	}
 
 	return &businessplugins.Record{
-		DataType:  6007,
+		DataType:  6004,
 		Timestamp: time.Now().Unix(),
 		Data: &businessplugins.Payload{
 			Fields: fields,

@@ -138,7 +138,7 @@ func (m *CgroupManager) applyCgroupV1(cfg CgroupConfig, pid int) error {
 		return fmt.Errorf("add process to memory cgroup: %w", err)
 	}
 
-	// CPU 限��
+	// CPU 限制
 	cpuPath := filepath.Join("/sys/fs/cgroup/cpu", m.name)
 	if err := os.MkdirAll(cpuPath, 0755); err != nil {
 		return fmt.Errorf("mkdir %s: %w", cpuPath, err)
