@@ -206,7 +206,7 @@ func main() {
 					result := det.Detect(comm, args)
 					if result != nil {
 						// 修改DataType为高危命令告警类型（6003），以便Server端正确处理
-						record.DataType = 6003
+						record.DataType = businessplugins.AlertTypeDangerousCommand
 
 						// 添加检测结果到record（保留原有字段供调试）
 						record.Data.Fields["detection_type"] = DetectionTypeDangerousCommand
@@ -459,7 +459,7 @@ func main() {
 					if result != nil {
 						// 发送告警 Record (DataType=6009)
 						alertRecord := evt.ToRecord()
-						alertRecord.DataType = 6009
+						alertRecord.DataType = businessplugins.AlertTypeSensitiveFile
 						alertRecord.Data.Fields["detection_type"] = DetectionTypeSensitiveFile
 						alertRecord.Data.Fields["rule_id"] = result.RuleID
 						alertRecord.Data.Fields["rule_name"] = result.RuleName

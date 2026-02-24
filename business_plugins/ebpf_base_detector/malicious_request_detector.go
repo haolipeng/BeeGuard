@@ -202,7 +202,7 @@ func BuildMaliciousRequestConnectRecord(evt *events.ConnectEvent, result *Malici
 	}
 
 	return &businessplugins.Record{
-		DataType:  6008,
+		DataType:  businessplugins.AlertTypeMaliciousRequest,
 		Timestamp: time.Now().Unix(),
 		Data: &businessplugins.Payload{
 			Fields: map[string]string{
@@ -237,7 +237,7 @@ func BuildMaliciousRequestDNSRecord(evt *events.DNSEvent, result *MaliciousReque
 	dnsServerIP := events.NetworkIPToString(evt.DNSServerIP)
 
 	return &businessplugins.Record{
-		DataType:  6008,
+		DataType:  businessplugins.AlertTypeMaliciousRequest,
 		Timestamp: time.Now().Unix(),
 		Data: &businessplugins.Payload{
 			Fields: map[string]string{

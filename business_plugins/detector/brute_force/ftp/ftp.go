@@ -5,14 +5,11 @@ import (
 	"sync"
 	"time"
 
+	businessplugins "business_plugins/lib"
+
 	"gitlab.myinterest.top/security/agent/business_plugins/detector/config"
 	"gitlab.myinterest.top/security/agent/business_plugins/detector/engine"
 	"go.uber.org/zap"
-)
-
-const (
-	// DataTypeFTPBruteForce FTP暴力破解告警数据类型
-	DataTypeFTPBruteForce = 6002
 )
 
 // Detector FTP暴力破解检测器
@@ -50,7 +47,7 @@ func (d *Detector) Name() string {
 
 // DataType 返回数据类型
 func (d *Detector) DataType() int {
-	return DataTypeFTPBruteForce
+	return businessplugins.AlertTypeFTPBruteForce
 }
 
 // LogPaths 返回监控的日志路径

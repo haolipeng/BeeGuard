@@ -94,7 +94,7 @@ func BuildReverseShellRecord(evt *events.ExecveEvent, result *ReverseShellResult
 	}
 
 	return &businessplugins.Record{
-		DataType:  6004,
+		DataType:  businessplugins.AlertTypeReverseShell,
 		Timestamp: time.Now().Unix(),
 		Data: &businessplugins.Payload{
 			Fields: fields,

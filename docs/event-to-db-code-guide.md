@@ -38,7 +38,7 @@ Agent (gRPC) → TransferServer.Transfer() → handlePackagedData() → processP
 | `MapAbnormalLoginAlert()` | 6005 | 异常登录 |
 | `MapPrivilegeEscalationAlert()` | 6006 | 本地提权 |
 | `MapMaliciousRequestAlert()` | 6008 | 恶意请求 |
-| `MapNetworkAttackAlert()` | 6010 | 网络攻击（NIDS） |
+| `MapNetworkAttackAlert()` | 6007 | 网络攻击（NIDS） |
 | `MapMalwareScanAlert()` | 6061/6062 | 恶意文件/进程扫描 |
 
 ### 资产采集映射: `internal/mapper/asset_mapper.go`

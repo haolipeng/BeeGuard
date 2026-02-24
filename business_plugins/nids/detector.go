@@ -130,12 +130,12 @@ func extractSnippet(buf string, matchStart, matchLen int) string {
 	return buf[start:end]
 }
 
-// sendAlert 构建并发送 DataType=6010 告警
+// sendAlert 构建并发送 DataType=6007 告警
 func (d *Detector) sendAlert(rule *SuricataRule, req *HTTPRequest,
 	state *AttackState, matchedSnippet string) {
 
 	record := &businessplugins.Record{
-		DataType:  6010,
+		DataType:  businessplugins.AlertTypeNIDS,
 		Timestamp: time.Now().Unix(),
 		Data: &businessplugins.Payload{
 			Fields: map[string]string{

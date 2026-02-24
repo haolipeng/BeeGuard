@@ -5,14 +5,11 @@ import (
 	"sync"
 	"time"
 
+	businessplugins "business_plugins/lib"
+
 	"gitlab.myinterest.top/security/agent/business_plugins/detector/config"
 	"gitlab.myinterest.top/security/agent/business_plugins/detector/engine"
 	"go.uber.org/zap"
-)
-
-const (
-	// DataTypeSSHBruteForce SSH暴力破解告警数据类型
-	DataTypeSSHBruteForce = 6001
 )
 
 // Detector SSH暴力破解检测器
@@ -50,7 +47,7 @@ func (d *Detector) Name() string {
 
 // DataType 返回数据类型
 func (d *Detector) DataType() int {
-	return DataTypeSSHBruteForce
+	return businessplugins.AlertTypeSSHBruteForce
 }
 
 // LogPaths 返回监控的日志路径

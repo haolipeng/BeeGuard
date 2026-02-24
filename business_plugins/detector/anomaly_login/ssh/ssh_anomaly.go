@@ -5,15 +5,11 @@ import (
 	"sync"
 	"time"
 
+	businessplugins "business_plugins/lib"
+
 	"gitlab.myinterest.top/security/agent/business_plugins/detector/config"
 	"gitlab.myinterest.top/security/agent/business_plugins/detector/engine"
 	"go.uber.org/zap"
-)
-
-const (
-	// DataTypeSSHAnomalyLogin SSH异常登录告警数据类型
-	// 注意: 6003 已被服务端高危命令告警使用，改用 6005
-	DataTypeSSHAnomalyLogin = 6005
 )
 
 // Detector SSH异常登录检测器
@@ -130,7 +126,7 @@ func (d *Detector) Name() string {
 
 // DataType 返回数据类型
 func (d *Detector) DataType() int {
-	return DataTypeSSHAnomalyLogin
+	return businessplugins.AlertTypeSSHAnomalyLogin
 }
 
 // LogPaths 返回监控的日志路径

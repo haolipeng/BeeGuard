@@ -15,8 +15,6 @@ import (
 	"go.uber.org/zap"
 )
 
-const dataTypePrivilegeEscalation int32 = 6006
-
 // DetectionOutput 高危命令检测结果输出结构
 type DetectionOutput struct {
 	Timestamp  int64             `json:"timestamp"`
@@ -112,7 +110,7 @@ func processRecords(recs []*proto.EncodedRecord, file *os.File) {
 		}
 
 		switch rec.DataType {
-		case dataTypePrivilegeEscalation:
+		case businessplugins.AlertTypePrivilegeEscalation:
 			output := buildPrivilegeEscalationOutput(rec, payload)
 			if file != nil {
 				writeJSON(file, output)

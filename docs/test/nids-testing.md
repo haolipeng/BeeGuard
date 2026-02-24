@@ -2,7 +2,7 @@
 
 ## 概述
 
-本文档描述如何手动验证 nids 插件的网络入侵检测功能（DataType 6010）。
+本文档描述如何手动验证 nids 插件的网络入侵检测功能（DataType 6007）。
 
 **检测原理**：通过 gopacket 抓取网卡流量，TCP 流重组后解析 HTTP 请求，将请求的 URI、Header、Body 等字段与 Suricata 格式规则进行匹配。匹配成功时产生告警。
 
