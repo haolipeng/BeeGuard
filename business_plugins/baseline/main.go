@@ -84,9 +84,9 @@ func main() {
 				retBaselineInfo, analysisErr := check.Analysis(pluginsTask.Data)
 
 				// send request to server
-				err = SendServer(retBaselineInfo, pluginsTask.Token)
-				if err != nil {
-					infra.Loger.Println("sendServer error:", err)
+				sendErr := SendServer(retBaselineInfo, pluginsTask.Token)
+				if sendErr != nil {
+					infra.Loger.Println("sendServer error:", sendErr)
 				} else {
 					infra.Loger.Println("sendServer success:", retBaselineInfo.BaselineId)
 				}

@@ -115,26 +115,35 @@ func (e *ClamAVEngine) LoadDB(dbPath string) error {
 // ScanFile 扫描单个文件
 func (e *ClamAVEngine) ScanFile(path string) (*ScanResult, error) {
 	e.mu.RLock()
-	defer e.mu.RUnlock()
 
 	if !e.initialized {
+		e.mu.RUnlock()
 		return nil, fmt.Errorf("engine not initialized")
 	}
 
 	cPath := C.CString(path)
-	defer C.free(unsafe.Pointer(cPath))
-
-	var virusName *C.char
-	var scanned C.ulong
 
 	// 使用超时控制
+	// 将 cPath、virusName、scanned 的生命周期移入 goroutine，
+	// 避免超时返回后 CGo 调用仍在访问已释放的内存
 	type scanRes struct {
-		ret C.cl_error_t
+		ret       C.cl_error_t
+		virusName string
 	}
 	resultCh := make(chan scanRes, 1)
 	go func() {
+		defer e.mu.RUnlock()
+		defer C.free(unsafe.Pointer(cPath))
+
+		var virusName *C.char
+		var scanned C.ulong
 		ret := C.scan_file_wrapper(cPath, &virusName, &scanned, e.engine)
-		resultCh <- scanRes{ret: ret}
+
+		var name string
+		if ret == C.CL_VIRUS && virusName != nil {
+			name = C.GoString(virusName)
+		}
+		resultCh <- scanRes{ret: ret, virusName: name}
 	}()
 
 	select {
@@ -142,7 +151,7 @@ func (e *ClamAVEngine) ScanFile(path string) (*ScanResult, error) {
 		if r.ret == C.CL_VIRUS {
 			return &ScanResult{
 				Infected:  true,
-				VirusName: C.GoString(virusName),
+				VirusName: r.virusName,
 			}, nil
 		}
 		if r.ret != C.CL_CLEAN {

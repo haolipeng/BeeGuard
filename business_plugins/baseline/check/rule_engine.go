@@ -83,6 +83,10 @@ func DealMathCompute(funcRes interface{}, ruleRes string) (ifPass bool, err erro
 		)
 		rule := ruleRes[len(operator)+3:]
 		ruleInt, err = strconv.Atoi(rule)
+		if err != nil {
+			errStr := fmt.Sprintf("%d:rule value is not a valid integer: %s", ErrorConfigWrite, rule)
+			return false, errors.New(errStr)
+		}
 
 		switch funcRes.(type) {
 		case int:
