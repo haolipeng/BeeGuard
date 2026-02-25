@@ -31,7 +31,6 @@ const (
 	// 结果上报（插件 → Agent → Server）
 	DataTypeScanStatus = 6060 // 扫描任务状态
 	DataTypeFileDetect = 6061 // 静态文件检出
-	DataTypeProcDetect = 6062 // 进程 EXE 检出
 )
 
 // ToRecord 将 MalwareResult 转换为 Protobuf Record
