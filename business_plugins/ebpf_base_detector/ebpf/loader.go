@@ -87,7 +87,15 @@ func NewLoader() (*Loader, error) {
 	}
 	l.links = append(l.links, fileRenameLink)
 
-	// 10. 创建perf reader（32页/CPU = 128KB，扩展后的 execve_event ~1.4KB）
+	// 10. 附加kprobe到security_inode_unlink（文件��除监控）
+	fileUnlinkLink, err := link.Kprobe("security_inode_unlink", objs.KpInodeUnlink, nil)
+	if err != nil {
+		l.Close()
+		return nil, fmt.Errorf("failed to attach kprobe to security_inode_unlink: %w", err)
+	}
+	l.links = append(l.links, fileUnlinkLink)
+
+	// 11. 创建perf reader（32页/CPU = 128KB，扩展后的 execve_event ~1.4KB）
 	l.perfReader, err = perf.NewReader(objs.Events, 32*4096)
 	if err != nil {
 		l.Close()

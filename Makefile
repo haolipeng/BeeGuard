@@ -107,6 +107,38 @@ build: build-agent build-plugins
 	@echo "  Agent:   $(BUILD_DIR)/$(BINARY_NAME)"
 	@echo "  Plugins: $(PLUGINS_DIR)/"
 
+# 编译 cloudsecctl 控制工具
+.PHONY: build-ctl
+build-ctl:
+	@echo "Building cloudsecctl..."
+	@mkdir -p $(BUILD_DIR)
+	@cd deploy/control && $(GO) build $(GOFLAGS) -o ../../$(BUILD_DIR)/cloudsecctl .
+	@echo "Build complete: $(BUILD_DIR)/cloudsecctl"
+
+# 编译所有组件 (agent + plugins + cloudsecctl)
+.PHONY: build-all
+build-all: build build-ctl
+	@echo "All components (including cloudsecctl) built successfully"
+
+# 生成 DEB 安装包
+.PHONY: package-deb
+package-deb: build-all
+	@echo "Generating DEB package..."
+	@cd deploy && VERSION=$(VERSION) ARCH=$$(dpkg --print-architecture 2>/dev/null || echo amd64) nfpm package --packager deb --target ../$(BUILD_DIR)/
+	@echo "DEB package created in $(BUILD_DIR)/"
+
+# 生成 RPM 安装包
+.PHONY: package-rpm
+package-rpm: build-all
+	@echo "Generating RPM package..."
+	@cd deploy && VERSION=$(VERSION) ARCH=$$(uname -m | sed 's/x86_64/amd64/' | sed 's/aarch64/arm64/') nfpm package --packager rpm --target ../$(BUILD_DIR)/
+	@echo "RPM package created in $(BUILD_DIR)/"
+
+# 生成 DEB + RPM 安装包
+.PHONY: package
+package: package-deb package-rpm
+	@echo "All packages created in $(BUILD_DIR)/"
+
 # 清理编译产物
 .PHONY: clean
 clean:
@@ -322,11 +354,18 @@ help:
 	@echo "  make build              - Build agent + all plugins"
 	@echo "  make build-agent        - Build agent only"
 	@echo "  make build-plugins      - Build all plugins"
+	@echo "  make build-ctl          - Build cloudsecctl control tool"
+	@echo "  make build-all          - Build agent + plugins + cloudsecctl"
 	@echo "  make build-driver       - Build ebpf_base_detector plugin only"
 	@echo "  make build-nids         - Build nids plugin only"
 	@echo "  make build-scanner      - Build scanner plugin only (requires libclamav-dev)"
 	@echo "  make generate-ebpf      - Generate eBPF code (requires clang, libbpf)"
 	@echo "  make clean              - Clean build artifacts"
+	@echo ""
+	@echo "Package (requires nfpm):"
+	@echo "  make package-deb        - Build all + generate DEB package"
+	@echo "  make package-rpm        - Build all + generate RPM package"
+	@echo "  make package            - Build all + generate DEB + RPM packages"
 	@echo ""
 	@echo "Deploy (to $(DEPLOY_DIR)):"
 	@echo "  make deploy             - Deploy agent + plugins + config"

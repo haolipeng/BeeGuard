@@ -196,8 +196,11 @@ func handleFile(ctx *eventHandlerCtx, raw []byte) error {
 	record.Data.Fields["pid_tree"] = pidTreeStr
 	newPath := cstring(evt.NewPath[:])
 	actionStr := "create"
-	if evt.Action == events.FileActionRename {
+	switch evt.Action {
+	case events.FileActionRename:
 		actionStr = "rename"
+	case events.FileActionDelete:
+		actionStr = "delete"
 	}
 	ctx.logger.Info("File event",
 		"pid", evt.PID, "comm", cstring(evt.Comm[:]), "action", actionStr,

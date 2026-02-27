@@ -26,6 +26,7 @@ const (
 const (
 	FileActionCreate uint8 = 1
 	FileActionRename uint8 = 2
+	FileActionDelete uint8 = 3
 )
 
 // GetEventType 从原始数据中获取事件类型
@@ -416,7 +417,7 @@ func (e *DNSEvent) ToRecord() *businessplugins.Record {
 // FileEvent 文件操作事件 - 对应C结构体 struct file_event
 type FileEvent struct {
 	EventType  uint8      // EVENT_TYPE_FILE = 8
-	Action     uint8      // 1=create, 2=rename
+	Action     uint8      // 1=create, 2=rename, 3=delete
 	Padding1   [2]byte
 	PID        uint32
 	TGID       uint32
@@ -454,6 +455,8 @@ func (e *FileEvent) ToRecord() *businessplugins.Record {
 		actionStr = "create"
 	case FileActionRename:
 		actionStr = "rename"
+	case FileActionDelete:
+		actionStr = "delete"
 	}
 
 	fields := map[string]string{

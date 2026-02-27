@@ -1274,4 +1274,89 @@ int kp_inode_rename(struct pt_regs *ctx)
     return handle_inode_rename(ctx);
 }
 
+// handle_inode_unlink: 处理文件删除事件
+// 独立 __noinline subprogram，有独立 1M 指令预算
+// security_inode_unlink 签名与 security_inode_create 相同：
+//   security_inode_unlink(struct inode *dir, struct dentry *dentry)
+static __noinline int handle_inode_unlink(struct pt_regs *ctx)
+{
+    u32 key = 0;
+    struct task_struct *task;
+    struct task_struct *parent;
+
+    struct file_event *evt = bpf_map_lookup_elem(&percpu_file_buf, &key);
+    if (!evt)
+        return 0;
+
+    evt->event_type = EVENT_TYPE_FILE;
+    evt->action = FILE_ACTION_DELETE;
+    evt->padding1[0] = 0;
+    evt->padding1[1] = 0;
+    evt->pid = 0;
+    evt->tgid = 0;
+    evt->ppid = 0;
+    evt->uid = 0;
+    evt->socket_pid = 0;
+    evt->remote_ip = 0;
+    evt->remote_port = 0;
+    evt->local_port = 0;
+    evt->local_ip = 0;
+    evt->new_path[0] = 0;
+    evt->old_path[0] = 0;
+    evt->s_id[0] = 0;
+
+    task = (struct task_struct *)bpf_get_current_task();
+
+    int path_len = read_full_exe_path(task, evt->exe_path, sizeof(evt->exe_path));
+    if (path_len > 0 && file_exe_is_trusted(evt->exe_path, path_len))
+        return 0;
+
+    u64 id = bpf_get_current_pid_tgid();
+    evt->pid = id;
+    evt->tgid = id >> 32;
+    evt->uid = bpf_get_current_uid_gid();
+    parent = BPF_CORE_READ(task, real_parent);
+    if (parent)
+        evt->ppid = BPF_CORE_READ(parent, tgid);
+    bpf_get_current_comm(&evt->comm, sizeof(evt->comm));
+
+    struct dentry *de = (struct dentry *)PT_REGS_PARM2_CORE(ctx);
+    if (!de)
+        return 0;
+
+    query_s_id_by_dentry(evt->s_id, de);
+
+    struct path_buf *pbuf = bpf_map_lookup_elem(&percpu_file_path_buf, &key);
+    if (!pbuf)
+        return 0;
+
+    __u32 fpath_len = 0;
+    char *fpath_start = dentry_path(pbuf->data, pbuf->swap, de, &fpath_len);
+
+    if (fpath_len > 1 && fpath_len <= PATH_BUF_SIZE)
+        bpf_probe_read_kernel(evt->new_path, fpath_len & PATH_BUF_MASK, fpath_start);
+
+    __u32 sock_pid = 0;
+    struct sock *sk = process_socket(task, &sock_pid);
+    if (sk) {
+        evt->socket_pid = sock_pid;
+        evt->remote_ip = BPF_CORE_READ(sk, __sk_common.skc_daddr);
+        evt->remote_port = BPF_CORE_READ(sk, __sk_common.skc_dport);
+        evt->local_ip = BPF_CORE_READ(sk, __sk_common.skc_rcv_saddr);
+        evt->local_port = BPF_CORE_READ(sk, __sk_common.skc_num);
+    }
+
+    bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, evt, sizeof(*evt));
+
+    return 0;
+}
+
+// 监听文件删除事件
+// Hook点: security_inode_unlink(struct inode *dir, struct dentry *dentry)
+SEC("kprobe/security_inode_unlink")
+int kp_inode_unlink(struct pt_regs *ctx)
+{
+    return handle_inode_unlink(ctx);
+}
+
 char LICENSE[] SEC("license") = "GPL";

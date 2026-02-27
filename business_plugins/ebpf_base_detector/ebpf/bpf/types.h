@@ -14,6 +14,7 @@
 // 文件操作 action 常量
 #define FILE_ACTION_CREATE  1   // 文件创建
 #define FILE_ACTION_RENAME  2   // 文件重命名
+#define FILE_ACTION_DELETE  3   // 文件删除
 
 // 文件系统 ID 常量
 #define FS_ID_LEN  32   // 文件系统 ID 最大长度（与内核 s_id 一致）
@@ -173,10 +174,10 @@ struct exe_item {
 	char  name[CMDLINE_LEN];  // 可执行文件路径
 } __attribute__((packed));
 
-// 文件操作事件结构体（文件创建/重命名监控）
+// 文件操作事件结构体（文件创建/重命名/删除监控）
 struct file_event {
     __u8  event_type;       // EVENT_TYPE_FILE = 8
-    __u8  action;           // FILE_ACTION_CREATE=1, FILE_ACTION_RENAME=2
+    __u8  action;           // FILE_ACTION_CREATE=1, FILE_ACTION_RENAME=2, FILE_ACTION_DELETE=3
     __u8  padding1[2];
     __u32 pid;
     __u32 tgid;

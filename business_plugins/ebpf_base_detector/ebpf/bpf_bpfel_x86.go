@@ -199,6 +199,7 @@ type bpfProgramSpecs struct {
 	KpCommitCreds *ebpf.ProgramSpec `ebpf:"kp_commit_creds"`
 	KpInodeCreate *ebpf.ProgramSpec `ebpf:"kp_inode_create"`
 	KpInodeRename *ebpf.ProgramSpec `ebpf:"kp_inode_rename"`
+	KpInodeUnlink *ebpf.ProgramSpec `ebpf:"kp_inode_unlink"`
 	TpProcExec    *ebpf.ProgramSpec `ebpf:"tp_proc_exec"`
 	TpSysExit     *ebpf.ProgramSpec `ebpf:"tp_sys_exit"`
 }
@@ -284,6 +285,7 @@ type bpfPrograms struct {
 	KpCommitCreds *ebpf.Program `ebpf:"kp_commit_creds"`
 	KpInodeCreate *ebpf.Program `ebpf:"kp_inode_create"`
 	KpInodeRename *ebpf.Program `ebpf:"kp_inode_rename"`
+	KpInodeUnlink *ebpf.Program `ebpf:"kp_inode_unlink"`
 	TpProcExec    *ebpf.Program `ebpf:"tp_proc_exec"`
 	TpSysExit     *ebpf.Program `ebpf:"tp_sys_exit"`
 }
@@ -293,6 +295,7 @@ func (p *bpfPrograms) Close() error {
 		p.KpCommitCreds,
 		p.KpInodeCreate,
 		p.KpInodeRename,
+		p.KpInodeUnlink,
 		p.TpProcExec,
 		p.TpSysExit,
 	)
