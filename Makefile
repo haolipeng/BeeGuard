@@ -194,7 +194,7 @@ deploy: build
 	@sudo mkdir -p $(DEPLOY_DIR)/plugins/ebpf_base_detector/config
 	@sudo mkdir -p $(DEPLOY_DIR)/plugins/nids/config
 	@sudo mkdir -p $(DEPLOY_DIR)/plugins/scanner/config
-	@sudo cp $(PLUGINS_DIR)/collector $(DEPLOY_DIR)/plugins/collector/
+	@sudo cp $(PLUGINS_DIR)/collector/collector $(DEPLOY_DIR)/plugins/collector/
 	@sudo cp $(PLUGINS_DIR)/baseline $(DEPLOY_DIR)/plugins/baseline/
 	@sudo cp $(PLUGINS_DIR)/detector $(DEPLOY_DIR)/plugins/detector/
 	@sudo cp $(DETECTOR_SRC)/config/rules/*.yaml $(DEPLOY_DIR)/plugins/detector/config/rules/
@@ -202,6 +202,7 @@ deploy: build
 	@sudo cp $(DRIVER_SRC)/config/dangerous_commands.yaml $(DEPLOY_DIR)/plugins/ebpf_base_detector/config/
 	@sudo cp $(DRIVER_SRC)/config/privilege_escalation_whitelist.yaml $(DEPLOY_DIR)/plugins/ebpf_base_detector/config/
 	@sudo cp $(DRIVER_SRC)/config/malicious_request_rules.yaml $(DEPLOY_DIR)/plugins/ebpf_base_detector/config/
+	@sudo cp $(DRIVER_SRC)/config/sensitive_file_rules.yaml $(DEPLOY_DIR)/plugins/ebpf_base_detector/config/
 	@sudo cp $(PLUGINS_DIR)/nids $(DEPLOY_DIR)/plugins/nids/
 	@sudo cp $(NIDS_SRC)/config/nids.yaml $(DEPLOY_DIR)/plugins/nids/config/
 	@sudo cp $(NIDS_SRC)/config/nids.rules $(DEPLOY_DIR)/plugins/nids/config/
@@ -244,7 +245,7 @@ deploy-plugins: build-plugins
 	@sudo mkdir -p $(DEPLOY_DIR)/plugins/ebpf_base_detector/config
 	@sudo mkdir -p $(DEPLOY_DIR)/plugins/nids/config
 	@sudo mkdir -p $(DEPLOY_DIR)/plugins/scanner/config
-	@sudo cp $(PLUGINS_DIR)/collector $(DEPLOY_DIR)/plugins/collector/
+	@sudo cp $(PLUGINS_DIR)/collector/collector $(DEPLOY_DIR)/plugins/collector/
 	@sudo cp $(PLUGINS_DIR)/baseline $(DEPLOY_DIR)/plugins/baseline/
 	@sudo cp $(PLUGINS_DIR)/detector $(DEPLOY_DIR)/plugins/detector/
 	@sudo cp $(DETECTOR_SRC)/config/rules/*.yaml $(DEPLOY_DIR)/plugins/detector/config/rules/
@@ -252,6 +253,7 @@ deploy-plugins: build-plugins
 	@sudo cp $(DRIVER_SRC)/config/dangerous_commands.yaml $(DEPLOY_DIR)/plugins/ebpf_base_detector/config/
 	@sudo cp $(DRIVER_SRC)/config/privilege_escalation_whitelist.yaml $(DEPLOY_DIR)/plugins/ebpf_base_detector/config/
 	@sudo cp $(DRIVER_SRC)/config/malicious_request_rules.yaml $(DEPLOY_DIR)/plugins/ebpf_base_detector/config/
+	@sudo cp $(DRIVER_SRC)/config/sensitive_file_rules.yaml $(DEPLOY_DIR)/plugins/ebpf_base_detector/config/
 	@sudo cp $(PLUGINS_DIR)/nids $(DEPLOY_DIR)/plugins/nids/
 	@sudo cp $(NIDS_SRC)/config/nids.yaml $(DEPLOY_DIR)/plugins/nids/config/
 	@sudo cp $(NIDS_SRC)/config/nids.rules $(DEPLOY_DIR)/plugins/nids/config/

@@ -54,3 +54,6 @@ scripts/
 # Machine ID 文件
 machine-id
 bin/agent
+
+# 文档目录
+docs/

@@ -1,0 +1,7 @@
+server: "127.0.0.1:50051"
+connect_timeout: 30
+working_directory: "/opt/cloudsec/data/agent"
+plugins_directory: "/opt/cloudsec/plugins"
+log_directory: "/opt/cloudsec/logs"
+retry_max_count: 10
+retry_interval: 5
