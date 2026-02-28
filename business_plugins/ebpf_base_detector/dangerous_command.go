@@ -9,14 +9,14 @@ import (
 // DangerousCommandDetector 高危命令检测器
 type DangerousCommandDetector struct {
 	rules    []Rule
-	compiled map[string][]*regexp.Regexp // 预编译的正则表达式，key为规则ID
+	compiled map[int64][]*regexp.Regexp // 预编译的正则表达式，key为规则ID
 }
 
 // NewDangerousCommandDetector 创建检测器实例
 func NewDangerousCommandDetector(config *RuleConfig) (*DangerousCommandDetector, error) {
 	d := &DangerousCommandDetector{
 		rules:    config.Rules,
-		compiled: make(map[string][]*regexp.Regexp),
+		compiled: make(map[int64][]*regexp.Regexp),
 	}
 
 	// 预编译所有启用的正则表达式规则
@@ -30,7 +30,7 @@ func NewDangerousCommandDetector(config *RuleConfig) (*DangerousCommandDetector,
 			for _, p := range rule.Match.Patterns {
 				re, err := regexp.Compile(p)
 				if err != nil {
-					return nil, fmt.Errorf("rule '%s': invalid regex pattern '%s': %w", rule.ID, p, err)
+					return nil, fmt.Errorf("rule '%d': invalid regex pattern '%s': %w", rule.ID, p, err)
 				}
 				patterns = append(patterns, re)
 			}
@@ -147,8 +147,8 @@ func (d *DangerousCommandDetector) GetEnabledRuleCount() int {
 }
 
 // GetRuleIDs 返回所有启用的规则ID
-func (d *DangerousCommandDetector) GetRuleIDs() []string {
-	var ids []string
+func (d *DangerousCommandDetector) GetRuleIDs() []int64 {
+	var ids []int64
 	for _, rule := range d.rules {
 		if rule.Enabled {
 			ids = append(ids, rule.ID)

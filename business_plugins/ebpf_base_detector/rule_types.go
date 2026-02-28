@@ -2,7 +2,7 @@ package main
 
 // DetectionResult 检测结果
 type DetectionResult struct {
-	RuleID         string // 规则ID
+	RuleID         int64  // 规则ID
 	RuleName       string // 规则名称
 	Severity       string // 严重级别: critical/high/medium/low
 	Description    string // 规则描述
@@ -11,7 +11,7 @@ type DetectionResult struct {
 
 // Rule 检测规则
 type Rule struct {
-	ID          string `yaml:"id"`          // 规则唯一标识
+	ID          int64  `yaml:"id"`          // 规则唯一标识
 	Name        string `yaml:"name"`        // 规则名称
 	Description string `yaml:"description"` // 规则描述
 	Severity    string `yaml:"severity"`    // 严重级别: critical/high/medium/low

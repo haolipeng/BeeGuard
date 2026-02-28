@@ -33,20 +33,20 @@ func validateConfig(config *RuleConfig) error {
 		return fmt.Errorf("missing version field")
 	}
 
-	seenIDs := make(map[string]bool)
+	seenIDs := make(map[int64]bool)
 	for i, rule := range config.Rules {
 		// 检查规则ID唯一性
-		if rule.ID == "" {
+		if rule.ID == 0 {
 			return fmt.Errorf("rule %d: missing id", i)
 		}
 		if seenIDs[rule.ID] {
-			return fmt.Errorf("rule %d: duplicate id '%s'", i, rule.ID)
+			return fmt.Errorf("rule %d: duplicate id '%d'", i, rule.ID)
 		}
 		seenIDs[rule.ID] = true
 
 		// 检查规则名称
 		if rule.Name == "" {
-			return fmt.Errorf("rule '%s': missing name", rule.ID)
+			return fmt.Errorf("rule '%d': missing name", rule.ID)
 		}
 
 		// 检查严重级别
@@ -54,7 +54,7 @@ func validateConfig(config *RuleConfig) error {
 		case SeverityCritical, SeverityHigh, SeverityMedium, SeverityLow:
 			// 有效
 		default:
-			return fmt.Errorf("rule '%s': invalid severity '%s'", rule.ID, rule.Severity)
+			return fmt.Errorf("rule '%d': invalid severity '%s'", rule.ID, rule.Severity)
 		}
 
 		// 检查匹配类型
@@ -62,12 +62,12 @@ func validateConfig(config *RuleConfig) error {
 		case MatchTypeRegex, MatchTypeContains, MatchTypePrefix, MatchTypeExact:
 			// 有效
 		default:
-			return fmt.Errorf("rule '%s': invalid match type '%s'", rule.ID, rule.Match.Type)
+			return fmt.Errorf("rule '%d': invalid match type '%s'", rule.ID, rule.Match.Type)
 		}
 
 		// 检查模式列表
 		if len(rule.Match.Patterns) == 0 {
-			return fmt.Errorf("rule '%s': no patterns defined", rule.ID)
+			return fmt.Errorf("rule '%d': no patterns defined", rule.ID)
 		}
 	}
 

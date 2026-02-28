@@ -34,13 +34,13 @@ func handleExecve(ctx *eventHandlerCtx, raw []byte) error {
 		if result != nil {
 			record.DataType = businessplugins.AlertTypeDangerousCommand
 			record.Data.Fields["detection_type"] = DetectionTypeDangerousCommand
-			record.Data.Fields["rule_id"] = result.RuleID
+			record.Data.Fields["rule_id"] = fmt.Sprintf("%d", result.RuleID)
 			record.Data.Fields["rule_name"] = result.RuleName
 			record.Data.Fields["severity"] = result.Severity
 			record.Data.Fields["rule_description"] = result.Description
 			record.Data.Fields["matched_pattern"] = result.MatchedPattern
 			record.Data.Fields["command"] = args
-			record.Data.Fields["command_type"] = result.RuleID
+			record.Data.Fields["command_type"] = fmt.Sprintf("%d", result.RuleID)
 			record.Data.Fields["user"] = record.Data.Fields["uid"]
 			if evt.UID == 0 {
 				record.Data.Fields["privilege_level"] = "root"
@@ -211,12 +211,15 @@ func handleFile(ctx *eventHandlerCtx, raw []byte) error {
 			alertRecord := evt.ToRecord()
 			alertRecord.DataType = businessplugins.AlertTypeSensitiveFile
 			alertRecord.Data.Fields["detection_type"] = DetectionTypeSensitiveFile
-			alertRecord.Data.Fields["rule_id"] = result.RuleID
+			alertRecord.Data.Fields["rule_id"] = fmt.Sprintf("%d", result.RuleID)
 			alertRecord.Data.Fields["rule_name"] = result.RuleName
 			alertRecord.Data.Fields["severity"] = result.Severity
 			alertRecord.Data.Fields["rule_description"] = result.Description
 			alertRecord.Data.Fields["matched_pattern"] = result.MatchedPattern
 			alertRecord.Data.Fields["pid_tree"] = pidTreeStr
+			alertRecord.Data.Fields["operator_user"] = resolveUsername(evt.UID)
+			alertRecord.Data.Fields["operator_process"] = cstring(evt.Comm[:])
+			alertRecord.Data.Fields["timestamp"] = fmt.Sprintf("%d", alertRecord.Timestamp)
 			ctx.logger.Warn("Sensitive file operation detected",
 				"rule_id", result.RuleID, "rule_name", result.RuleName, "severity", result.Severity,
 				"action", actionStr, "new_path", newPath, "pid", evt.PID, "comm", cstring(evt.Comm[:]))

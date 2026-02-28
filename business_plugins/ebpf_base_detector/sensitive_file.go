@@ -9,14 +9,14 @@ import (
 // SensitiveFileDetector 敏感文件检测器
 type SensitiveFileDetector struct {
 	rules    []Rule
-	compiled map[string][]*regexp.Regexp // 预编译的正则表达式，key为规则ID
+	compiled map[int64][]*regexp.Regexp // 预编译的正则表达式，key为规则ID
 }
 
 // NewSensitiveFileDetector 创建敏感文件检测器实例
 func NewSensitiveFileDetector(config *RuleConfig) (*SensitiveFileDetector, error) {
 	d := &SensitiveFileDetector{
 		rules:    config.Rules,
-		compiled: make(map[string][]*regexp.Regexp),
+		compiled: make(map[int64][]*regexp.Regexp),
 	}
 
 	// 预编译所有启用的正则表达式规则
@@ -30,7 +30,7 @@ func NewSensitiveFileDetector(config *RuleConfig) (*SensitiveFileDetector, error
 			for _, p := range rule.Match.Patterns {
 				re, err := regexp.Compile(p)
 				if err != nil {
-					return nil, fmt.Errorf("rule '%s': invalid regex pattern '%s': %w", rule.ID, p, err)
+					return nil, fmt.Errorf("rule '%d': invalid regex pattern '%s': %w", rule.ID, p, err)
 				}
 				patterns = append(patterns, re)
 			}

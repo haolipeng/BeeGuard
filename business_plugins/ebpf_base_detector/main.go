@@ -154,22 +154,22 @@ func main() {
 			}
 			var handlerErr error
 			switch eventType {
-			case events.EventTypeExecve:
+			case events.EventTypeExecve: // 执行命令事件
 				handlerErr = handleExecve(evtCtx, rec.RawSample)
-			case events.EventTypeCommitCreds:
+			case events.EventTypeCommitCreds: // 提权事件
 				handlerErr = handleCommitCreds(evtCtx, rec.RawSample)
-			case events.EventTypeConnect:
+			case events.EventTypeConnect: // 连接事件
 				handlerErr = handleConnect(evtCtx, rec.RawSample)
-			case events.EventTypeBind:
+			case events.EventTypeBind: // 绑定端口事件
 				handlerErr = handleBind(evtCtx, rec.RawSample)
-			case events.EventTypeAccept:
+			case events.EventTypeAccept: // 接受连接事件
 				handlerErr = handleAccept(evtCtx, rec.RawSample)
-			case events.EventTypeDNS:
+			case events.EventTypeDNS: // DNS事件
 				handlerErr = handleDNS(evtCtx, rec.RawSample)
-			case events.EventTypeFile:
+			case events.EventTypeFile: // 文件操作事件
 				handlerErr = handleFile(evtCtx, rec.RawSample)
 			default:
-				logger.Warn("Unknown event type", "type", eventType)
+				logger.Warn("Unknown event type", "type", eventType) // 未知事件类型
 			}
 			if handlerErr != nil {
 				logger.Error("Event handler failed", "type", eventType, "error", handlerErr)
