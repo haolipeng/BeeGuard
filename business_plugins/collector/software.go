@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -158,6 +159,10 @@ func (h *SoftwareHandler) Handle(c *businessplugins.Client, cache *engine.Cache,
 					s.Status = fields[1]
 				}
 			}
+			// 跳过非 installed 状态的包（如已卸载但保留配置的包）
+			if !strings.Contains(s.Status, "installed") {
+				continue
+			}
 			r := &businessplugins.Record{
 				DataType:  int32(h.DataType()),
 				Timestamp: time.Now().Unix(),
@@ -175,6 +180,14 @@ func (h *SoftwareHandler) Handle(c *businessplugins.Client, cache *engine.Cache,
 	// 扫描 rpm 包（RedHat/CentOS）
 	if db, err := rpm.OpenDatabase(); err == nil {
 		db.WalkPackages(func(p rpm.Package) {
+			// 组装完整 RPM 版本: [epoch:]version[-release]
+			version := p.Version
+			if p.Release != "" {
+				version = p.Version + "-" + p.Release
+			}
+			if p.Epoch > 0 {
+				version = fmt.Sprintf("%d:%s", p.Epoch, version)
+			}
 			c.SendRecord(&businessplugins.Record{
 				DataType:  int32(h.DataType()),
 				Timestamp: time.Now().Unix(),
@@ -183,7 +196,7 @@ func (h *SoftwareHandler) Handle(c *businessplugins.Client, cache *engine.Cache,
 						"type":        "rpm",
 						"package_seq": seq,
 						"name":        p.Name,
-						"sversion":    p.Version,
+						"sversion":    version,
 						"source_rpm":  p.SourceRpm,
 						"vendor":      p.Vendor,
 					},

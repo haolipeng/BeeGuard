@@ -6,7 +6,9 @@ import (
 	"errors"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -430,7 +432,107 @@ func joinFiles(dirNames, baseNames, digests []string, dirIndexes []int32) []File
 	return files
 }
 
-func OpenDatabase() (db *Database, err error) {
+// PackageDB is the interface for reading RPM package databases
+type PackageDB interface {
+	WalkPackages(f WalkFunc) error
+	Close()
+}
+
+// OpenDatabase opens the RPM database for reading.
+// It tries the following in order:
+// 1. BerkeleyDB format (/var/lib/rpm/Packages) - RHEL <= 8, CentOS <= 8
+// 2. rpm command fallback - RHEL 9+, Fedora 33+ (SQLite format)
+func OpenDatabase() (PackageDB, error) {
+	// Try BerkeleyDB format first
+	db, err := openBerkeleyDB()
+	if err == nil {
+		return db, nil
+	}
+
+	// Check if SQLite format exists (RHEL 9+ / Fedora 33+)
+	if _, statErr := os.Stat("/var/lib/rpm/rpmdb.sqlite"); statErr == nil {
+		// Use rpm command as fallback for SQLite format
+		return newRpmCmdDB()
+	}
+
+	return nil, err
+}
+
+// rpmCmdDB uses the rpm command to query packages (fallback for SQLite format)
+type rpmCmdDB struct {
+	packages []Package
+}
+
+func newRpmCmdDB() (*rpmCmdDB, error) {
+	// Query RPM database using rpm command
+	// Format: epoch\tname\tversion\trelease\tarch\tsourcerpm\tsize\tlicense\tvendor
+	cmd := exec.Command("rpm", "-qa",
+		"--queryformat", "%{EPOCH}\t%{NAME}\t%{VERSION}\t%{RELEASE}\t%{ARCH}\t%{SOURCERPM}\t%{SIZE}\t%{LICENSE}\t%{VENDOR}\n")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, errors.New("rpm command failed: " + err.Error())
+	}
+
+	var packages []Package
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	for _, line := range lines {
+		if line == "" {
+			continue
+		}
+		fields := strings.SplitN(line, "\t", 9)
+		if len(fields) < 9 {
+			continue
+		}
+
+		p := Package{
+			Name:      fields[1],
+			Version:   fields[2],
+			Release:   fields[3],
+			Arch:      fields[4],
+			SourceRpm: fields[5],
+			License:   fields[7],
+			Vendor:    fields[8],
+		}
+
+		// Parse epoch (rpm outputs "(none)" for epoch 0)
+		if fields[0] != "(none)" && fields[0] != "" {
+			if epoch, err := strconv.ParseInt(fields[0], 10, 32); err == nil {
+				p.Epoch = int32(epoch)
+			}
+		}
+
+		// Parse size
+		if size, err := strconv.ParseInt(fields[6], 10, 32); err == nil {
+			p.Size = int32(size)
+		}
+
+		// Clean up "(none)" values
+		if p.SourceRpm == "(none)" {
+			p.SourceRpm = ""
+		}
+		if p.License == "(none)" {
+			p.License = ""
+		}
+		if p.Vendor == "(none)" {
+			p.Vendor = ""
+		}
+
+		packages = append(packages, p)
+	}
+
+	return &rpmCmdDB{packages: packages}, nil
+}
+
+func (db *rpmCmdDB) WalkPackages(f WalkFunc) error {
+	for _, p := range db.packages {
+		f(p)
+	}
+	return nil
+}
+
+func (db *rpmCmdDB) Close() {}
+
+func openBerkeleyDB() (db *Database, err error) {
 	var f *os.File
 	f, err = os.Open("/var/lib/rpm/Packages")
 	if err != nil {

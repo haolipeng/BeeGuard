@@ -116,29 +116,28 @@ func (e *Engine) AddHandler(interval time.Duration, h Handler) {
 
 func (e *Engine) Run() {
 	zap.S().Info("engine running")
+	// 阶段1：立即并发执行所有handler一次
 	for _, h := range e.m {
 		go func(h *handler) {
-			var spec string
-			var r int
-			minutes := int(h.interval.Minutes())
-			if h.interval == BeforeDawn() {
-				spec = fmt.Sprintf("%d %d * * *", rand.Intn(60), rand.Intn(6))
-				r = rand.Intn(14400) + 7200
-			} else if minutes > 0 {
-				r = rand.Intn(minutes * 60)
-				spec = fmt.Sprintf("@every %dm", int(minutes))
-			} else {
-				panic("unknown interval")
-			}
-			h.l.Infof("init call will after %d secs\n", r)
-			time.Sleep(time.Second * time.Duration(r))
 			h.l.Info("init call")
 			h.Handle(e.c, e.cache)
-			time.Sleep(time.Minute * time.Duration(minutes))
-			//为每个handler添加定时任务
-			e.s.AddFunc(spec, func() { h.Handle(e.c, e.cache) })
-			h.l.Info("add func to scheduler successfully")
 		}(h)
+	}
+	// 阶段2：注册周期性cron定时任务
+	for _, h := range e.m {
+		var spec string
+		minutes := int(h.interval.Minutes())
+		if h.interval == BeforeDawn() {
+			spec = fmt.Sprintf("%d %d * * *", rand.Intn(60), rand.Intn(6))
+		} else if minutes > 0 {
+			spec = fmt.Sprintf("@every %dm", minutes)
+		} else {
+			panic("unknown interval")
+		}
+		func(h *handler) {
+			e.s.AddFunc(spec, func() { h.Handle(e.c, e.cache) })
+		}(h)
+		h.l.Infof("add func to scheduler: %s", spec)
 	}
 	go func() {
 		zap.S().Info("scheduler running")

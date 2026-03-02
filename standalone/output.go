@@ -46,6 +46,46 @@ type PrivilegeEscalationOutput struct {
 	NewEUID   string `json:"new_euid"`
 }
 
+// ReverseShellOutput 反弹 Shell 检测结果输出结构
+type ReverseShellOutput struct {
+	Timestamp   int64  `json:"timestamp"`
+	DataType    int32  `json:"data_type"`
+	PID         string `json:"pid"`
+	TGID        string `json:"tgid"`
+	PPID        string `json:"ppid"`
+	UID         string `json:"uid"`
+	Comm        string `json:"comm"`
+	ExePath     string `json:"exe_path"`
+	Args        string `json:"args,omitempty"`
+	FDType      string `json:"fd_type"`
+	StdinPath   string `json:"stdin_path,omitempty"`
+	StdoutPath  string `json:"stdout_path,omitempty"`
+	RemoteIP    string `json:"remote_ip,omitempty"`
+	RemotePort  string `json:"remote_port,omitempty"`
+	RuleName    string `json:"rule_name"`
+	Confidence  string `json:"confidence"`
+	Description string `json:"description"`
+}
+
+// MaliciousRequestOutput 恶意请求检测结果输出结构
+type MaliciousRequestOutput struct {
+	Timestamp     int64  `json:"timestamp"`
+	DataType      int32  `json:"data_type"`
+	EventType     string `json:"event_type"`
+	RuleID        string `json:"rule_id"`
+	RuleName      string `json:"rule_name"`
+	Severity      string `json:"severity"`
+	ThreatType    string `json:"threat_type"`
+	IndicatorType string `json:"indicator_type"`
+	MatchedValue  string `json:"matched_value"`
+	PID           string `json:"pid"`
+	Comm          string `json:"comm"`
+	ExePath       string `json:"exe_path"`
+	RemoteIP      string `json:"remote_ip,omitempty"`
+	RemotePort    string `json:"remote_port,omitempty"`
+	Domain        string `json:"domain,omitempty"`
+}
+
 // StartOutputHandler 启动 standalone 模式的输出处理
 func StartOutputHandler(ctx context.Context, wg *sync.WaitGroup) {
 	defer wg.Done()
@@ -117,6 +157,20 @@ func processRecords(recs []*proto.EncodedRecord, file *os.File) {
 			} else {
 				logPrivilegeEscalation(output)
 			}
+		case businessplugins.AlertTypeReverseShell:
+			output := buildReverseShellOutput(rec, payload)
+			if file != nil {
+				writeJSON(file, output)
+			} else {
+				logReverseShell(output)
+			}
+		case businessplugins.AlertTypeMaliciousRequest:
+			output := buildMaliciousRequestOutput(rec, payload)
+			if file != nil {
+				writeJSON(file, output)
+			} else {
+				logMaliciousRequest(output)
+			}
 		default:
 			// 高危命令检测结果（需要 rule_id 字段）
 			ruleID, ok := payload.Fields["rule_id"]
@@ -187,6 +241,54 @@ func buildPrivilegeEscalationOutput(rec *proto.EncodedRecord, payload *businessp
 	}
 }
 
+// buildReverseShellOutput 构建反弹 Shell 事件输出结构
+func buildReverseShellOutput(rec *proto.EncodedRecord, payload *businessplugins.Payload) *ReverseShellOutput {
+	fields := payload.Fields
+
+	return &ReverseShellOutput{
+		Timestamp:   rec.Timestamp,
+		DataType:    rec.DataType,
+		PID:         fields["pid"],
+		TGID:        fields["tgid"],
+		PPID:        fields["ppid"],
+		UID:         fields["uid"],
+		Comm:        fields["comm"],
+		ExePath:     fields["exe_path"],
+		Args:        fields["args"],
+		FDType:      fields["fd_type"],
+		StdinPath:   fields["stdin_path"],
+		StdoutPath:  fields["stdout_path"],
+		RemoteIP:    fields["remote_ip"],
+		RemotePort:  fields["remote_port"],
+		RuleName:    fields["rule_name"],
+		Confidence:  fields["confidence"],
+		Description: fields["description"],
+	}
+}
+
+// buildMaliciousRequestOutput 构建恶意请求事件输出结构
+func buildMaliciousRequestOutput(rec *proto.EncodedRecord, payload *businessplugins.Payload) *MaliciousRequestOutput {
+	fields := payload.Fields
+
+	return &MaliciousRequestOutput{
+		Timestamp:     rec.Timestamp,
+		DataType:      rec.DataType,
+		EventType:     fields["event_type"],
+		RuleID:        fields["rule_id"],
+		RuleName:      fields["rule_name"],
+		Severity:      fields["severity"],
+		ThreatType:    fields["threat_type"],
+		IndicatorType: fields["indicator_type"],
+		MatchedValue:  fields["matched_value"],
+		PID:           fields["pid"],
+		Comm:          fields["comm"],
+		ExePath:       fields["exe_path"],
+		RemoteIP:      fields["remote_ip"],
+		RemotePort:    fields["remote_port"],
+		Domain:        fields["domain"],
+	}
+}
+
 // logRecord 将记录输出到日志
 func logRecord(output *DetectionOutput) {
 	zap.S().Infow("dangerous command detected",
@@ -213,6 +315,41 @@ func logPrivilegeEscalation(output *PrivilegeEscalationOutput) {
 		"old_euid", output.OldEUID,
 		"new_uid", output.NewUID,
 		"new_euid", output.NewEUID,
+	)
+}
+
+// logReverseShell 将反弹 Shell 事件输出到日志
+func logReverseShell(output *ReverseShellOutput) {
+	zap.S().Warnw("Reverse shell detected",
+		"pid", output.PID,
+		"tgid", output.TGID,
+		"ppid", output.PPID,
+		"comm", output.Comm,
+		"exe_path", output.ExePath,
+		"fd_type", output.FDType,
+		"remote_ip", output.RemoteIP,
+		"remote_port", output.RemotePort,
+		"rule_name", output.RuleName,
+		"confidence", output.Confidence,
+	)
+}
+
+// logMaliciousRequest 将恶意请求事件输出到日志
+func logMaliciousRequest(output *MaliciousRequestOutput) {
+	zap.S().Warnw("Malicious request detected",
+		"event_type", output.EventType,
+		"rule_id", output.RuleID,
+		"rule_name", output.RuleName,
+		"severity", output.Severity,
+		"threat_type", output.ThreatType,
+		"indicator_type", output.IndicatorType,
+		"matched_value", output.MatchedValue,
+		"pid", output.PID,
+		"comm", output.Comm,
+		"exe_path", output.ExePath,
+		"remote_ip", output.RemoteIP,
+		"remote_port", output.RemotePort,
+		"domain", output.Domain,
 	)
 }
 

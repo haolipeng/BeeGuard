@@ -1,0 +1,5 @@
+server: "127.0.0.1:50051"
+connect_timeout: 30
+working_directory: "/tmp/cloudsec-agent"
+retry_max_count: 10
+retry_interval: 5

@@ -48,26 +48,39 @@ build-agent:
 .PHONY: build-plugins
 build-plugins: generate-ebpf
 	@echo "Building all plugins..."
-	@mkdir -p $(PLUGINS_DIR)
+	@mkdir -p $(PLUGINS_DIR)/collector
+	@mkdir -p $(PLUGINS_DIR)/baseline
+	@mkdir -p $(PLUGINS_DIR)/detector/config/rules
+	@mkdir -p $(PLUGINS_DIR)/ebpf_base_detector/config
+	@mkdir -p $(PLUGINS_DIR)/nids/config
+	@mkdir -p $(PLUGINS_DIR)/scanner/config
 	@echo "  Building collector plugin..."
-	@cd $(COLLECTOR_SRC) && $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/collector .
+	@cd $(COLLECTOR_SRC) && $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/collector/collector .
 	@echo "  Building baseline plugin..."
-	@cd $(BASELINE_SRC) && $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/baseline .
+	@cd $(BASELINE_SRC) && $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/baseline/baseline .
 	@echo "  Building detector plugin..."
-	@cd $(DETECTOR_SRC) && $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/detector .
+	@cd $(DETECTOR_SRC) && $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/detector/detector .
+	@cp $(DETECTOR_SRC)/config/rules/*.yaml $(PLUGINS_DIR)/detector/config/rules/
 	@echo "  Building ebpf_base_detector plugin..."
-	@cd $(DRIVER_SRC) && $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/ebpf_base_detector .
+	@cd $(DRIVER_SRC) && $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/ebpf_base_detector/ebpf_base_detector .
+	@cp $(DRIVER_SRC)/config/dangerous_commands.yaml $(PLUGINS_DIR)/ebpf_base_detector/config/
+	@cp $(DRIVER_SRC)/config/privilege_escalation_whitelist.yaml $(PLUGINS_DIR)/ebpf_base_detector/config/
+	@cp $(DRIVER_SRC)/config/malicious_request_rules.yaml $(PLUGINS_DIR)/ebpf_base_detector/config/
+	@cp $(DRIVER_SRC)/config/sensitive_file_rules.yaml $(PLUGINS_DIR)/ebpf_base_detector/config/
 	@echo "  Building nids plugin..."
-	@cd $(NIDS_SRC) && $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/nids .
+	@cd $(NIDS_SRC) && $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/nids/nids .
+	@cp $(NIDS_SRC)/config/nids.yaml $(PLUGINS_DIR)/nids/config/
+	@cp $(NIDS_SRC)/config/nids.rules $(PLUGINS_DIR)/nids/config/
 	@echo "  Building scanner plugin..."
-	@cd $(SCANNER_SRC) && CGO_ENABLED=1 $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/scanner .
+	@cd $(SCANNER_SRC) && CGO_ENABLED=1 $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/scanner/scanner .
+	@cp $(SCANNER_SRC)/config/scanner.yaml $(PLUGINS_DIR)/scanner/config/
 	@echo "All plugins built successfully"
-	@echo "  $(PLUGINS_DIR)/collector"
-	@echo "  $(PLUGINS_DIR)/baseline"
-	@echo "  $(PLUGINS_DIR)/detector"
-	@echo "  $(PLUGINS_DIR)/ebpf_base_detector"
-	@echo "  $(PLUGINS_DIR)/nids"
-	@echo "  $(PLUGINS_DIR)/scanner"
+	@echo "  $(PLUGINS_DIR)/collector/"
+	@echo "  $(PLUGINS_DIR)/baseline/"
+	@echo "  $(PLUGINS_DIR)/detector/"
+	@echo "  $(PLUGINS_DIR)/ebpf_base_detector/"
+	@echo "  $(PLUGINS_DIR)/nids/"
+	@echo "  $(PLUGINS_DIR)/scanner/"
 
 # 生成 eBPF 代码 (ebpf_base_detector 插件依赖)
 .PHONY: generate-ebpf
@@ -80,25 +93,32 @@ generate-ebpf:
 .PHONY: build-driver
 build-driver: generate-ebpf
 	@echo "Building ebpf_base_detector plugin..."
-	@mkdir -p $(PLUGINS_DIR)
-	@cd $(DRIVER_SRC) && $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/ebpf_base_detector .
-	@echo "Build complete: $(PLUGINS_DIR)/ebpf_base_detector"
+	@mkdir -p $(PLUGINS_DIR)/ebpf_base_detector/config
+	@cd $(DRIVER_SRC) && $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/ebpf_base_detector/ebpf_base_detector .
+	@cp $(DRIVER_SRC)/config/dangerous_commands.yaml $(PLUGINS_DIR)/ebpf_base_detector/config/
+	@cp $(DRIVER_SRC)/config/privilege_escalation_whitelist.yaml $(PLUGINS_DIR)/ebpf_base_detector/config/
+	@cp $(DRIVER_SRC)/config/malicious_request_rules.yaml $(PLUGINS_DIR)/ebpf_base_detector/config/
+	@cp $(DRIVER_SRC)/config/sensitive_file_rules.yaml $(PLUGINS_DIR)/ebpf_base_detector/config/
+	@echo "Build complete: $(PLUGINS_DIR)/ebpf_base_detector/"
 
 # 编译 nids 插件
 .PHONY: build-nids
 build-nids:
 	@echo "Building nids plugin..."
-	@mkdir -p $(PLUGINS_DIR)
-	@cd $(NIDS_SRC) && $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/nids .
-	@echo "Build complete: $(PLUGINS_DIR)/nids"
+	@mkdir -p $(PLUGINS_DIR)/nids/config
+	@cd $(NIDS_SRC) && $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/nids/nids .
+	@cp $(NIDS_SRC)/config/nids.yaml $(PLUGINS_DIR)/nids/config/
+	@cp $(NIDS_SRC)/config/nids.rules $(PLUGINS_DIR)/nids/config/
+	@echo "Build complete: $(PLUGINS_DIR)/nids/"
 
 # 编译 scanner 插件
 .PHONY: build-scanner
 build-scanner:
 	@echo "Building scanner plugin..."
-	@mkdir -p $(PLUGINS_DIR)
-	@cd $(SCANNER_SRC) && CGO_ENABLED=1 $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/scanner .
-	@echo "Build complete: $(PLUGINS_DIR)/scanner"
+	@mkdir -p $(PLUGINS_DIR)/scanner/config
+	@cd $(SCANNER_SRC) && CGO_ENABLED=1 $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/scanner/scanner .
+	@cp $(SCANNER_SRC)/config/scanner.yaml $(PLUGINS_DIR)/scanner/config/
+	@echo "Build complete: $(PLUGINS_DIR)/scanner/"
 
 # 编译所有组件 (agent + plugins)
 .PHONY: build
@@ -188,26 +208,12 @@ deploy: build
 	@sudo mkdir -p $(DEPLOY_DIR)/logs/plugins/nids
 	@sudo mkdir -p $(DEPLOY_DIR)/logs/plugins/scanner
 	@sudo cp $(BUILD_DIR)/$(BINARY_NAME) $(DEPLOY_DIR)/bin/
-	@sudo mkdir -p $(DEPLOY_DIR)/plugins/collector
-	@sudo mkdir -p $(DEPLOY_DIR)/plugins/baseline
-	@sudo mkdir -p $(DEPLOY_DIR)/plugins/detector/config/rules
-	@sudo mkdir -p $(DEPLOY_DIR)/plugins/ebpf_base_detector/config
-	@sudo mkdir -p $(DEPLOY_DIR)/plugins/nids/config
-	@sudo mkdir -p $(DEPLOY_DIR)/plugins/scanner/config
-	@sudo cp $(PLUGINS_DIR)/collector/collector $(DEPLOY_DIR)/plugins/collector/
-	@sudo cp $(PLUGINS_DIR)/baseline $(DEPLOY_DIR)/plugins/baseline/
-	@sudo cp $(PLUGINS_DIR)/detector $(DEPLOY_DIR)/plugins/detector/
-	@sudo cp $(DETECTOR_SRC)/config/rules/*.yaml $(DEPLOY_DIR)/plugins/detector/config/rules/
-	@sudo cp $(PLUGINS_DIR)/ebpf_base_detector $(DEPLOY_DIR)/plugins/ebpf_base_detector/
-	@sudo cp $(DRIVER_SRC)/config/dangerous_commands.yaml $(DEPLOY_DIR)/plugins/ebpf_base_detector/config/
-	@sudo cp $(DRIVER_SRC)/config/privilege_escalation_whitelist.yaml $(DEPLOY_DIR)/plugins/ebpf_base_detector/config/
-	@sudo cp $(DRIVER_SRC)/config/malicious_request_rules.yaml $(DEPLOY_DIR)/plugins/ebpf_base_detector/config/
-	@sudo cp $(DRIVER_SRC)/config/sensitive_file_rules.yaml $(DEPLOY_DIR)/plugins/ebpf_base_detector/config/
-	@sudo cp $(PLUGINS_DIR)/nids $(DEPLOY_DIR)/plugins/nids/
-	@sudo cp $(NIDS_SRC)/config/nids.yaml $(DEPLOY_DIR)/plugins/nids/config/
-	@sudo cp $(NIDS_SRC)/config/nids.rules $(DEPLOY_DIR)/plugins/nids/config/
-	@sudo cp $(PLUGINS_DIR)/scanner $(DEPLOY_DIR)/plugins/scanner/
-	@sudo cp $(SCANNER_SRC)/config/scanner.yaml $(DEPLOY_DIR)/plugins/scanner/config/
+	@sudo cp -r $(PLUGINS_DIR)/collector/ $(DEPLOY_DIR)/plugins/
+	@sudo cp -r $(PLUGINS_DIR)/baseline/ $(DEPLOY_DIR)/plugins/
+	@sudo cp -r $(PLUGINS_DIR)/detector/ $(DEPLOY_DIR)/plugins/
+	@sudo cp -r $(PLUGINS_DIR)/ebpf_base_detector/ $(DEPLOY_DIR)/plugins/
+	@sudo cp -r $(PLUGINS_DIR)/nids/ $(DEPLOY_DIR)/plugins/
+	@sudo cp -r $(PLUGINS_DIR)/scanner/ $(DEPLOY_DIR)/plugins/
 	@sudo chmod 755 $(DEPLOY_DIR)/bin/$(BINARY_NAME)
 	@sudo chmod 755 $(DEPLOY_DIR)/plugins/collector/collector
 	@sudo chmod 755 $(DEPLOY_DIR)/plugins/baseline/baseline
@@ -239,26 +245,13 @@ deploy-agent: build-agent
 .PHONY: deploy-plugins
 deploy-plugins: build-plugins
 	@echo "Deploying plugins only to $(DEPLOY_DIR)..."
-	@sudo mkdir -p $(DEPLOY_DIR)/plugins/collector
-	@sudo mkdir -p $(DEPLOY_DIR)/plugins/baseline
-	@sudo mkdir -p $(DEPLOY_DIR)/plugins/detector/config/rules
-	@sudo mkdir -p $(DEPLOY_DIR)/plugins/ebpf_base_detector/config
-	@sudo mkdir -p $(DEPLOY_DIR)/plugins/nids/config
-	@sudo mkdir -p $(DEPLOY_DIR)/plugins/scanner/config
-	@sudo cp $(PLUGINS_DIR)/collector/collector $(DEPLOY_DIR)/plugins/collector/
-	@sudo cp $(PLUGINS_DIR)/baseline $(DEPLOY_DIR)/plugins/baseline/
-	@sudo cp $(PLUGINS_DIR)/detector $(DEPLOY_DIR)/plugins/detector/
-	@sudo cp $(DETECTOR_SRC)/config/rules/*.yaml $(DEPLOY_DIR)/plugins/detector/config/rules/
-	@sudo cp $(PLUGINS_DIR)/ebpf_base_detector $(DEPLOY_DIR)/plugins/ebpf_base_detector/
-	@sudo cp $(DRIVER_SRC)/config/dangerous_commands.yaml $(DEPLOY_DIR)/plugins/ebpf_base_detector/config/
-	@sudo cp $(DRIVER_SRC)/config/privilege_escalation_whitelist.yaml $(DEPLOY_DIR)/plugins/ebpf_base_detector/config/
-	@sudo cp $(DRIVER_SRC)/config/malicious_request_rules.yaml $(DEPLOY_DIR)/plugins/ebpf_base_detector/config/
-	@sudo cp $(DRIVER_SRC)/config/sensitive_file_rules.yaml $(DEPLOY_DIR)/plugins/ebpf_base_detector/config/
-	@sudo cp $(PLUGINS_DIR)/nids $(DEPLOY_DIR)/plugins/nids/
-	@sudo cp $(NIDS_SRC)/config/nids.yaml $(DEPLOY_DIR)/plugins/nids/config/
-	@sudo cp $(NIDS_SRC)/config/nids.rules $(DEPLOY_DIR)/plugins/nids/config/
-	@sudo cp $(PLUGINS_DIR)/scanner $(DEPLOY_DIR)/plugins/scanner/
-	@sudo cp $(SCANNER_SRC)/config/scanner.yaml $(DEPLOY_DIR)/plugins/scanner/config/
+	@sudo mkdir -p $(DEPLOY_DIR)/plugins
+	@sudo cp -r $(PLUGINS_DIR)/collector/ $(DEPLOY_DIR)/plugins/
+	@sudo cp -r $(PLUGINS_DIR)/baseline/ $(DEPLOY_DIR)/plugins/
+	@sudo cp -r $(PLUGINS_DIR)/detector/ $(DEPLOY_DIR)/plugins/
+	@sudo cp -r $(PLUGINS_DIR)/ebpf_base_detector/ $(DEPLOY_DIR)/plugins/
+	@sudo cp -r $(PLUGINS_DIR)/nids/ $(DEPLOY_DIR)/plugins/
+	@sudo cp -r $(PLUGINS_DIR)/scanner/ $(DEPLOY_DIR)/plugins/
 	@sudo chmod 755 $(DEPLOY_DIR)/plugins/collector/collector
 	@sudo chmod 755 $(DEPLOY_DIR)/plugins/baseline/baseline
 	@sudo chmod 755 $(DEPLOY_DIR)/plugins/detector/detector
@@ -271,11 +264,8 @@ deploy-plugins: build-plugins
 .PHONY: deploy-driver
 deploy-driver: build-driver
 	@echo "Deploying ebpf_base_detector plugin only to $(DEPLOY_DIR)..."
-	@sudo mkdir -p $(DEPLOY_DIR)/plugins/ebpf_base_detector/config
-	@sudo cp $(PLUGINS_DIR)/ebpf_base_detector $(DEPLOY_DIR)/plugins/ebpf_base_detector/
-	@sudo cp $(DRIVER_SRC)/config/dangerous_commands.yaml $(DEPLOY_DIR)/plugins/ebpf_base_detector/config/
-	@sudo cp $(DRIVER_SRC)/config/privilege_escalation_whitelist.yaml $(DEPLOY_DIR)/plugins/ebpf_base_detector/config/
-	@sudo cp $(DRIVER_SRC)/config/malicious_request_rules.yaml $(DEPLOY_DIR)/plugins/ebpf_base_detector/config/
+	@sudo mkdir -p $(DEPLOY_DIR)/plugins
+	@sudo cp -r $(PLUGINS_DIR)/ebpf_base_detector/ $(DEPLOY_DIR)/plugins/
 	@sudo chmod 755 $(DEPLOY_DIR)/plugins/ebpf_base_detector/ebpf_base_detector
 	@echo "Deploy complete: $(DEPLOY_DIR)/plugins/ebpf_base_detector/"
 
@@ -285,10 +275,8 @@ deploy-nids: build-nids
 	@echo "Deploying nids plugin only to $(DEPLOY_DIR)..."
 	@sudo mkdir -p $(DEPLOY_DIR)/data/plugins/nids
 	@sudo mkdir -p $(DEPLOY_DIR)/logs/plugins/nids
-	@sudo mkdir -p $(DEPLOY_DIR)/plugins/nids/config
-	@sudo cp $(PLUGINS_DIR)/nids $(DEPLOY_DIR)/plugins/nids/
-	@sudo cp $(NIDS_SRC)/config/nids.yaml $(DEPLOY_DIR)/plugins/nids/config/
-	@sudo cp $(NIDS_SRC)/config/nids.rules $(DEPLOY_DIR)/plugins/nids/config/
+	@sudo mkdir -p $(DEPLOY_DIR)/plugins
+	@sudo cp -r $(PLUGINS_DIR)/nids/ $(DEPLOY_DIR)/plugins/
 	@sudo chmod 755 $(DEPLOY_DIR)/plugins/nids/nids
 	@echo "Deploy complete: $(DEPLOY_DIR)/plugins/nids/"
 
@@ -298,9 +286,8 @@ deploy-scanner: build-scanner
 	@echo "Deploying scanner plugin only to $(DEPLOY_DIR)..."
 	@sudo mkdir -p $(DEPLOY_DIR)/data/plugins/scanner/db
 	@sudo mkdir -p $(DEPLOY_DIR)/logs/plugins/scanner
-	@sudo mkdir -p $(DEPLOY_DIR)/plugins/scanner/config
-	@sudo cp $(PLUGINS_DIR)/scanner $(DEPLOY_DIR)/plugins/scanner/
-	@sudo cp $(SCANNER_SRC)/config/scanner.yaml $(DEPLOY_DIR)/plugins/scanner/config/
+	@sudo mkdir -p $(DEPLOY_DIR)/plugins
+	@sudo cp -r $(PLUGINS_DIR)/scanner/ $(DEPLOY_DIR)/plugins/
 	@sudo chmod 755 $(DEPLOY_DIR)/plugins/scanner/scanner
 	@echo "Deploy complete: $(DEPLOY_DIR)/plugins/scanner/"
 
