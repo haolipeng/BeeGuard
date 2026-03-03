@@ -22,6 +22,11 @@ const (
 	EventTypeFile         uint8 = 8
 )
 
+// 上报 DataType 常量
+const (
+	DataTypeExecve int32 = 59
+)
+
 // 文件操作 action 常量
 const (
 	FileActionCreate uint8 = 1
@@ -105,7 +110,7 @@ func (e *ExecveEvent) ToRecord() *businessplugins.Record {
 	}
 
 	return &businessplugins.Record{
-		DataType:  59, // execve事件类型
+		DataType:  DataTypeExecve, // execve事件类型
 		Timestamp: time.Now().Unix(),
 		Data: &businessplugins.Payload{
 			Fields: fields,

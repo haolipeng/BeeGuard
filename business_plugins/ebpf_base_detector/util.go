@@ -1,6 +1,9 @@
 package main
 
-import "bytes"
+import (
+	"bytes"
+	"strings"
+)
 
 // cstring 将C字符串（以\0结尾）转换为Go字符串
 func cstring(b []byte) string {
@@ -37,4 +40,22 @@ func argsString(b []byte) string {
 		}
 	}
 	return string(bytes.TrimRight(result, " "))
+}
+
+// extractLeadingCommand 从匹配模式中提取前导命令名
+// 例如: "rm\s+.*-rf" → "rm", "cat\s+.*/etc/shadow" → "cat", "chmod\s+.*777" → "chmod"
+// 遇到正则元字符或空白转义时停止
+func extractLeadingCommand(pattern string) string {
+	var cmd strings.Builder
+	for _, ch := range pattern {
+		if ch == '\\' || ch == '(' || ch == '[' || ch == '.' || ch == '*' ||
+			ch == '+' || ch == '?' || ch == '{' || ch == '|' || ch == '^' || ch == '$' {
+			break
+		}
+		if ch == ' ' || ch == '\t' {
+			break
+		}
+		cmd.WriteRune(ch)
+	}
+	return cmd.String()
 }

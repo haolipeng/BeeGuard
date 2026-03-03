@@ -199,7 +199,7 @@ deploy: build
 	@sudo mkdir -p $(DEPLOY_DIR)/data/plugins/detector
 	@sudo mkdir -p $(DEPLOY_DIR)/data/plugins/ebpf_base_detector
 	@sudo mkdir -p $(DEPLOY_DIR)/data/plugins/nids
-	@sudo mkdir -p $(DEPLOY_DIR)/data/plugins/scanner/db
+	@sudo mkdir -p $(DEPLOY_DIR)/data/plugins/scanner
 	@sudo mkdir -p $(DEPLOY_DIR)/logs/agent
 	@sudo mkdir -p $(DEPLOY_DIR)/logs/plugins/collector
 	@sudo mkdir -p $(DEPLOY_DIR)/logs/plugins/baseline
@@ -284,7 +284,7 @@ deploy-nids: build-nids
 .PHONY: deploy-scanner
 deploy-scanner: build-scanner
 	@echo "Deploying scanner plugin only to $(DEPLOY_DIR)..."
-	@sudo mkdir -p $(DEPLOY_DIR)/data/plugins/scanner/db
+	@sudo mkdir -p $(DEPLOY_DIR)/data/plugins/scanner
 	@sudo mkdir -p $(DEPLOY_DIR)/logs/plugins/scanner
 	@sudo mkdir -p $(DEPLOY_DIR)/plugins
 	@sudo cp -r $(PLUGINS_DIR)/scanner/ $(DEPLOY_DIR)/plugins/

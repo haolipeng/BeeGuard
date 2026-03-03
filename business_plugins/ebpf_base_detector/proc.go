@@ -90,6 +90,27 @@ func buildPidTree(tgid uint32, comm string) string {
 	return buf.String()
 }
 
+// readProcCmdline 从 /proc/<tgid>/cmdline 读取干净的命令行
+// /proc/pid/cmdline 中各参数以 NULL 分隔，这里替换为空格
+// 进程可能已退出，此时返回空字符串
+func readProcCmdline(tgid uint32) string {
+	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/cmdline", tgid))
+	if err != nil || len(data) == 0 {
+		return ""
+	}
+	// 去掉尾部的 NULL 字节
+	for len(data) > 0 && data[len(data)-1] == 0 {
+		data = data[:len(data)-1]
+	}
+	// 将 NULL 分隔符替换为空格
+	for i := range data {
+		if data[i] == 0 {
+			data[i] = ' '
+		}
+	}
+	return string(data)
+}
+
 // readPPid 从 /proc/<pid>/status 读取父进程 PID
 func readPPid(pid uint32) uint32 {
 	f, err := os.Open(fmt.Sprintf("/proc/%d/status", pid))

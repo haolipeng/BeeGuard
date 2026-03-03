@@ -1,6 +1,6 @@
 scanner:
   engine:
-    db_path: "db"
+    db_path: "/var/lib/clamav"
     max_file_size: 18874368
     max_scan_time: 5
   cronjob:

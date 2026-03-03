@@ -136,7 +136,7 @@ func defaultConfig() *ScannerConfig {
 	return &ScannerConfig{
 		Scanner: ScannerSection{
 			Engine: EngineConfig{
-				DBPath:      "db",
+				DBPath:      "/var/lib/clamav",
 				MaxFileSize: 18874368,
 				MaxScanTime: 5,
 			},

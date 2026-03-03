@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"time"
 
@@ -129,6 +130,40 @@ func getServiceRuntimeInfo(serviceName string) (status, runUser, version string)
 	return status, runUser, version
 }
 
+// versionExtractPattern 从 --version 输出中提取 "程序名 + 版本号" 的核心部分
+// 支持以下常见格式：
+//
+//	"openjdk version \"17.0.6\" 2023-01-17 LTS"          → openjdk version "17.0.6"
+//	"Docker version 24.0.7, build afdd53b4e3"             → Docker version 24.0.7
+//	"curl 7.81.0 (x86_64-pc-linux-gnu) libcurl/7.81.0"   → curl 7.81.0
+//	"Python 3.11.2 (main, Mar 13 2023, 12:18:29)"         → Python 3.11.2
+//	"OpenSSH_8.9p1 Ubuntu-3ubuntu0.6, OpenSSL 3.0.2"      → OpenSSH_8.9p1（回退到首词）
+var versionExtractPattern = regexp.MustCompile(
+	`(?i)^(` +
+		`\S+\s+version\s+"[\d][\w._-]+"` + // name version "x.y.z"
+		`|\S+\s+version\s+[\d][\w._+-]+` + // name version x.y.z
+		`|\S+\s+[\d][\w._+-]+` + // name x.y.z
+		`)`,
+)
+
+// extractCleanVersion 从 --version 输出的首行中提取简洁版本信息
+func extractCleanVersion(line string) string {
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return ""
+	}
+
+	if match := versionExtractPattern.FindString(line); match != "" {
+		return match
+	}
+
+	// 回退：取第一个词（处理 OpenSSH_8.9p1 等名称内嵌版本号的情况）
+	if fields := strings.Fields(line); len(fields) > 0 {
+		return fields[0]
+	}
+	return line
+}
+
 // getVersionFromBinary 尝试从二进制文件获取版本号
 func getVersionFromBinary(command string) string {
 	if command == "" {
@@ -167,15 +202,10 @@ func getVersionFromBinary(command string) string {
 		}
 	}
 
-	// 提取第一行作为版本信息（通常版本在第一行）
+	// 提取第一行，使用正则提取简洁版本信息
 	lines := strings.Split(string(output), "\n")
 	if len(lines) > 0 {
-		// 截取前100个字符，避免过长
-		version := strings.TrimSpace(lines[0])
-		if len(version) > 100 {
-			version = version[:100]
-		}
-		return version
+		return extractCleanVersion(lines[0])
 	}
 	return ""
 }

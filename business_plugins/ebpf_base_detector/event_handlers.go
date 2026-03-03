@@ -39,7 +39,13 @@ func handleExecve(ctx *eventHandlerCtx, raw []byte) error {
 			record.Data.Fields["severity"] = result.Severity
 			record.Data.Fields["rule_description"] = result.Description
 			record.Data.Fields["matched_pattern"] = result.MatchedPattern
-			record.Data.Fields["command"] = args
+			// 优先从 /proc/<tgid>/cmdline 读取干净的命令行，
+			// 避免 eBPF per-CPU buffer 残留数据污染 args 字段
+			cleanCmd := readProcCmdline(evt.TGID)
+			if cleanCmd == "" {
+				cleanCmd = comm + " " + args // 进程已退出时回退到 eBPF 数据
+			}
+			record.Data.Fields["command"] = cleanCmd
 			record.Data.Fields["command_type"] = fmt.Sprintf("%d", result.RuleID)
 			record.Data.Fields["user"] = record.Data.Fields["uid"]
 			if evt.UID == 0 {
@@ -67,8 +73,11 @@ func handleExecve(ctx *eventHandlerCtx, raw []byte) error {
 			ctx.logger.Error("Failed to send reverse shell record to agent", "error", err)
 		}
 	}
-	if err := ctx.client.SendRecord(record); err != nil {
-		return fmt.Errorf("send execve record: %w", err)
+	// 仅上报检测引擎触发的告警（高危命令等），不上报原始 execve 事件
+	if record.DataType != events.DataTypeExecve {
+		if err := ctx.client.SendRecord(record); err != nil {
+			return fmt.Errorf("send execve record: %w", err)
+		}
 	}
 	return nil
 }
@@ -120,9 +129,6 @@ func handleConnect(ctx *eventHandlerCtx, raw []byte) error {
 			}
 		}
 	}
-	if err := ctx.client.SendRecord(record); err != nil {
-		return fmt.Errorf("send connect record: %w", err)
-	}
 	return nil
 }
 
@@ -136,9 +142,6 @@ func handleBind(ctx *eventHandlerCtx, raw []byte) error {
 		"pid", evt.PID, "comm", cstring(evt.Comm[:]),
 		"bind_ip", record.Data.Fields["bind_ip"], "bind_port", record.Data.Fields["bind_port"],
 		"protocol", record.Data.Fields["protocol"])
-	if err := ctx.client.SendRecord(record); err != nil {
-		return fmt.Errorf("send bind record: %w", err)
-	}
 	return nil
 }
 
@@ -152,9 +155,6 @@ func handleAccept(ctx *eventHandlerCtx, raw []byte) error {
 		"pid", evt.PID, "comm", cstring(evt.Comm[:]),
 		"remote_ip", record.Data.Fields["remote_ip"], "remote_port", record.Data.Fields["remote_port"],
 		"local_port", record.Data.Fields["local_port"], "protocol", record.Data.Fields["protocol"])
-	if err := ctx.client.SendRecord(record); err != nil {
-		return fmt.Errorf("send accept record: %w", err)
-	}
 	return nil
 }
 
@@ -179,9 +179,6 @@ func handleDNS(ctx *eventHandlerCtx, raw []byte) error {
 				ctx.logger.Error("Failed to send malicious request DNS record to agent", "error", err)
 			}
 		}
-	}
-	if err := ctx.client.SendRecord(record); err != nil {
-		return fmt.Errorf("send DNS record: %w", err)
 	}
 	return nil
 }
@@ -227,9 +224,6 @@ func handleFile(ctx *eventHandlerCtx, raw []byte) error {
 				ctx.logger.Error("Failed to send sensitive file alert record to agent", "error", err)
 			}
 		}
-	}
-	if err := ctx.client.SendRecord(record); err != nil {
-		return fmt.Errorf("send file event record: %w", err)
 	}
 	return nil
 }

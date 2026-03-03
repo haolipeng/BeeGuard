@@ -226,6 +226,10 @@ scripts:
   postinstall: ./scripts/postinstall.sh
   preremove: ./scripts/preremove.sh
 
+recommends:
+  - clamav
+  - libclamav-dev
+
 rpm:
   group: Unspecified
   compression: lzma

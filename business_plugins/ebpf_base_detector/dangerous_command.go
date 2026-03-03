@@ -70,6 +70,8 @@ func (d *DangerousCommandDetector) Detect(comm, args string) *DetectionResult {
 }
 
 // matchRule 检测命令是否匹配指定规则
+// 对于 regex/contains 类型，在模式匹配后额外验证 comm 是否为规则期望的目标命令，
+// 避免 shell 解释器（bash/sh/node 等）因 args buffer 包含子命令内容而产生误报。
 func (d *DangerousCommandDetector) matchRule(rule *Rule, comm, fullCmd string) (matched bool, pattern string) {
 	switch rule.Match.Type {
 	case MatchTypeRegex:
@@ -77,6 +79,12 @@ func (d *DangerousCommandDetector) matchRule(rule *Rule, comm, fullCmd string) (
 		patterns := d.compiled[rule.ID]
 		for i, re := range patterns {
 			if re.MatchString(fullCmd) {
+				// 从模式中提取期望的命令名（如 "rm\s+..." → "rm"），
+				// 验证 comm 是否与之匹配，过滤掉 shell 解释器的误报
+				expectedCmd := extractLeadingCommand(rule.Match.Patterns[i])
+				if expectedCmd != "" && !strings.HasPrefix(comm, expectedCmd) {
+					continue
+				}
 				return true, rule.Match.Patterns[i]
 			}
 		}
@@ -85,12 +93,17 @@ func (d *DangerousCommandDetector) matchRule(rule *Rule, comm, fullCmd string) (
 		// 包含匹配：检查fullCmd是否包含任一模式
 		for _, p := range rule.Match.Patterns {
 			if strings.Contains(fullCmd, p) {
+				// 提取模式的第一个单词作为期望命令名
+				expectedCmd := extractLeadingCommand(p)
+				if expectedCmd != "" && !strings.HasPrefix(comm, expectedCmd) {
+					continue
+				}
 				return true, p
 			}
 		}
 
 	case MatchTypePrefix:
-		// 前缀匹配：检查comm是否以任一模式开头
+		// 前缀匹配：检查comm是否以任一模式开头（已天然过滤非目标进程）
 		for _, p := range rule.Match.Patterns {
 			if strings.HasPrefix(comm, p) {
 				return true, p
@@ -98,7 +111,7 @@ func (d *DangerousCommandDetector) matchRule(rule *Rule, comm, fullCmd string) (
 		}
 
 	case MatchTypeExact:
-		// 精确匹配：检查comm是否与任一模式完全相同
+		// 精确匹配：检查comm是否与任一模式完全相同（已天然过滤非目标进程）
 		for _, p := range rule.Match.Patterns {
 			if comm == p {
 				return true, p
