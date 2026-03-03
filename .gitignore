@@ -22,7 +22,6 @@ go.work
 
 # 依赖目录（如果需要）
 vendor/
-docs/
 
 # IDE 配置文件
 .vscode/

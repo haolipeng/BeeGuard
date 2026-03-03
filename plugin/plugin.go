@@ -13,8 +13,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"gitlab.myinterest.top/security/agent/agent"
 	businessplugins "business_plugins/lib"
+
+	"gitlab.myinterest.top/security/agent/agent"
 	"gitlab.myinterest.top/security/agent/config"
 	"gitlab.myinterest.top/security/agent/proto"
 	"go.uber.org/zap"
