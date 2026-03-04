@@ -134,9 +134,10 @@ func (c *dockerClient) ListContainers(ctx context.Context) ([]Container, error) 
 		}
 		if resp, err := c.c.ContainerInspect(ctx, dockerContainer.ID); err == nil {
 			container.Name = strings.TrimPrefix(resp.Name, "/")
-			if container.State == StateName[int32(RUNNING)] {
+			// 只要 inspect 返回有效 Pid 就填充，不依赖 List 返回的 State 字符串（可能大小写不一致）
+			if resp.State.Pid > 0 {
 				container.Pid = strconv.Itoa(resp.State.Pid)
-				if resp.State.Pid > 0 {
+				if strings.EqualFold(container.State, StateName[int32(RUNNING)]) {
 					if p, err := process.NewProcess(container.Pid); err == nil {
 						container.Pns, _ = p.Namespace("pid")
 					}
