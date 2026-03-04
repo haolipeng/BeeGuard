@@ -51,6 +51,7 @@ type Service struct {
 	Name       string `mapstructure:"name"`        // 服务名称（文件名）
 	Type       string `mapstructure:"type"`        // 服务类型（simple, oneshot, dbus 等）
 	Command    string `mapstructure:"command"`     // 启动命令（ExecStart）
+	Path       string `mapstructure:"path"`        // 可执行文件路径（从 ExecStart 提取）
 	Restart    string `mapstructure:"restart"`     // 是否自动重启（true/false）
 	WorkingDir string `mapstructure:"working_dir"` // 工作目录（WorkingDirectory）
 	Checksum   string `mapstructure:"checksum"`    // 文件 MD5 校验和
@@ -221,6 +222,28 @@ func getVersionFromBinary(command string) string {
 	return ""
 }
 
+// extractExePath 从 ExecStart 命令中提取可执行文件路径
+// ExecStart 格式示例：
+//
+//	"/usr/sbin/sshd -D $SSHD_OPTS"          → /usr/sbin/sshd
+//	"-/sbin/agetty -o -p -- \\u --noclear"   → /sbin/agetty  （去除 - 前缀）
+//	"@/usr/bin/dbus-daemon --system"          → /usr/bin/dbus-daemon
+//	""                                        → ""
+func extractExePath(command string) string {
+	if command == "" {
+		return ""
+	}
+	parts := strings.Fields(command)
+	if len(parts) == 0 {
+		return ""
+	}
+	exe := strings.TrimLeft(parts[0], "-@+!")
+	if exe == "" || !strings.HasPrefix(exe, "/") {
+		return ""
+	}
+	return exe
+}
+
 func (h *ServiceHandler) Handle(c *businessplugins.Client, cache *engine.Cache, seq string) {
 	// 使用 Set 来去重，避免重复处理同名服务文件
 	set := mapset.NewSet[string]()
@@ -288,6 +311,9 @@ func (h *ServiceHandler) Handle(c *businessplugins.Client, cache *engine.Cache, 
 
 					// 计算文件 MD5 校验和
 					u.Checksum, _ = utils.GetMd5(path, "")
+
+					// 从 ExecStart 提取可执行文件路径
+					u.Path = extractExePath(u.Command)
 
 					// 设置默认服务类型
 					u.SetDefault()

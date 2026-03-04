@@ -277,12 +277,24 @@ func (h *UserHandler) Handle(c *businessplugins.Client, cache *engine.Cache, seq
 		for {
 			l := &utmp{}
 			if er := binary.Read(f, binary.LittleEndian, l); er == nil {
+				// 只处理 USER_PROCESS（type=7）记录，即登录事件
+				// 其他类型（8=登出、2=重启、1=运行级别）不是登录记录
+				if l.Typ != 7 {
+					continue
+				}
 				username := bytes.TrimRight(l.User[:], "\x00")
-				ip := bytes.TrimRight(l.Addr[:], "\x00")
+				if len(username) == 0 {
+					continue
+				}
 				//判断用户在映射表中是否存在
 				if u, ok := m[string(username)]; ok {
-					u.LastLoginIP = net.IP(ip).String()
+					// wtmp 按时间顺序存储，后面的记录覆盖前面的，最终保留最后一次登录
 					u.LastLoginTime = strconv.FormatInt(int64(l.Time.Sec), 10)
+					// IPv4 地址存储在 Addr 的前 4 字节
+					ip := net.IP(l.Addr[:4])
+					if !ip.IsUnspecified() {
+						u.LastLoginIP = ip.String()
+					}
 				}
 			} else {
 				break

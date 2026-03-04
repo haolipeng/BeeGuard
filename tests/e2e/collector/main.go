@@ -65,8 +65,8 @@ func main() {
 
 	// Override plugins directory to build output directory (relative to project root)
 	agent.PluginsDirectory = "../../../build/plugins"
-	// 只运行 image handler（镜像资产采集）
-	os.Setenv("HANDLER", "service")
+	// 只运行 user handler（用户采集，测试登录时间）
+	os.Setenv("HANDLER", "user")
 	if err := config.SetStandalone(true, "stderr", []string{"collector"}); err != nil {
 		zap.S().Errorf("failed to set standalone mode: %v", err)
 		os.Exit(1)
@@ -173,6 +173,8 @@ func printRecord(rec *proto.EncodedRecord) {
 		printEnvSuspiciousRecord(rec)
 	case 5058: //镜像
 		printImageRecord(rec)
+	case 5060: //Web服务
+		printWebServiceRecord(rec)
 	case 5062: //内核模块
 		printKernelModuleRecord(rec)
 	case 5100: //采集状态
@@ -473,6 +475,25 @@ func printImageRecord(rec *proto.EncodedRecord) {
 	fmt.Printf("Build Time: %s\n", payload.Fields["image_build_time"])
 	fmt.Printf("Runtime: %s\n", payload.Fields["runtime"])
 	fmt.Println("==================================")
+	fmt.Println()
+}
+
+func printWebServiceRecord(rec *proto.EncodedRecord) {
+	payload := unmarshalPayload(rec)
+	if payload == nil {
+		return
+	}
+	fmt.Println("\n========== Web Service Record ==========")
+	fmt.Printf("App Name: %s\n", payload.Fields["app_name"])
+	fmt.Printf("Server Type: %s\n", payload.Fields["server_type"])
+	fmt.Printf("Version: %s\n", payload.Fields["version"])
+	if payload.Fields["run_user"] != "" {
+		fmt.Printf("Run User: %s\n", payload.Fields["run_user"])
+	}
+	if payload.Fields["path"] != "" {
+		fmt.Printf("Config Path: %s\n", payload.Fields["path"])
+	}
+	fmt.Println("========================================")
 	fmt.Println()
 }
 
