@@ -65,8 +65,8 @@ func main() {
 
 	// Override plugins directory to build output directory (relative to project root)
 	agent.PluginsDirectory = "../../../build/plugins"
-	// 只运行 web_service handler
-	os.Setenv("HANDLER", "web_service")
+	// 只运行 image handler（镜像资产采集）
+	os.Setenv("HANDLER", "image")
 	if err := config.SetStandalone(true, "stderr", []string{"collector"}); err != nil {
 		zap.S().Errorf("failed to set standalone mode: %v", err)
 		os.Exit(1)
@@ -425,6 +425,30 @@ func printRecord(rec *proto.EncodedRecord) {
 					fmt.Println("============================================================")
 					fmt.Println()
 				}
+			}
+		}
+	} else if rec.DataType == 5058 {
+		// 镜像资产数据的数据类型是 5058
+		if len(rec.Data) > 0 {
+			payload := &businessplugins.Payload{}
+			err := payload.Unmarshal(rec.Data)
+			if err != nil {
+				zap.S().Errorf("Failed to unmarshal payload: %v", err)
+			} else {
+				fmt.Println("\n========== Image Record ==========")
+				fmt.Printf("Image ID: %s\n", payload.Fields["image_id"])
+				fmt.Printf("Image Name: %s\n", payload.Fields["image_name"])
+				fmt.Printf("Image Version: %s\n", payload.Fields["image_version"])
+				fmt.Printf("Image Size: %s\n", payload.Fields["image_size"])
+				if payload.Fields["container_count"] != "" && payload.Fields["container_count"] != "-1" {
+				fmt.Printf("Container Count: %s\n", payload.Fields["container_count"])
+			} else {
+				fmt.Printf("Container Count: N/A\n")
+			}
+				fmt.Printf("Build Time: %s\n", payload.Fields["image_build_time"])
+				fmt.Printf("Runtime: %s\n", payload.Fields["runtime"])
+				fmt.Println("==================================")
+				fmt.Println()
 			}
 		}
 	} else if rec.DataType == 5100 {

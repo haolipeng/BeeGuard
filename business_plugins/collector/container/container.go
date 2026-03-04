@@ -60,15 +60,40 @@ func (c *dockerClient) ListImages(ctx context.Context) ([]Image, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// 统计每个镜像关联的容器数（Docker API 的 Containers 字段默认返回 -1，不可靠）
+	containerCountMap := make(map[string]int)
+	containers, err := c.c.ContainerList(ctx, types.ContainerListOptions{All: true})
+	if err == nil {
+		for _, ct := range containers {
+			imageID := strings.TrimPrefix(ct.ImageID, "sha256:")
+			containerCountMap[imageID]++
+		}
+	}
+
 	for _, img := range resp {
 		name, version := parseImageRepoTag(img.RepoTags)
+		size := formatSize(img.Size)
+		createTime := formatUnixTime(img.Created)
+		// 部分环境（如 containerd 或旧版本）List 返回的 Size/Created 为 0，用 ImageInspect 回填
+		if (img.Size == 0 || img.Created <= 0) && img.ID != "" {
+			if inspect, _, err := c.c.ImageInspectWithRaw(ctx, img.ID); err == nil {
+				if img.Size == 0 && inspect.Size > 0 {
+					size = formatSize(inspect.Size)
+				}
+				if img.Created <= 0 && inspect.Created != "" {
+					createTime = formatInspectCreated(inspect.Created)
+				}
+			}
+		}
+		imageID := strings.TrimPrefix(img.ID, "sha256:")
 		images = append(images, Image{
-			ID:             strings.TrimPrefix(img.ID, "sha256:"),
+			ID:             imageID,
 			Name:           name,
 			Version:        version,
-			Size:           formatSize(img.Size),
-			ContainerCount: int(img.Containers),
-			CreateTime:     formatUnixTime(img.Created),
+			Size:           size,
+			ContainerCount: containerCountMap[imageID],
+			CreateTime:     createTime,
 			Runtime:        c.Runtime(),
 		})
 	}
@@ -115,6 +140,21 @@ func formatUnixTime(ts int64) string {
 		return ""
 	}
 	return time.Unix(ts, 0).Format("2006-01-02 15:04:05")
+}
+
+// formatInspectCreated 将 ImageInspect.Created（ISO3339 字符串）格式化为 "2006-01-02 15:04:05"
+func formatInspectCreated(created string) string {
+	if created == "" {
+		return ""
+	}
+	t, err := time.Parse(time.RFC3339Nano, created)
+	if err != nil {
+		t, err = time.Parse(time.RFC3339, created)
+	}
+	if err != nil {
+		return ""
+	}
+	return t.Format("2006-01-02 15:04:05")
 }
 
 func (c *dockerClient) ListContainers(ctx context.Context) ([]Container, error) {
