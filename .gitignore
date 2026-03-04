@@ -54,3 +54,9 @@ scripts/
 # Machine ID 文件
 machine-id
 bin/agent
+tests/e2e/collector/plugin/collector/collector.stderr
+tests/e2e/collector/plugin/collector/collector
+tests/e2e/collector/plugin/collector/collector
+tests/e2e/collector/plugin/collector/collector
+tests/e2e/test_collector
+tests/e2e/collector/plugin/collector/collector

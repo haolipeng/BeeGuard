@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -589,5 +591,77 @@ func TestListImages_Empty(t *testing.T) {
 	}
 	if len(images) != 0 {
 		t.Errorf("ListImages() returned %d images, want 0", len(images))
+	}
+}
+
+// TestListContainers_LocalDockerPid 集成测试：连接本地 Docker，验证 running 容器的 Pid 和 Pns 获取
+// 需要：Docker 可用、有 running 容器、root 权限
+// 运行方式：go test -v -run TestListContainers_LocalDockerPid
+func TestListContainers_LocalDockerPid(t *testing.T) {
+	if os.Getuid() != 0 {
+		t.Skip("skipping: requires root privileges")
+	}
+
+	clients := NewClients()
+	if len(clients) == 0 {
+		t.Skip("skipping: Docker not available")
+	}
+	defer func() {
+		for _, c := range clients {
+			c.Close()
+		}
+	}()
+
+	cli := clients[0]
+	containers, err := cli.ListContainers(context.Background())
+	if err != nil {
+		t.Fatalf("ListContainers() error: %v", err)
+	}
+
+	// 找到至少一个 running 容器来验证 Pid
+	var found bool
+	for _, c := range containers {
+		t.Logf("Container: ID=%s Name=%s State=%s Pid=%s Pns=%s",
+			c.ID[:12], c.Name, c.State, c.Pid, c.Pns)
+
+		if !strings.EqualFold(c.State, "running") {
+			// 非 running 容器，Pid 可能为空
+			continue
+		}
+
+		found = true
+
+		// running 容器的 Pid 必须非空且为正整数
+		if c.Pid == "" {
+			t.Errorf("running container %s (%s): Pid is empty", c.Name, c.ID[:12])
+			continue
+		}
+		pid, err := strconv.Atoi(c.Pid)
+		if err != nil || pid <= 0 {
+			t.Errorf("running container %s (%s): invalid Pid %q", c.Name, c.ID[:12], c.Pid)
+			continue
+		}
+
+		// 验证 Pid 对应的进程存在于 /proc
+		if _, err := os.Stat(fmt.Sprintf("/proc/%d", pid)); err != nil {
+			t.Errorf("running container %s (%s): /proc/%d does not exist", c.Name, c.ID[:12], pid)
+		}
+
+		// running 容器的 Pns 应该非空（pid namespace inode）
+		if c.Pns == "" {
+			t.Errorf("running container %s (%s): Pns is empty for running container with Pid=%s",
+				c.Name, c.ID[:12], c.Pid)
+		} else {
+			pns, err := strconv.ParseUint(c.Pns, 10, 64)
+			if err != nil || pns == 0 {
+				t.Errorf("running container %s (%s): invalid Pns %q", c.Name, c.ID[:12], c.Pns)
+			} else {
+				t.Logf("  -> Pid=%d verified (process exists), Pns=%d (namespace inode)", pid, pns)
+			}
+		}
+	}
+
+	if !found {
+		t.Skip("skipping Pid validation: no running containers found. Start one with: docker start test-nginx")
 	}
 }

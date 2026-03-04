@@ -12,11 +12,11 @@ import (
 
 	businessplugins "business_plugins/lib"
 
+	"gitlab.myinterest.top/security/agent/agent"
 	"gitlab.myinterest.top/security/agent/buffer"
 	"gitlab.myinterest.top/security/agent/config"
 	"gitlab.myinterest.top/security/agent/plugin"
 	"gitlab.myinterest.top/security/agent/proto"
-	"gitlab.myinterest.top/security/agent/transport"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -32,7 +32,7 @@ type jsonWriter struct {
 var (
 	// enableJSONOutput 控制是否将接收到的记录写入 JSON 文件
 	// 设置为 true 启用 JSON 文件输出，设置为 false 禁用
-	enableJSONOutput = false
+	enableJSONOutput = true
 
 	// jsonOutputFile 指定 JSON 输出文件的路径
 	jsonOutputFile = "collector_records.json"
@@ -52,12 +52,26 @@ func main() {
 	fmt.Println("=== Collector Plugin Test ===")
 	fmt.Println("Starting test agent...")
 
-	// 初始化 agent 配置（连接到 Server）
+	// 初始化 agent 配置
 	if err := config.Init(); err != nil {
 		zap.S().Errorf("failed to init config: %v", err)
 		os.Exit(1)
 	}
 	zap.S().Info("config initialized successfully")
+
+	// Set agent package variables from config
+	cfg, _ := config.Get()
+	agent.PluginsDirectory = cfg.PluginsDirectory
+
+	// Override plugins directory to build output directory (relative to project root)
+	agent.PluginsDirectory = "../../../build/plugins"
+	// 只运行 web_service handler
+	os.Setenv("HANDLER", "web_service")
+	if err := config.SetStandalone(true, "stderr", []string{"collector"}); err != nil {
+		zap.S().Errorf("failed to set standalone mode: %v", err)
+		os.Exit(1)
+	}
+	zap.S().Info("standalone mode enabled, plugins directory: ../../../build/plugins")
 
 	// 初始化 JSON 文件写入器（如果启用）
 	if enableJSONOutput {
@@ -81,33 +95,8 @@ func main() {
 	wg.Add(1)
 	go plugin.Startup(Context, wg)
 
-	// 启动传输守护进程（连接到 Server）
-	wg.Add(1)
-	go transport.StartTransfer(Context, wg)
-
 	// 等待插件守护进程启动
 	time.Sleep(time.Second * 1)
-
-	// 加载 collector 插件
-	collectorConfig := &proto.Config{
-		Name:    "collector",
-		Type:    "binary",
-		Version: "1.0.0",
-		Sha256:  "", // 测试时可以为空
-	}
-	cfgs := map[string]*proto.Config{
-		"collector": collectorConfig,
-	}
-	err := plugin.Sync(cfgs)
-	if err != nil {
-		zap.S().Errorf("failed to load collector plugin: %v", err)
-		os.Exit(1)
-	} else {
-		zap.S().Info("collector plugin loaded successfully")
-	}
-
-	// 等待插件加载完成
-	time.Sleep(time.Second * 2)
 
 	// 启动结果读取 goroutine
 	go func() {
@@ -130,28 +119,6 @@ func main() {
 		}
 	}()
 
-	// 发送测试任务（触发进程采集、端口采集、内核模块采集、软件采集和用户采集）
-	go func() {
-		time.Sleep(time.Second * 3)
-		sendProcessTask()
-		time.Sleep(time.Second * 2)
-		sendPortTask()
-		time.Sleep(time.Second * 2)
-		sendUserTask()
-		time.Sleep(time.Second * 2)
-		sendServiceTask()
-		time.Sleep(time.Second * 2)
-		sendSoftwareTask()
-		time.Sleep(time.Second * 2)
-		sendContainerTask()
-		time.Sleep(time.Second * 2)
-		sendEnvSuspiciousTask()
-		time.Sleep(time.Second * 2)
-		sendDatabaseTask()
-		time.Sleep(time.Second * 2)
-		sendWebServiceTask()
-	}()
-
 	// 信号处理
 	go func() {
 		sigs := make(chan os.Signal, 1)
@@ -163,9 +130,9 @@ func main() {
 		Cancel()
 	}()
 
-	// 运行 180 秒后自动退出（留足够时间让所有handler执行退出）
+	// 自动退出超时
 	go func() {
-		<-time.After(time.Second * 180)
+		<-time.After(90 * time.Second)
 		zap.S().Info("test timeout, exiting...")
 		Cancel()
 	}()
@@ -174,91 +141,10 @@ func main() {
 	fmt.Println("Test completed.")
 }
 
-// sendCollectorTask 发送采集任务给 collector 插件的通用函数
-// dataType: 任务的数据类型
-// taskName: 任务名称（用于日志消息，如 "process", "port" 等）
-func sendCollectorTask(dataType int32, taskName string) {
-	plg, ok := plugin.Get("collector")
-	if !ok {
-		zap.S().Error("collector plugin not found")
-		return
-	}
-
-	task := proto.Task{
-		DataType:   dataType,
-		ObjectName: "collector", // 固定为插件名称，与 Server 下发格式一致
-		Data:       "",          // collector 插件会自动采集，不需要额外数据
-		Token:      fmt.Sprintf("test-%s-token-%d", taskName, time.Now().Unix()),
-	}
-
-	err := plg.SendTask(task)
-	if err != nil {
-		zap.S().Errorf("failed to send %s task: %v", taskName, err)
-	} else {
-		zap.S().Infof("%s collection task sent successfully to collector plugin", taskName)
-	}
-}
-
-// sendProcessTask 发送进程采集任务给 collector 插件
-func sendProcessTask() {
-	sendCollectorTask(5050, "process")
-}
-
-// sendPortTask 发送端口采集任务给 collector 插件
-func sendPortTask() {
-	sendCollectorTask(5051, "port")
-}
-
-// sendKmodTask 发送内核模块采集任务给 collector 插件
-func sendKmodTask() {
-	sendCollectorTask(5062, "kmod")
-}
-
-// sendSoftwareTask 发送软件采集任务给 collector 插件
-func sendSoftwareTask() {
-	sendCollectorTask(5055, "software")
-}
-
-// sendUserTask 发送用户采集任务给 collector 插件
-func sendUserTask() {
-	sendCollectorTask(5052, "user")
-}
-
-// sendContainerTask 发送容器采集任务给 collector 插件
-func sendContainerTask() {
-	sendCollectorTask(5056, "container")
-}
-
-// sendEnvSuspiciousTask 发送可疑环境变量检测任务给 collector 插件
-func sendEnvSuspiciousTask() {
-	sendCollectorTask(5057, "env_suspicious")
-}
-
-// sendServiceTask 发送系统服务采集任务给 collector 插件
-func sendServiceTask() {
-	sendCollectorTask(5054, "service")
-}
-
-// sendDatabaseTask 发送数据库服务采集任务给 collector 插件
-func sendDatabaseTask() {
-	sendCollectorTask(5061, "database")
-}
-
-// sendWebServiceTask 发送Web服务采集任务给 collector 插件
-func sendWebServiceTask() {
-	sendCollectorTask(5060, "web_service")
-}
-
 // printRecord 打印接收到的记录
 func printRecord(rec *proto.EncodedRecord) {
-	//zap.S().Infof("=== Received Record ===")
-	//zap.S().Infof("DataType: %d", rec.DataType)
-	//zap.S().Infof("Timestamp: %d", rec.Timestamp)
-
 	// 进程数据的数据类型是 5050
 	if rec.DataType == 5050 {
-		//zap.S().Infof("Data length: %d bytes", len(rec.Data))
-
 		// 解析 protobuf Payload
 		if len(rec.Data) > 0 {
 			payload := &businessplugins.Payload{}
@@ -466,9 +352,9 @@ func printRecord(rec *proto.EncodedRecord) {
 					fmt.Printf("Password Remain Days: %s\n", payload.Fields["password_remain_days"])
 				}
 				if payload.Fields["is_expired"] == "true" {
-					fmt.Printf("⚠️  Password Status: EXPIRED\n")
+					fmt.Printf("Password Status: EXPIRED\n")
 				} else if payload.Fields["is_expiring_soon"] == "true" {
-					fmt.Printf("⚠️  Password Status: EXPIRING SOON\n")
+					fmt.Printf("Password Status: EXPIRING SOON\n")
 				}
 				fmt.Println("=================================")
 				fmt.Println()
@@ -476,8 +362,6 @@ func printRecord(rec *proto.EncodedRecord) {
 		}
 	} else if rec.DataType == 5056 {
 		// 容器数据的数据类型是 5056
-		//zap.S().Infof("Data length: %d bytes", len(rec.Data))
-
 		// 解析 protobuf Payload
 		if len(rec.Data) > 0 {
 			payload := &businessplugins.Payload{}
@@ -623,7 +507,7 @@ func writeRecordToJSON(rec *proto.EncodedRecord) {
 	defer jsonWriterInst.mu.Unlock()
 
 	// 构建 JSON 记录结构
-	record := map[string]interface{}{
+	record := map[string]any{
 		"data_type": rec.DataType,
 		"timestamp": rec.Timestamp,
 	}

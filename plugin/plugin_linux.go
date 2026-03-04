@@ -126,6 +126,10 @@ func Load(ctx context.Context, config proto.Config) (plg *Plugin, err error) {
 	// 传递日志目录环境变量
 	logDir := path.Join(agent.LogDirectory, "plugins", config.Name)
 	cmd.Env = append(cmd.Env, "LOG_DIR="+logDir)
+	// 传递 HANDLER 环境变量（用于 standalone 模式下过滤 handler）
+	if h := os.Getenv("HANDLER"); h != "" {
+		cmd.Env = append(cmd.Env, "HANDLER="+h)
+	}
 
 	logger.Info("plugin's process will start")
 

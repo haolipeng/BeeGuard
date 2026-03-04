@@ -82,10 +82,11 @@ func getServiceRuntimeInfo(serviceName string) (status, runUser, version string)
 	defer cancel()
 
 	// 使用 systemctl show 获取服务属性
-	cmd := exec.CommandContext(ctx, "systemctl", "show", serviceName,
+	cmd := exec.CommandContext(ctx, "/usr/bin/systemctl", "show", serviceName,
 		"--property=ActiveState,SubState,User,ExecMainPID,Version")
 	output, err := cmd.Output()
 	if err != nil {
+		zap.S().Debugf("systemctl show %s failed: %v", serviceName, err)
 		return "unknown", "", ""
 	}
 
@@ -241,16 +242,15 @@ func (h *ServiceHandler) Handle(c *businessplugins.Client, cache *engine.Cache, 
 						Restart: "false", // 默认不自动重启
 					}
 
-					// 解析服务文件内容
+					// 解析服务文件内容（使用 SplitN(_, "=", 2) 保证值中可含等号，如 ExecStart=... --containerd=/path）
 					for s.Scan() {
-						// 按等号分割键值对
-						fields := strings.Split(s.Text(), "=")
-						if len(fields) != 2 {
+						parts := strings.SplitN(s.Text(), "=", 2)
+						if len(parts) != 2 {
 							continue
 						}
 
-						key := strings.TrimSpace(fields[0])
-						value := strings.TrimSpace(fields[1])
+						key := strings.TrimSpace(parts[0])
+						value := strings.TrimSpace(parts[1])
 
 						// 解析关键字段
 						switch key {

@@ -65,14 +65,27 @@ func main() {
 	e.AddHandler(time.Hour*6, &DatabaseHandler{})      //数据库服务
 	e.AddHandler(time.Hour*6, &WebServiceHandler{})    //Web服务
 
+	// 环境变量 HANDLER 作为 -handler flag 的补充（agent 通过环境变量传递）
+	handlerNames := *handlers
+	if handlerNames == "" {
+		handlerNames = os.Getenv("HANDLER")
+	}
+
 	// 判断执行模式
 	if *runOnce {
 		var names []string
-		if *handlers != "" {
-			names = strings.Split(*handlers, ",")
+		if handlerNames != "" {
+			names = strings.Split(handlerNames, ",")
 		}
 		e.RunOnce(names)
 		return // 执行完毕退出
+	}
+
+	// 如果指定了 handler，只运行指定的 handler
+	if handlerNames != "" {
+		names := strings.Split(handlerNames, ",")
+		e.RunOnce(names)
+		return
 	}
 
 	//运行engine引擎
