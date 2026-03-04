@@ -31,12 +31,13 @@ type Port struct {
 	Username string `mapstructure:"username"` // 用户名（从 UID 获取）
 
 	// 进程信息
-	Pid     string `mapstructure:"pid"`
-	Exe     string `mapstructure:"exe"`
-	Comm    string `mapstructure:"comm"`
-	Cmdline string `mapstructure:"cmdline"`
-	Psm     string `mapstructure:"psm"`
-	PodName string `mapstructure:"pod_name"`
+	Pid        string `mapstructure:"pid"`
+	Exe        string `mapstructure:"exe"`
+	Comm       string `mapstructure:"comm"`
+	Cmdline    string `mapstructure:"cmdline"`
+	Psm        string `mapstructure:"psm"`
+	PodName    string `mapstructure:"pod_name"`
+	StartTime  string `mapstructure:"start_time"` // 进程启动时间（Unix 时间戳字符串）
 }
 
 // ListeningPorts 获取所有监听端口信息
@@ -101,6 +102,9 @@ func ListeningPorts() (ret []*Port, err error) {
 						port.Exe, _ = p.Exe()
 						port.Cmdline, _ = p.Cmdline()
 						port.Comm, _ = p.Comm()
+						if stat, err := p.Stat(); err == nil {
+							port.StartTime = stat.StartTime
+						}
 						// 从进程环境变量提取容器/K8s 信息
 						if envs, err := p.Envs(); err == nil {
 							// 提取 PodName
