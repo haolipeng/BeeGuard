@@ -21,6 +21,14 @@ var (
 	updateTime = time.Now()
 )
 
+// taskObjectToPlugin 任务 object_name 到插件名的映射表
+// 当 object_name 与插件注册名不一致时（如 detector 插件的子检测器），通过此表路由到正确的插件
+var taskObjectToPlugin = map[string]string{
+	"ssh":               "detector",
+	"ftp":               "detector",
+	"ssh_anomaly_login": "detector",
+}
+
 // GetState 获取传输统计信息（发送和接收的 TPS）
 func GetState(now time.Time) (txTPS, rxTPS float64) {
 	instant := now.Sub(updateTime).Seconds()
@@ -187,19 +195,34 @@ func handleReceive(ctx context.Context, wg *sync.WaitGroup, client proto.Transfe
 				}
 			} else {
 				// 转发给对应插件的任务
-				plg, ok := plugin.Get(cmd.Task.ObjectName)
+				pluginName := cmd.Task.ObjectName
+				plg, ok := plugin.Get(pluginName)
+				if !ok {
+					// object_name 与插件名不一致时，查映射表
+					if mapped, exists := taskObjectToPlugin[pluginName]; exists {
+						plg, ok = plugin.Get(mapped)
+						if ok {
+							zap.S().Infow("task object_name mapped to plugin",
+								"object_name", pluginName,
+								"plugin", mapped)
+						}
+					}
+				}
 				if ok {
 					zap.S().Infow("forwarding task to plugin",
-						"plugin", cmd.Task.ObjectName,
+						"plugin", plg.Name(),
+						"object_name", cmd.Task.ObjectName,
 						"data_type", cmd.Task.DataType)
 					err := plg.SendTask(*cmd.Task)
 					if err != nil {
 						plg.Error("send task to plugin failed: " + err.Error())
 					} else {
-						zap.S().Infow("task sent to plugin successfully", "plugin", cmd.Task.ObjectName)
+						zap.S().Infow("task sent to plugin successfully",
+							"plugin", plg.Name(),
+							"object_name", cmd.Task.ObjectName)
 					}
 				} else {
-					zap.S().Errorw("can't find plugin", "plugin", cmd.Task.ObjectName)
+					zap.S().Errorw("can't find plugin", "plugin", pluginName)
 				}
 			}
 			continue

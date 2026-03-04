@@ -169,56 +169,6 @@ TRUNCATE TABLE agent_info CASCADE;
 
 > **说明：** 使用 `TRUNCATE` 比 `DELETE` 更快，且会重置自增 ID。`CASCADE` 会同时清理有外键依赖的关联数据。如果表尚未创建，可跳过此步骤，hcids 启动后会自动建表。
 
-### 2.4 编译部署 Agent
-
-```bash
-cd /home/work/goProject/src/company/agent
-make build
-make deploy
-```
-
-**验证**：
-
-```bash
-ls -la /opt/cloudsec/bin/agent
-ls -la /opt/cloudsec/plugins/
-ls -la /opt/cloudsec/agent.yaml
-```
-
-部署后 `/opt/cloudsec/` 中 Agent 相关目录结构：
-
-```
-/opt/cloudsec/
-├── bin/
-│   └── agent                          # agent 主程序
-├── plugins/
-│   ├── collector/collector            # 资产采集插件
-│   ├── baseline/baseline              # 基线检查插件
-│   ├── detector/detector              # 威胁检测插件
-│   ├── ebpf_base_detector/            # eBPF 进程监控插件
-│   │   ├── ebpf_base_detector
-│   │   └── config/                    # 插件配置文件
-│   ├── nids/nids                      # 网络入侵检测插件
-│   └── scanner/scanner                # 恶意文件扫描插件
-├── agent.yaml                         # agent 配置文件
-├── data/                              # 运行时数据目录
-└── logs/                              # 日志目录
-```
-
-### 2.5 配置 Agent
-
-编辑 `/opt/cloudsec/agent.yaml`，将 `server` 地址指向远程 hcids：
-
-```yaml
-server: "<REMOTE_IP>:50051"     # 远程 hcids gRPC 地址
-connect_timeout: 30
-working_directory: "/opt/cloudsec/data/agent"
-plugins_directory: "/opt/cloudsec/plugins"
-log_directory: "/opt/cloudsec/logs"
-retry_max_count: 10
-retry_interval: 5
-```
-
 ---
 
 ## 三、启动服务
