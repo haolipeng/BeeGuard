@@ -76,23 +76,21 @@ func (s *Service) SetDefault() {
 }
 
 // getServiceRuntimeInfo 获取服务运行时信息（状态、用户、版本）
-// 通过 systemctl show 命令获取
+// 通过 systemctl show 命令获取；若未解析到状态则用 systemctl is-active 回退
 func getServiceRuntimeInfo(serviceName string) (status, runUser, version string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// 使用 systemctl show 获取服务属性
 	cmd := exec.CommandContext(ctx, "/usr/bin/systemctl", "show", serviceName,
-		"--property=ActiveState,SubState,User,ExecMainPID,Version")
+		"--property=ActiveState,User,ExecMainPID,Version")
 	output, err := cmd.Output()
 	if err != nil {
 		zap.S().Debugf("systemctl show %s failed: %v", serviceName, err)
-		return "unknown", "", ""
+		return getServiceStatusFallback(serviceName), "", ""
 	}
 
-	// 解析输出
 	lines := strings.Split(string(output), "\n")
-	var activeState, subState string
+	var activeState string
 	for _, line := range lines {
 		parts := strings.SplitN(line, "=", 2)
 		if len(parts) != 2 {
@@ -103,9 +101,9 @@ func getServiceRuntimeInfo(serviceName string) (status, runUser, version string)
 
 		switch key {
 		case "ActiveState":
-			activeState = value
-		case "SubState":
-			subState = value
+			if value != "" && value != "[not set]" {
+				activeState = value
+			}
 		case "User":
 			if value != "" && value != "[not set]" {
 				runUser = value
@@ -117,18 +115,30 @@ func getServiceRuntimeInfo(serviceName string) (status, runUser, version string)
 		}
 	}
 
-	// 组合状态: active(running), inactive(dead), failed(failed)
+	// 只上报 active/inactive/failed，不组合 SubState
 	if activeState != "" {
-		if subState != "" && subState != activeState {
-			status = activeState + "(" + subState + ")"
-		} else {
-			status = activeState
-		}
+		status = activeState
 	} else {
-		status = "unknown"
+		status = getServiceStatusFallback(serviceName)
 	}
 
 	return status, runUser, version
+}
+
+// getServiceStatusFallback 在 systemctl show 未返回有效状态时，用 systemctl is-active 获取单一状态
+func getServiceStatusFallback(serviceName string) string {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "/usr/bin/systemctl", "is-active", serviceName)
+	out, err := cmd.Output()
+	if err != nil {
+		return "unknown"
+	}
+	s := strings.TrimSpace(string(out))
+	if s == "" {
+		return "unknown"
+	}
+	return s
 }
 
 // versionExtractPattern 从 --version 输出中提取 "程序名 + 版本号" 的核心部分

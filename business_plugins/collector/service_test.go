@@ -43,12 +43,12 @@ func TestGetServiceRuntimeInfo_ParseOutput(t *testing.T) {
 		{
 			name:       "active running",
 			output:     "ExecMainPID=2130\nUser=\nActiveState=active\nSubState=running\n",
-			wantStatus: "active(running)",
+			wantStatus: "active",
 		},
 		{
 			name:       "inactive dead",
 			output:     "ExecMainPID=0\nUser=\nActiveState=inactive\nSubState=dead\n",
-			wantStatus: "inactive(dead)",
+			wantStatus: "inactive",
 		},
 		{
 			name:       "failed",
@@ -69,9 +69,9 @@ func TestGetServiceRuntimeInfo_ParseOutput(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// 模拟 getServiceRuntimeInfo 的解析逻辑
+			// 模拟 getServiceRuntimeInfo：只取 ActiveState，不组合 SubState
 			lines := strings.Split(tt.output, "\n")
-			var activeState, subState string
+			var activeState string
 			for _, line := range lines {
 				parts := strings.SplitN(line, "=", 2)
 				if len(parts) != 2 {
@@ -79,26 +79,15 @@ func TestGetServiceRuntimeInfo_ParseOutput(t *testing.T) {
 				}
 				key := strings.TrimSpace(parts[0])
 				value := strings.TrimSpace(parts[1])
-
-				switch key {
-				case "ActiveState":
+				if key == "ActiveState" && value != "" && value != "[not set]" {
 					activeState = value
-				case "SubState":
-					subState = value
+					break
 				}
 			}
-
-			var status string
-			if activeState != "" {
-				if subState != "" && subState != activeState {
-					status = activeState + "(" + subState + ")"
-				} else {
-					status = activeState
-				}
-			} else {
+			status := activeState
+			if status == "" {
 				status = "unknown"
 			}
-
 			if status != tt.wantStatus {
 				t.Errorf("status = %q, want %q", status, tt.wantStatus)
 			}

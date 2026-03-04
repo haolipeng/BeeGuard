@@ -66,7 +66,7 @@ func main() {
 	// Override plugins directory to build output directory (relative to project root)
 	agent.PluginsDirectory = "../../../build/plugins"
 	// 只运行 image handler（镜像资产采集）
-	os.Setenv("HANDLER", "image")
+	os.Setenv("HANDLER", "service")
 	if err := config.SetStandalone(true, "stderr", []string{"collector"}); err != nil {
 		zap.S().Errorf("failed to set standalone mode: %v", err)
 		os.Exit(1)
@@ -141,335 +141,353 @@ func main() {
 	fmt.Println("Test completed.")
 }
 
-// printRecord 打印接收到的记录
+// unmarshalPayload 解析 EncodedRecord 的 Data 为 Payload，失败返回 nil
+func unmarshalPayload(rec *proto.EncodedRecord) *businessplugins.Payload {
+	if len(rec.Data) == 0 {
+		return nil
+	}
+	payload := &businessplugins.Payload{}
+	if err := payload.Unmarshal(rec.Data); err != nil {
+		zap.S().Errorf("Failed to unmarshal payload: %v", err)
+		return nil
+	}
+	return payload
+}
+
+// printRecord 根据 DataType 分发到对应的打印函数
 func printRecord(rec *proto.EncodedRecord) {
-	// 进程数据的数据类型是 5050
-	if rec.DataType == 5050 {
-		// 解析 protobuf Payload
-		if len(rec.Data) > 0 {
-			payload := &businessplugins.Payload{}
-			err := payload.Unmarshal(rec.Data)
-			if err != nil {
-				zap.S().Errorf("Failed to unmarshal payload: %v", err)
-			} else {
-				fmt.Println("\n========== Process Record ==========")
-				fmt.Printf("PID: %s\n", payload.Fields["pid"])
-				fmt.Printf("Command: %s\n", payload.Fields["cmdline"])
-				fmt.Printf("Executable: %s\n", payload.Fields["exe"])
-				fmt.Printf("Working Directory: %s\n", payload.Fields["cwd"])
-				fmt.Printf("PPID: %s\n", payload.Fields["ppid"])
-				fmt.Printf("State: %s\n", payload.Fields["state"])
-				fmt.Printf("User: %s (UID: %s)\n", payload.Fields["rusername"], payload.Fields["ruid"])
-				fmt.Printf("Group: %s (GID: %s)\n", payload.Fields["rgid"], payload.Fields["rgid"])
-				if nsPid, ok := payload.Fields["pns"]; ok {
-					fmt.Printf("Namespace PID: %s\n", nsPid)
-				}
-				fmt.Println("====================================")
-				fmt.Println()
-			}
-		}
-	} else if rec.DataType == 5051 {
-		// 端口数据的数据类型是 5051
-		zap.S().Infof("Data length: %d bytes", len(rec.Data))
-
-		// 解析 protobuf Payload
-		if len(rec.Data) > 0 {
-			payload := &businessplugins.Payload{}
-			err := payload.Unmarshal(rec.Data)
-			if err != nil {
-				zap.S().Errorf("Failed to unmarshal payload: %v", err)
-			} else {
-				fmt.Println("\n========== Port Record ==========")
-				fmt.Printf("Protocol: %s", payload.Fields["protocol"])
-				if payload.Fields["protocol"] == "6" {
-					fmt.Print(" (TCP)")
-				} else if payload.Fields["protocol"] == "17" {
-					fmt.Print(" (UDP)")
-				}
-				fmt.Println()
-				fmt.Printf("Family: %s", payload.Fields["family"])
-				if payload.Fields["family"] == "2" {
-					fmt.Print(" (IPv4)")
-				} else if payload.Fields["family"] == "10" {
-					fmt.Print(" (IPv6)")
-				}
-				fmt.Println()
-				fmt.Printf("Local:  %s:%s\n", payload.Fields["sip"], payload.Fields["sport"])
-				fmt.Printf("Remote: %s:%s\n", payload.Fields["dip"], payload.Fields["dport"])
-				fmt.Printf("State: %s", payload.Fields["state"])
-				if payload.Fields["state"] == "10" {
-					fmt.Print(" (LISTEN)")
-				} else if payload.Fields["state"] == "7" {
-					fmt.Print(" (UDP)")
-				}
-				fmt.Println()
-				fmt.Printf("UID: %s (%s)\n", payload.Fields["uid"], payload.Fields["username"])
-				fmt.Printf("Inode: %s\n", payload.Fields["inode"])
-				fmt.Println("=================================")
-				fmt.Println()
-			}
-		}
-	} else if rec.DataType == 5062 {
-		// 内核模块数据的数据类型是 5062
-		zap.S().Infof("Data length: %d bytes", len(rec.Data))
-
-		// 解析 protobuf Payload
-		if len(rec.Data) > 0 {
-			payload := &businessplugins.Payload{}
-			err := payload.Unmarshal(rec.Data)
-			if err != nil {
-				zap.S().Errorf("Failed to unmarshal payload: %v", err)
-			} else {
-				fmt.Println("\n========== Kernel Module Record ==========")
-				fmt.Printf("Name: %s\n", payload.Fields["name"])
-				fmt.Printf("Size: %s bytes\n", payload.Fields["size"])
-				fmt.Printf("RefCount: %s\n", payload.Fields["refcount"])
-				fmt.Printf("Used By: %s\n", payload.Fields["used_by"])
-				fmt.Printf("State: %s\n", payload.Fields["state"])
-				fmt.Printf("Address: %s\n", payload.Fields["addr"])
-				fmt.Println("==========================================")
-				fmt.Println()
-			}
-		}
-	} else if rec.DataType == 5055 {
-		// 软件数据的数据类型是 5055
-		zap.S().Infof("Data length: %d bytes", len(rec.Data))
-
-		// 解析 protobuf Payload
-		if len(rec.Data) > 0 {
-			payload := &businessplugins.Payload{}
-			err := payload.Unmarshal(rec.Data)
-			if err != nil {
-				zap.S().Errorf("Failed to unmarshal payload: %v", err)
-			} else {
-				fmt.Println("\n========== Software Record ==========")
-				fmt.Printf("Name: %s\n", payload.Fields["name"])
-				fmt.Printf("Version: %s\n", payload.Fields["sversion"])
-				fmt.Printf("Type: %s", payload.Fields["type"])
-				switch payload.Fields["type"] {
-				case "dpkg":
-					fmt.Print(" (Debian/Ubuntu)")
-				case "rpm":
-					fmt.Print(" (RedHat/CentOS)")
-				case "pypi":
-					fmt.Print(" (Python)")
-				case "jar":
-					fmt.Print(" (Java)")
-				}
-				fmt.Println()
-				if payload.Fields["source"] != "" {
-					fmt.Printf("Source: %s\n", payload.Fields["source"])
-				}
-				if payload.Fields["status"] != "" {
-					fmt.Printf("Status: %s\n", payload.Fields["status"])
-				}
-				if payload.Fields["vendor"] != "" {
-					fmt.Printf("Vendor: %s\n", payload.Fields["vendor"])
-				}
-				if payload.Fields["component_version"] != "" {
-					fmt.Printf("Component Version: %s\n", payload.Fields["component_version"])
-				}
-				if payload.Fields["pid"] != "" {
-					fmt.Printf("PID: %s\n", payload.Fields["pid"])
-				}
-				if payload.Fields["pod_name"] != "" {
-					fmt.Printf("Pod Name: %s\n", payload.Fields["pod_name"])
-				}
-				if payload.Fields["psm"] != "" {
-					fmt.Printf("PSM: %s\n", payload.Fields["psm"])
-				}
-				if payload.Fields["path"] != "" {
-					fmt.Printf("Path: %s\n", payload.Fields["path"])
-				}
-				fmt.Println("====================================")
-				fmt.Println()
-			}
-		}
-	} else if rec.DataType == 5052 {
-		// 用户数据的数据类型是 5052
-		zap.S().Infof("Data length: %d bytes", len(rec.Data))
-
-		// 解析 protobuf Payload
-		if len(rec.Data) > 0 {
-			payload := &businessplugins.Payload{}
-			err := payload.Unmarshal(rec.Data)
-			if err != nil {
-				zap.S().Errorf("Failed to unmarshal payload: %v", err)
-			} else {
-				fmt.Println("\n========== User Record ==========")
-				fmt.Printf("Username: %s\n", payload.Fields["username"])
-				fmt.Printf("UID: %s\n", payload.Fields["uid"])
-				fmt.Printf("GID: %s", payload.Fields["gid"])
-				if payload.Fields["groupname"] != "" {
-					fmt.Printf(" (%s)", payload.Fields["groupname"])
-				}
-				fmt.Println()
-				if payload.Fields["info"] != "" {
-					fmt.Printf("Info: %s\n", payload.Fields["info"])
-				}
-				fmt.Printf("Home: %s\n", payload.Fields["home"])
-				fmt.Printf("Shell: %s\n", payload.Fields["shell"])
-				if payload.Fields["password"] != "" && payload.Fields["password"] != "x" {
-					fmt.Printf("Password: %s\n", payload.Fields["password"])
-				}
-				if payload.Fields["last_login_time"] != "" {
-					fmt.Printf("Last Login Time: %s\n", payload.Fields["last_login_time"])
-				}
-				if payload.Fields["last_login_ip"] != "" {
-					fmt.Printf("Last Login IP: %s\n", payload.Fields["last_login_ip"])
-				}
-				if payload.Fields["weak_password"] != "" {
-					fmt.Printf("Weak Password: %s", payload.Fields["weak_password"])
-					if payload.Fields["weak_password"] == "true" && payload.Fields["weak_password_content"] != "" {
-						fmt.Printf(" (%s)", payload.Fields["weak_password_content"])
-					}
-					fmt.Println()
-				}
-				// 账号类型标识
-				if payload.Fields["is_root"] == "true" {
-					fmt.Printf("Account Type: ROOT\n")
-				}
-				if payload.Fields["is_sudo"] == "true" {
-					fmt.Printf("Account Type: SUDO\n")
-				}
-				if payload.Fields["sudoers"] != "" {
-					fmt.Printf("Sudoers: %s\n", payload.Fields["sudoers"])
-				}
-				// 密码过期信息
-				if payload.Fields["password_last_change"] != "" {
-					fmt.Printf("Password Last Change: %s\n", payload.Fields["password_last_change"])
-				}
-				if payload.Fields["password_max_days"] != "" {
-					fmt.Printf("Password Max Days: %s\n", payload.Fields["password_max_days"])
-				}
-				if payload.Fields["password_warn_days"] != "" {
-					fmt.Printf("Password Warn Days: %s\n", payload.Fields["password_warn_days"])
-				}
-				if payload.Fields["password_expire_date"] != "" && payload.Fields["password_expire_date"] != "0" {
-					fmt.Printf("Password Expire Date: %s\n", payload.Fields["password_expire_date"])
-				}
-				if payload.Fields["password_remain_days"] != "" {
-					fmt.Printf("Password Remain Days: %s\n", payload.Fields["password_remain_days"])
-				}
-				if payload.Fields["is_expired"] == "true" {
-					fmt.Printf("Password Status: EXPIRED\n")
-				} else if payload.Fields["is_expiring_soon"] == "true" {
-					fmt.Printf("Password Status: EXPIRING SOON\n")
-				}
-				fmt.Println("=================================")
-				fmt.Println()
-			}
-		}
-	} else if rec.DataType == 5056 {
-		// 容器数据的数据类型是 5056
-		// 解析 protobuf Payload
-		if len(rec.Data) > 0 {
-			payload := &businessplugins.Payload{}
-			err := payload.Unmarshal(rec.Data)
-			if err != nil {
-				zap.S().Errorf("Failed to unmarshal payload: %v", err)
-			} else {
-				fmt.Println("\n========== Container Record ==========")
-				fmt.Printf("Container ID: %s\n", payload.Fields["id"])
-				fmt.Printf("Container Name: %s\n", payload.Fields["name"])
-				fmt.Printf("State: %s\n", payload.Fields["state"])
-				fmt.Printf("Image ID: %s\n", payload.Fields["image_id"])
-				fmt.Printf("Image Name: %s\n", payload.Fields["image_name"])
-				if payload.Fields["pid"] != "" {
-					fmt.Printf("PID: %s\n", payload.Fields["pid"])
-				}
-				if payload.Fields["pns"] != "" {
-					fmt.Printf("PNS: %s\n", payload.Fields["pns"])
-				}
-				fmt.Printf("Runtime: %s\n", payload.Fields["runtime"])
-				if payload.Fields["create_time"] != "" {
-					fmt.Printf("Create Time: %s\n", payload.Fields["create_time"])
-				}
-				fmt.Println("=====================================")
-				fmt.Println()
-			}
-		}
-	} else if rec.DataType == 5057 {
-		// 可疑环境变量数据的数据类型是 5057
-		zap.S().Infof("Data length: %d bytes", len(rec.Data))
-
-		// 解析 protobuf Payload
-		if len(rec.Data) > 0 {
-			payload := &businessplugins.Payload{}
-			err := payload.Unmarshal(rec.Data)
-			if err != nil {
-				zap.S().Errorf("Failed to unmarshal payload: %v", err)
-			} else {
-				// 检查是否是汇总记录（没有可疑项时）
-				if payload.Fields["suspicious_count"] == "0" {
-					fmt.Println("\n========== Environment Suspicious Detection Summary ==========")
-					fmt.Printf("Total Environment Variables: %s\n", payload.Fields["total_envs"])
-					fmt.Printf("Suspicious Count: %s\n", payload.Fields["suspicious_count"])
-					fmt.Println("No suspicious environment variables found.")
-					fmt.Println("==============================================================")
-					fmt.Println()
-				} else {
-					fmt.Println("\n========== Suspicious Environment Variable Record ==========")
-					fmt.Printf("Variable Name: %s\n", payload.Fields["var_name"])
-					fmt.Printf("Variable Value: %s\n", payload.Fields["var_value"])
-					fmt.Printf("Suspicious Reasons: %s\n", payload.Fields["suspicious_reasons"])
-					if payload.Fields["source"] != "" {
-						fmt.Printf("Source: %s\n", payload.Fields["source"])
-					}
-					if payload.Fields["total_envs"] != "" {
-						fmt.Printf("Total Envs: %s\n", payload.Fields["total_envs"])
-					}
-					if payload.Fields["suspicious_count"] != "" {
-						fmt.Printf("Suspicious Count: %s\n", payload.Fields["suspicious_count"])
-					}
-					fmt.Println("============================================================")
-					fmt.Println()
-				}
-			}
-		}
-	} else if rec.DataType == 5058 {
-		// 镜像资产数据的数据类型是 5058
-		if len(rec.Data) > 0 {
-			payload := &businessplugins.Payload{}
-			err := payload.Unmarshal(rec.Data)
-			if err != nil {
-				zap.S().Errorf("Failed to unmarshal payload: %v", err)
-			} else {
-				fmt.Println("\n========== Image Record ==========")
-				fmt.Printf("Image ID: %s\n", payload.Fields["image_id"])
-				fmt.Printf("Image Name: %s\n", payload.Fields["image_name"])
-				fmt.Printf("Image Version: %s\n", payload.Fields["image_version"])
-				fmt.Printf("Image Size: %s\n", payload.Fields["image_size"])
-				if payload.Fields["container_count"] != "" && payload.Fields["container_count"] != "-1" {
-				fmt.Printf("Container Count: %s\n", payload.Fields["container_count"])
-			} else {
-				fmt.Printf("Container Count: N/A\n")
-			}
-				fmt.Printf("Build Time: %s\n", payload.Fields["image_build_time"])
-				fmt.Printf("Runtime: %s\n", payload.Fields["runtime"])
-				fmt.Println("==================================")
-				fmt.Println()
-			}
-		}
-	} else if rec.DataType == 5100 {
-		// 任务状态响应
-		zap.S().Infof("Task status response received")
-		if len(rec.Data) > 0 {
-			payload := &businessplugins.Payload{}
-			err := payload.Unmarshal(rec.Data)
-			if err != nil {
-				zap.S().Errorf("Failed to unmarshal payload: %v", err)
-			} else {
-				fmt.Println("\n========== Task Status ==========")
-				fmt.Printf("Status: %s\n", payload.Fields["status"])
-				fmt.Printf("Token: %s\n", payload.Fields["token"])
-				fmt.Printf("Message: %s\n", payload.Fields["msg"])
-				fmt.Println("================================")
-				fmt.Println()
-			}
-		}
+	switch rec.DataType {
+	case 5050: //进程
+		printProcessRecord(rec)
+	case 5051: //端口
+		printPortRecord(rec)
+	case 5052: //用户
+		printUserRecord(rec)
+	case 5054: //系统服务
+		printServiceRecord(rec)
+	case 5055: //软件
+		printSoftwareRecord(rec)
+	case 5056: //容器
+		printContainerRecord(rec)
+	case 5057: //可疑环境变量
+		printEnvSuspiciousRecord(rec)
+	case 5058: //镜像
+		printImageRecord(rec)
+	case 5062: //内核模块
+		printKernelModuleRecord(rec)
+	case 5100: //采集状态
+		printTaskStatusRecord(rec)
+	default:
+		zap.S().Infof("Unknown data type: %d", rec.DataType)
 	}
 	zap.S().Info("========================")
+}
+
+func printProcessRecord(rec *proto.EncodedRecord) {
+	payload := unmarshalPayload(rec)
+	if payload == nil {
+		return
+	}
+	fmt.Println("\n========== Process Record ==========")
+	fmt.Printf("PID: %s\n", payload.Fields["pid"])
+	fmt.Printf("Command: %s\n", payload.Fields["cmdline"])
+	fmt.Printf("Executable: %s\n", payload.Fields["exe"])
+	fmt.Printf("Working Directory: %s\n", payload.Fields["cwd"])
+	fmt.Printf("PPID: %s\n", payload.Fields["ppid"])
+	fmt.Printf("State: %s\n", payload.Fields["state"])
+	fmt.Printf("User: %s (UID: %s)\n", payload.Fields["rusername"], payload.Fields["ruid"])
+	fmt.Printf("Group: %s (GID: %s)\n", payload.Fields["rgid"], payload.Fields["rgid"])
+	if nsPid, ok := payload.Fields["pns"]; ok {
+		fmt.Printf("Namespace PID: %s\n", nsPid)
+	}
+	fmt.Println("====================================")
+	fmt.Println()
+}
+
+func printPortRecord(rec *proto.EncodedRecord) {
+	zap.S().Infof("Data length: %d bytes", len(rec.Data))
+	payload := unmarshalPayload(rec)
+	if payload == nil {
+		return
+	}
+	fmt.Println("\n========== Port Record ==========")
+	fmt.Printf("Protocol: %s", payload.Fields["protocol"])
+	if payload.Fields["protocol"] == "6" {
+		fmt.Print(" (TCP)")
+	} else if payload.Fields["protocol"] == "17" {
+		fmt.Print(" (UDP)")
+	}
+	fmt.Println()
+	fmt.Printf("Family: %s", payload.Fields["family"])
+	if payload.Fields["family"] == "2" {
+		fmt.Print(" (IPv4)")
+	} else if payload.Fields["family"] == "10" {
+		fmt.Print(" (IPv6)")
+	}
+	fmt.Println()
+	fmt.Printf("Local:  %s:%s\n", payload.Fields["sip"], payload.Fields["sport"])
+	fmt.Printf("Remote: %s:%s\n", payload.Fields["dip"], payload.Fields["dport"])
+	fmt.Printf("State: %s", payload.Fields["state"])
+	if payload.Fields["state"] == "10" {
+		fmt.Print(" (LISTEN)")
+	} else if payload.Fields["state"] == "7" {
+		fmt.Print(" (UDP)")
+	}
+	fmt.Println()
+	fmt.Printf("UID: %s (%s)\n", payload.Fields["uid"], payload.Fields["username"])
+	fmt.Printf("Inode: %s\n", payload.Fields["inode"])
+	fmt.Println("=================================")
+	fmt.Println()
+}
+
+func printKernelModuleRecord(rec *proto.EncodedRecord) {
+	zap.S().Infof("Data length: %d bytes", len(rec.Data))
+	payload := unmarshalPayload(rec)
+	if payload == nil {
+		return
+	}
+	fmt.Println("\n========== Kernel Module Record ==========")
+	fmt.Printf("Name: %s\n", payload.Fields["name"])
+	fmt.Printf("Size: %s bytes\n", payload.Fields["size"])
+	fmt.Printf("RefCount: %s\n", payload.Fields["refcount"])
+	fmt.Printf("Used By: %s\n", payload.Fields["used_by"])
+	fmt.Printf("State: %s\n", payload.Fields["state"])
+	fmt.Printf("Address: %s\n", payload.Fields["addr"])
+	fmt.Println("==========================================")
+	fmt.Println()
+}
+
+func printSoftwareRecord(rec *proto.EncodedRecord) {
+	zap.S().Infof("Data length: %d bytes", len(rec.Data))
+	payload := unmarshalPayload(rec)
+	if payload == nil {
+		return
+	}
+	fmt.Println("\n========== Software Record ==========")
+	fmt.Printf("Name: %s\n", payload.Fields["name"])
+	fmt.Printf("Version: %s\n", payload.Fields["sversion"])
+	fmt.Printf("Type: %s", payload.Fields["type"])
+	switch payload.Fields["type"] {
+	case "dpkg":
+		fmt.Print(" (Debian/Ubuntu)")
+	case "rpm":
+		fmt.Print(" (RedHat/CentOS)")
+	case "pypi":
+		fmt.Print(" (Python)")
+	case "jar":
+		fmt.Print(" (Java)")
+	}
+	fmt.Println()
+	if payload.Fields["source"] != "" {
+		fmt.Printf("Source: %s\n", payload.Fields["source"])
+	}
+	if payload.Fields["status"] != "" {
+		fmt.Printf("Status: %s\n", payload.Fields["status"])
+	}
+	if payload.Fields["vendor"] != "" {
+		fmt.Printf("Vendor: %s\n", payload.Fields["vendor"])
+	}
+	if payload.Fields["component_version"] != "" {
+		fmt.Printf("Component Version: %s\n", payload.Fields["component_version"])
+	}
+	if payload.Fields["pid"] != "" {
+		fmt.Printf("PID: %s\n", payload.Fields["pid"])
+	}
+	if payload.Fields["pod_name"] != "" {
+		fmt.Printf("Pod Name: %s\n", payload.Fields["pod_name"])
+	}
+	if payload.Fields["psm"] != "" {
+		fmt.Printf("PSM: %s\n", payload.Fields["psm"])
+	}
+	if payload.Fields["path"] != "" {
+		fmt.Printf("Path: %s\n", payload.Fields["path"])
+	}
+	fmt.Println("====================================")
+	fmt.Println()
+}
+
+func printUserRecord(rec *proto.EncodedRecord) {
+	zap.S().Infof("Data length: %d bytes", len(rec.Data))
+	payload := unmarshalPayload(rec)
+	if payload == nil {
+		return
+	}
+	fmt.Println("\n========== User Record ==========")
+	fmt.Printf("Username: %s\n", payload.Fields["username"])
+	fmt.Printf("UID: %s\n", payload.Fields["uid"])
+	fmt.Printf("GID: %s", payload.Fields["gid"])
+	if payload.Fields["groupname"] != "" {
+		fmt.Printf(" (%s)", payload.Fields["groupname"])
+	}
+	fmt.Println()
+	if payload.Fields["info"] != "" {
+		fmt.Printf("Info: %s\n", payload.Fields["info"])
+	}
+	fmt.Printf("Home: %s\n", payload.Fields["home"])
+	fmt.Printf("Shell: %s\n", payload.Fields["shell"])
+	if payload.Fields["password"] != "" && payload.Fields["password"] != "x" {
+		fmt.Printf("Password: %s\n", payload.Fields["password"])
+	}
+	if payload.Fields["last_login_time"] != "" {
+		fmt.Printf("Last Login Time: %s\n", payload.Fields["last_login_time"])
+	}
+	if payload.Fields["last_login_ip"] != "" {
+		fmt.Printf("Last Login IP: %s\n", payload.Fields["last_login_ip"])
+	}
+	if payload.Fields["weak_password"] != "" {
+		fmt.Printf("Weak Password: %s", payload.Fields["weak_password"])
+		if payload.Fields["weak_password"] == "true" && payload.Fields["weak_password_content"] != "" {
+			fmt.Printf(" (%s)", payload.Fields["weak_password_content"])
+		}
+		fmt.Println()
+	}
+	if payload.Fields["is_root"] == "true" {
+		fmt.Printf("Account Type: ROOT\n")
+	}
+	if payload.Fields["is_sudo"] == "true" {
+		fmt.Printf("Account Type: SUDO\n")
+	}
+	if payload.Fields["sudoers"] != "" {
+		fmt.Printf("Sudoers: %s\n", payload.Fields["sudoers"])
+	}
+	if payload.Fields["password_last_change"] != "" {
+		fmt.Printf("Password Last Change: %s\n", payload.Fields["password_last_change"])
+	}
+	if payload.Fields["password_max_days"] != "" {
+		fmt.Printf("Password Max Days: %s\n", payload.Fields["password_max_days"])
+	}
+	if payload.Fields["password_warn_days"] != "" {
+		fmt.Printf("Password Warn Days: %s\n", payload.Fields["password_warn_days"])
+	}
+	if payload.Fields["password_expire_date"] != "" && payload.Fields["password_expire_date"] != "0" {
+		fmt.Printf("Password Expire Date: %s\n", payload.Fields["password_expire_date"])
+	}
+	if payload.Fields["password_remain_days"] != "" {
+		fmt.Printf("Password Remain Days: %s\n", payload.Fields["password_remain_days"])
+	}
+	if payload.Fields["is_expired"] == "true" {
+		fmt.Printf("Password Status: EXPIRED\n")
+	} else if payload.Fields["is_expiring_soon"] == "true" {
+		fmt.Printf("Password Status: EXPIRING SOON\n")
+	}
+	fmt.Println("=================================")
+	fmt.Println()
+}
+
+func printServiceRecord(rec *proto.EncodedRecord) {
+	payload := unmarshalPayload(rec)
+	if payload == nil {
+		return
+	}
+	fmt.Println("\n========== Service Record ==========")
+	fmt.Printf("Name: %s\n", payload.Fields["name"])
+	fmt.Printf("Type: %s\n", payload.Fields["type"])
+	fmt.Printf("Status: %s\n", payload.Fields["status"])
+	fmt.Printf("Command: %s\n", payload.Fields["command"])
+	fmt.Printf("Restart: %s\n", payload.Fields["restart"])
+	if payload.Fields["working_dir"] != "" {
+		fmt.Printf("Working Dir: %s\n", payload.Fields["working_dir"])
+	}
+	if payload.Fields["run_user"] != "" {
+		fmt.Printf("Run User: %s\n", payload.Fields["run_user"])
+	}
+	if payload.Fields["version"] != "" {
+		fmt.Printf("Version: %s\n", payload.Fields["version"])
+	}
+	fmt.Println("====================================")
+	fmt.Println()
+}
+
+func printContainerRecord(rec *proto.EncodedRecord) {
+	payload := unmarshalPayload(rec)
+	if payload == nil {
+		return
+	}
+	fmt.Println("\n========== Container Record ==========")
+	fmt.Printf("Container ID: %s\n", payload.Fields["id"])
+	fmt.Printf("Container Name: %s\n", payload.Fields["name"])
+	fmt.Printf("State: %s\n", payload.Fields["state"])
+	fmt.Printf("Image ID: %s\n", payload.Fields["image_id"])
+	fmt.Printf("Image Name: %s\n", payload.Fields["image_name"])
+	if payload.Fields["pid"] != "" {
+		fmt.Printf("PID: %s\n", payload.Fields["pid"])
+	}
+	if payload.Fields["pns"] != "" {
+		fmt.Printf("PNS: %s\n", payload.Fields["pns"])
+	}
+	fmt.Printf("Runtime: %s\n", payload.Fields["runtime"])
+	if payload.Fields["create_time"] != "" {
+		fmt.Printf("Create Time: %s\n", payload.Fields["create_time"])
+	}
+	fmt.Println("=====================================")
+	fmt.Println()
+}
+
+func printEnvSuspiciousRecord(rec *proto.EncodedRecord) {
+	zap.S().Infof("Data length: %d bytes", len(rec.Data))
+	payload := unmarshalPayload(rec)
+	if payload == nil {
+		return
+	}
+	if payload.Fields["suspicious_count"] == "0" {
+		fmt.Println("\n========== Environment Suspicious Detection Summary ==========")
+		fmt.Printf("Total Environment Variables: %s\n", payload.Fields["total_envs"])
+		fmt.Printf("Suspicious Count: %s\n", payload.Fields["suspicious_count"])
+		fmt.Println("No suspicious environment variables found.")
+		fmt.Println("==============================================================")
+		fmt.Println()
+	} else {
+		fmt.Println("\n========== Suspicious Environment Variable Record ==========")
+		fmt.Printf("Variable Name: %s\n", payload.Fields["var_name"])
+		fmt.Printf("Variable Value: %s\n", payload.Fields["var_value"])
+		fmt.Printf("Suspicious Reasons: %s\n", payload.Fields["suspicious_reasons"])
+		if payload.Fields["source"] != "" {
+			fmt.Printf("Source: %s\n", payload.Fields["source"])
+		}
+		if payload.Fields["total_envs"] != "" {
+			fmt.Printf("Total Envs: %s\n", payload.Fields["total_envs"])
+		}
+		if payload.Fields["suspicious_count"] != "" {
+			fmt.Printf("Suspicious Count: %s\n", payload.Fields["suspicious_count"])
+		}
+		fmt.Println("============================================================")
+		fmt.Println()
+	}
+}
+
+func printImageRecord(rec *proto.EncodedRecord) {
+	payload := unmarshalPayload(rec)
+	if payload == nil {
+		return
+	}
+	fmt.Println("\n========== Image Record ==========")
+	fmt.Printf("Image ID: %s\n", payload.Fields["image_id"])
+	fmt.Printf("Image Name: %s\n", payload.Fields["image_name"])
+	fmt.Printf("Image Version: %s\n", payload.Fields["image_version"])
+	fmt.Printf("Image Size: %s\n", payload.Fields["image_size"])
+	if payload.Fields["container_count"] != "" && payload.Fields["container_count"] != "-1" {
+		fmt.Printf("Container Count: %s\n", payload.Fields["container_count"])
+	} else {
+		fmt.Printf("Container Count: N/A\n")
+	}
+	fmt.Printf("Build Time: %s\n", payload.Fields["image_build_time"])
+	fmt.Printf("Runtime: %s\n", payload.Fields["runtime"])
+	fmt.Println("==================================")
+	fmt.Println()
+}
+
+func printTaskStatusRecord(rec *proto.EncodedRecord) {
+	zap.S().Infof("Task status response received")
+	payload := unmarshalPayload(rec)
+	if payload == nil {
+		return
+	}
+	fmt.Println("\n========== Task Status ==========")
+	fmt.Printf("Status: %s\n", payload.Fields["status"])
+	fmt.Printf("Token: %s\n", payload.Fields["token"])
+	fmt.Printf("Message: %s\n", payload.Fields["msg"])
+	fmt.Println("================================")
+	fmt.Println()
 }
 
 // newJSONWriter 创建新的 JSON 文件写入器
