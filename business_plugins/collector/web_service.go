@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bufio"
 	"context"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -82,6 +84,13 @@ var (
 		"apache2": apacheWebRule,
 		"httpd":   apacheWebRule,
 	}
+
+	// site_domain 解析相关正则
+	nginxServerNameRegex  = regexp.MustCompile(`(?i)^\s*server_name\s+(.+?)\s*;`)
+	nginxIncludeRegex     = regexp.MustCompile(`(?i)^\s*include\s+(.+?)\s*;`)
+	apacheServerNameRegex = regexp.MustCompile(`(?i)^\s*ServerName\s+(\S+)`)
+	apacheServerAliasRegex = regexp.MustCompile(`(?i)^\s*ServerAlias\s+(.+)`)
+	apacheIncludeRegex    = regexp.MustCompile(`(?i)^\s*(?:Include|IncludeOptional)\s+(.+?)\s*$`)
 )
 
 // WebServiceHandler Web服务采集处理器
@@ -183,6 +192,9 @@ func (h *WebServiceHandler) Handle(c *businessplugins.Client, cache *engine.Cach
 			configPath = rule.confFunc(cmdline, proc)
 		}
 
+		// 提取站点域名
+		siteDomain := h.extractSiteDomains(configPath, rule.serverType)
+
 		// 上报Web服务资产
 		c.SendRecord(&businessplugins.Record{
 			DataType:  int32(h.DataType()),
@@ -194,14 +206,15 @@ func (h *WebServiceHandler) Handle(c *businessplugins.Client, cache *engine.Cach
 					"server_type": rule.serverType,
 					"run_user":    runUser,
 					"path":        configPath,
+					"site_domain": siteDomain,
 					"package_seq": seq,
 				},
 			},
 		})
 
 		reported[rule.serverType] = true
-		zap.S().Infof("Web service collected: app=%s version=%s type=%s user=%s path=%s",
-			rule.appName, version, rule.serverType, runUser, configPath)
+		zap.S().Infof("Web service collected: app=%s version=%s type=%s user=%s path=%s domains=%s",
+			rule.appName, version, rule.serverType, runUser, configPath, siteDomain)
 	}
 }
 
@@ -252,6 +265,169 @@ func (h *WebServiceHandler) getVersion(rule *WebServiceRule, uid, gid uint32, di
 		version = strings.TrimPrefix(version, rule.versionTrimPrefix)
 	}
 	return version
+}
+
+// extractSiteDomains 提取Web服务配置中的站点域名
+func (h *WebServiceHandler) extractSiteDomains(configPath, serverType string) string {
+	if configPath == "" {
+		return ""
+	}
+
+	var domains []string
+	switch serverType {
+	case "nginx":
+		domains = parseNginxDomains(configPath)
+	case "apache":
+		domains = parseApacheDomains(configPath)
+	default:
+		return ""
+	}
+
+	// 去重
+	seen := make(map[string]bool, len(domains))
+	unique := make([]string, 0, len(domains))
+	for _, d := range domains {
+		lower := strings.ToLower(d)
+		if !seen[lower] {
+			seen[lower] = true
+			unique = append(unique, d)
+		}
+	}
+
+	result := strings.Join(unique, ",")
+	// VARCHAR(255) 截断：在最后一个逗号处截断，避免切断域名
+	if len(result) > 255 {
+		result = result[:255]
+		if idx := strings.LastIndex(result, ","); idx > 0 {
+			result = result[:idx]
+		}
+	}
+	return result
+}
+
+// parseNginxDomains 解析 nginx 配置中的域名（主配置 + 一级 include）
+func parseNginxDomains(configPath string) []string {
+	domains, includes := parseNginxConfigFile(configPath)
+
+	configDir := filepath.Dir(configPath)
+	for _, inc := range includes {
+		if !filepath.IsAbs(inc) {
+			inc = filepath.Join(configDir, inc)
+		}
+		// 展开 glob 模式
+		matches, err := filepath.Glob(inc)
+		if err != nil {
+			zap.S().Debugf("Failed to glob nginx include %s: %v", inc, err)
+			continue
+		}
+		for _, m := range matches {
+			d, _ := parseNginxConfigFile(m)
+			domains = append(domains, d...)
+		}
+	}
+	return domains
+}
+
+// parseNginxConfigFile 逐行扫描单个 nginx 配置文件，返回域名和 include 路径
+func parseNginxConfigFile(path string) (domains []string, includes []string) {
+	f, err := os.Open(path)
+	if err != nil {
+		zap.S().Debugf("Failed to open nginx config %s: %v", path, err)
+		return
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(io.LimitReader(f, 10*1024*1024))
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		// 跳过注释
+		if strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		if m := nginxServerNameRegex.FindStringSubmatch(line); m != nil {
+			names := strings.Fields(m[1])
+			for _, name := range names {
+				if isValidDomain(name) {
+					domains = append(domains, name)
+				}
+			}
+		}
+
+		if m := nginxIncludeRegex.FindStringSubmatch(line); m != nil {
+			includes = append(includes, m[1])
+		}
+	}
+	return
+}
+
+// parseApacheDomains 解析 apache 配置中的域名（主配置 + 一级 Include）
+func parseApacheDomains(configPath string) []string {
+	domains, includes := parseApacheConfigFile(configPath)
+
+	configDir := filepath.Dir(configPath)
+	for _, inc := range includes {
+		if !filepath.IsAbs(inc) {
+			inc = filepath.Join(configDir, inc)
+		}
+		matches, err := filepath.Glob(inc)
+		if err != nil {
+			zap.S().Debugf("Failed to glob apache include %s: %v", inc, err)
+			continue
+		}
+		for _, m := range matches {
+			d, _ := parseApacheConfigFile(m)
+			domains = append(domains, d...)
+		}
+	}
+	return domains
+}
+
+// parseApacheConfigFile 逐行扫描单个 apache 配置文件，返回域名和 Include 路径
+func parseApacheConfigFile(path string) (domains []string, includes []string) {
+	f, err := os.Open(path)
+	if err != nil {
+		zap.S().Debugf("Failed to open apache config %s: %v", path, err)
+		return
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(io.LimitReader(f, 10*1024*1024))
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		if m := apacheServerNameRegex.FindStringSubmatch(line); m != nil {
+			name := strings.TrimSpace(m[1])
+			if isValidDomain(name) {
+				domains = append(domains, name)
+			}
+		}
+
+		if m := apacheServerAliasRegex.FindStringSubmatch(line); m != nil {
+			aliases := strings.Fields(m[1])
+			for _, alias := range aliases {
+				if isValidDomain(alias) {
+					domains = append(domains, alias)
+				}
+			}
+		}
+
+		if m := apacheIncludeRegex.FindStringSubmatch(line); m != nil {
+			includes = append(includes, m[1])
+		}
+	}
+	return
+}
+
+// isValidDomain 过滤无意义的域名值
+func isValidDomain(name string) bool {
+	if name == "" || name == "_" || name == "*" || strings.EqualFold(name, "localhost") {
+		return false
+	}
+	return true
 }
 
 // getWebServerRoot 获取Web服务根目录（保留供扩展使用）
