@@ -13,11 +13,8 @@ import (
 
 	businessplugins "business_plugins/lib"
 
-	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/go-viper/mapstructure/v2"
-	"github.com/karrick/godirwalk"
 	"gitlab.myinterest.top/security/agent/business_plugins/collector/engine"
-	"gitlab.myinterest.top/security/agent/business_plugins/collector/process"
 	"gitlab.myinterest.top/security/agent/business_plugins/collector/rpm"
 	"gitlab.myinterest.top/security/agent/business_plugins/collector/zip"
 )
@@ -205,7 +202,7 @@ func (h *SoftwareHandler) Handle(c *businessplugins.Client, cache *engine.Cache,
 		})
 	}
 
-	// 扫描 PyPI 包（Python）
+	/* 扫描 PyPI 包（Python）- 已注释，需要时恢复
 	dirs := mapset.NewSet[string]()
 	godirwalk.Walk("/usr", &godirwalk.Options{
 		FollowSymbolicLinks: false,
@@ -261,7 +258,9 @@ func (h *SoftwareHandler) Handle(c *businessplugins.Client, cache *engine.Cache,
 			}})
 		return false
 	})
-	// 扫描 JAR 包（Java）
+	*/
+
+	/* 扫描 JAR 包（Java）- 已注释，需要时恢复
 	procs, err := process.Processes(false)
 	if err != nil {
 		return
@@ -330,4 +329,5 @@ func (h *SoftwareHandler) Handle(c *businessplugins.Client, cache *engine.Cache,
 			}
 		}
 	}
+	*/
 }
