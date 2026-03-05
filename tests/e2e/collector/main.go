@@ -493,6 +493,9 @@ func printWebServiceRecord(rec *proto.EncodedRecord) {
 	if payload.Fields["path"] != "" {
 		fmt.Printf("Config Path: %s\n", payload.Fields["path"])
 	}
+	if payload.Fields["site_domain"] != "" {
+		fmt.Printf("Site Domain: %s\n", payload.Fields["site_domain"])
+	}
 	fmt.Println("========================================")
 	fmt.Println()
 }

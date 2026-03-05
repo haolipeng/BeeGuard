@@ -271,7 +271,10 @@ func (h *UserHandler) Handle(c *businessplugins.Client, cache *engine.Cache, seq
 	}
 	f.Close()
 
-	//2.获取用户的登录时间和登录ip
+	//2.获取用户的登录时间和登录IP（仅对“有过交互式登录”的用户有值）
+	// 数据来源：/var/log/wtmp，只记录实际发生过的 TTY/SSH 等登录事件（type=7）。
+	// 系统账号（如 proxy、usbmux、daemon）通常从不交互登录，因此不会出现在 wtmp 中，
+	// 其 LastLoginTime/LastLoginIP 为空是预期行为；只有 root 或曾登录过的普通用户会有值。
 	f, err = os.Open("/var/log/wtmp")
 	if err == nil {
 		for {

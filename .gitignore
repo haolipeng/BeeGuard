@@ -60,3 +60,4 @@ tests/e2e/collector/plugin/collector/collector
 tests/e2e/collector/plugin/collector/collector
 tests/e2e/test_collector
 tests/e2e/collector/plugin/collector/collector
+tests/e2e/collector/test_collector_user
