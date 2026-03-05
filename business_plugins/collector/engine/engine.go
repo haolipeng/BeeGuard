@@ -116,45 +116,41 @@ func (e *Engine) AddHandler(interval time.Duration, h Handler) {
 
 func (e *Engine) Run() {
 	zap.S().Info("engine running")
-	// 阶段1：立即并发执行所有handler一次
-	for _, h := range e.m {
-		go func(h *handler) {
-			h.l.Info("init call")
-			h.Handle(e.c, e.cache)
-		}(h)
-	}
-	// 阶段2：注册周期性cron定时任务
-	for _, h := range e.m {
-		var spec string
-		minutes := int(h.interval.Minutes())
-		if h.interval == BeforeDawn() {
-			spec = fmt.Sprintf("%d %d * * *", rand.Intn(60), rand.Intn(6))
-		} else if minutes > 0 {
-			spec = fmt.Sprintf("@every %dm", minutes)
-		} else {
-			panic("unknown interval")
-		}
-		func(h *handler) {
-			e.s.AddFunc(spec, func() { h.Handle(e.c, e.cache) })
-		}(h)
-		h.l.Infof("add func to scheduler: %s", spec)
-	}
+
+	// 启动 cron scheduler（初始为空，按需动态添加）
+	scheduled := make(map[int]bool)
 	go func() {
 		zap.S().Info("scheduler running")
 		e.s.Run()
 	}()
-	// receive task until stop
+
+	// 接收 server task，按需执行和调度
 	for {
-		//接收服务端任务
 		t, err := e.c.ReceiveTask()
 		if err != nil {
 			break
 		}
 		zap.S().Infof("received task %+v", t)
 		if h, ok := e.m[int(t.DataType)]; ok {
+			// 首次激活：注册 cron 定时任务
+			if !scheduled[int(t.DataType)] {
+				scheduled[int(t.DataType)] = true
+				var spec string
+				minutes := int(h.interval.Minutes())
+				if h.interval == BeforeDawn() {
+					spec = fmt.Sprintf("%d %d * * *", rand.Intn(60), rand.Intn(6))
+				} else if minutes > 0 {
+					spec = fmt.Sprintf("@every %dm", minutes)
+				} else {
+					panic("unknown interval")
+				}
+				func(h *handler) {
+					e.s.AddFunc(spec, func() { h.Handle(e.c, e.cache) })
+				}(h)
+				h.l.Infof("activated by server task, registered cron: %s", spec)
+			}
+
 			h.Handle(e.c, e.cache)
-			// send result recored
-			//发送数据记录结果
 			e.c.SendRecord(
 				&businessplugins.Record{
 					DataType:  5100,
@@ -167,7 +163,6 @@ func (e *Engine) Run() {
 						},
 					}})
 		} else {
-			// can't find handler
 			e.c.SendRecord(
 				&businessplugins.Record{
 					DataType:  5100,
