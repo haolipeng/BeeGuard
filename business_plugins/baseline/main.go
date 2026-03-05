@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"math/rand"
 	"runtime"
+	"strconv"
 	"time"
 
 	businessplugins "business_plugins/lib"
@@ -38,6 +39,8 @@ func SendServer(retCheckInfo check.RetBaselineInfo, token string) (err error) {
 	field := make(map[string]string, 0)
 	field["data"] = string(dataInfo)
 	field["token"] = token
+	field["baseline_name"] = retCheckInfo.BaselineName
+	field["template_id"] = strconv.Itoa(retCheckInfo.TemplateId)
 	payload.Fields = field
 	record.Data = &payload
 

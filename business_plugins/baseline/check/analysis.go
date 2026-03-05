@@ -10,6 +10,8 @@ import (
 type RetBaselineInfo struct {
 	BaselineId      int            `json:"baseline_id" bson:"baseline_id"`
 	BaselineVersion string         `json:"baseline_version" bson:"baseline_version"`
+	BaselineName    string         `json:"baseline_name" bson:"baseline_name"`
+	TemplateId      int            `json:"template_id" bson:"template_id"`
 	Status          string         `json:"status" bson:"status"`
 	Msg             string         `json:"msg" bson:"msg"`
 	CheckList       []RetCheckInfo `json:"check_list" bson:"check_list"`
@@ -80,6 +82,8 @@ func AnalysisBaseline(taskData TaskData) (retBaselineInfo RetBaselineInfo, err e
 	}
 
 	retBaselineInfo.BaselineVersion = baselineInfo.BaselineVersion
+	retBaselineInfo.BaselineName = baselineInfo.BaselineName
+	retBaselineInfo.TemplateId = baselineInfo.TemplateId
 
 	// get and analysis check rule
 	taskCheckIdMap := make(map[int]int)

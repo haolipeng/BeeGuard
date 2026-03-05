@@ -49,7 +49,7 @@ build-agent:
 build-plugins: generate-ebpf
 	@echo "Building all plugins..."
 	@mkdir -p $(PLUGINS_DIR)/collector
-	@mkdir -p $(PLUGINS_DIR)/baseline
+	@mkdir -p $(PLUGINS_DIR)/baseline/config
 	@mkdir -p $(PLUGINS_DIR)/detector/config/rules
 	@mkdir -p $(PLUGINS_DIR)/ebpf_base_detector/config
 	@mkdir -p $(PLUGINS_DIR)/nids/config
@@ -58,6 +58,8 @@ build-plugins: generate-ebpf
 	@cd $(COLLECTOR_SRC) && $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/collector/collector .
 	@echo "  Building baseline plugin..."
 	@cd $(BASELINE_SRC) && $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/baseline/baseline .
+	@cp -r $(BASELINE_SRC)/config/linux $(PLUGINS_DIR)/baseline/config/
+	@cp -r $(BASELINE_SRC)/config/container $(PLUGINS_DIR)/baseline/config/ 2>/dev/null || true
 	@echo "  Building detector plugin..."
 	@cd $(DETECTOR_SRC) && $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/detector/detector .
 	@cp $(DETECTOR_SRC)/config/rules/*.yaml $(PLUGINS_DIR)/detector/config/rules/

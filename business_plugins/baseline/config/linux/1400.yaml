@@ -1,7 +1,8 @@
 baseline_id: 1400
 baseline_version: 1.0
-baseline_name: "字节跳动最佳实践-ubuntu基线检查"
+baseline_name: "ubuntu基线检查"
 baseline_name_en: "bytedance Standard-ubuntu Security Baseline Check"
+template_id: 1400
 system:
   - "ubuntu"
 check_list:

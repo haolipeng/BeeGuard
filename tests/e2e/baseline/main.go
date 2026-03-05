@@ -110,9 +110,10 @@ func sendTestTask() {
 	}
 
 	// 创建测试任务数据
+	// Ubuntu 用 1400（config/linux/1400.yaml），CentOS 用 1200，Debian 用 1300；check_id_list 需与对应 yaml 中的 check_id 一致
 	taskData := map[string]interface{}{
-		"baseline_id":   1200,
-		"check_id_list": []int{1001, 1002, 1003},
+		"baseline_id":   1400, // Ubuntu 基线；改为 1200 可测 CentOS 基线
+		"check_id_list": []int{1, 2, 3},
 	}
 	taskDataJSON, _ := json.Marshal(taskData)
 
@@ -129,6 +130,39 @@ func sendTestTask() {
 	} else {
 		zap.S().Info("task sent successfully to baseline plugin")
 	}
+}
+
+// toFloat64 从 JSON 解析的 interface{} 安全转为 float64
+func toFloat64(v interface{}) float64 {
+	if v == nil {
+		return 0
+	}
+	switch x := v.(type) {
+	case float64:
+		return x
+	case float32:
+		return float64(x)
+	case int:
+		return float64(x)
+	case int64:
+		return float64(x)
+	}
+	return 0
+}
+
+// getStr 从 map[string]interface{} 安全取字符串
+func getStr(m map[string]interface{}, key string) string {
+	if m == nil {
+		return ""
+	}
+	v, ok := m[key]
+	if !ok || v == nil {
+		return ""
+	}
+	if s, ok := v.(string); ok {
+		return s
+	}
+	return fmt.Sprint(v)
 }
 
 // printRecord 打印接收到的记录
@@ -150,28 +184,40 @@ func printRecord(rec *proto.EncodedRecord) {
 			} else {
 				zap.S().Infof("Payload Fields: %+v", payload.Fields)
 
-				// 如果是基线检查结果（DataType 8000），解析 JSON 数据
+				// 如果是基线检查结果（DataType 8000），解析并打印检测结果
 				if rec.DataType == 8000 {
 					if dataStr, ok := payload.Fields["data"]; ok {
 						var baselineResult map[string]interface{}
 						if err := json.Unmarshal([]byte(dataStr), &baselineResult); err == nil {
 							fmt.Println("\n========== Baseline Check Result ==========")
-							fmt.Printf("Baseline ID: %.0f\n", baselineResult["baseline_id"])
-							fmt.Printf("Status: %s\n", baselineResult["status"])
+							if v, ok := baselineResult["baseline_id"]; ok {
+								fmt.Printf("Baseline ID: %.0f\n", toFloat64(v))
+							}
+							fmt.Printf("Status: %s\n", getStr(baselineResult, "status"))
 							fmt.Printf("Token: %s\n", payload.Fields["token"])
-							if checkList, ok := baselineResult["check_list"].([]interface{}); ok {
-								fmt.Printf("Check Items Count: %d\n", len(checkList))
-								for i, item := range checkList {
-									if itemMap, ok := item.(map[string]interface{}); ok {
-										result := "PASS"
-										if itemMap["result"].(float64) == 1 {
-											result = "FAIL"
-										} else if itemMap["result"].(float64) == 2 {
-											result = "ERROR"
-										}
-										fmt.Printf("  [%d] CheckID: %.0f, Result: %s, Title: %s\n",
-											i+1, itemMap["check_id"], result, itemMap["title_cn"])
-									}
+							if msg := getStr(baselineResult, "msg"); msg != "" {
+								fmt.Printf("Message: %s\n", msg)
+							}
+							checkList, _ := baselineResult["check_list"].([]interface{})
+							fmt.Printf("Check Items Count: %d\n", len(checkList))
+							for i, item := range checkList {
+								itemMap, _ := item.(map[string]interface{})
+								checkID := toFloat64(itemMap["check_id"])
+								resultVal := toFloat64(itemMap["result"])
+								resultStr := "PASS"
+								if resultVal == 1 {
+									resultStr = "FAIL"
+								} else if resultVal == 2 {
+									resultStr = "ERROR"
+								}
+								titleCn := getStr(itemMap, "title_cn")
+								if titleCn == "" {
+									titleCn = getStr(itemMap, "title")
+								}
+								fmt.Printf("  [%d] CheckID: %.0f, Result: %s, Title: %s\n",
+									i+1, checkID, resultStr, titleCn)
+								if msg := getStr(itemMap, "msg"); msg != "" {
+									fmt.Printf("       Msg: %s\n", msg)
 								}
 							}
 							fmt.Println("==========================================\n")

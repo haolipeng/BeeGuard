@@ -1,7 +1,8 @@
 baseline_id: 1300
 baseline_version: 1.0
-baseline_name: "字节跳动最佳实践-debian基线检查"
+baseline_name: "debian基线检查"
 baseline_name_en: "bytedance Standard-debian Security Baseline Check"
+template_id: 1300
 system:
   - "debian"
 check_list:

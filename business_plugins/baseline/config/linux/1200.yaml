@@ -1,7 +1,8 @@
 baseline_id: 1200
 baseline_version: 1.0
-baseline_name: "字节跳动最佳实践-centos基线检查"
+baseline_name: "centos基线检查"
 baseline_name_en: "bytedance Standard-centos Security Baseline Check"
+template_id: 1200
 system:
   - "centos"
 check_list:

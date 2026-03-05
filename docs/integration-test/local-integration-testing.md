@@ -79,9 +79,10 @@ Agent                          hcids Server                    PostgreSQL
 
 | 依赖 | 用途 | 安装命令 | 检查命令 |
 |------|------|---------|---------|
+| Nginx/httpd | Web 服务采集 + NIDS 网络攻击检测 | `apt install nginx` 或 `yum install httpd` | `systemctl is-active nginx` |
+| Docker | 容器/镜像资产采集 | `apt install docker.io` | `docker info` |
 | sshpass | SSH 暴力破解测试 | `apt install sshpass` | `which sshpass` |
 | ClamAV | Scanner 恶意文件扫描 | `apt install clamav libclamav-dev` | `which clamscan` |
-| Nginx | NIDS 网络攻击检测 | `apt install nginx` | `systemctl is-active nginx` |
 | DNS 解析 | 恶意请求检测 | - | `dig +short example.com` |
 
 ### 2.2 数据库准备
@@ -343,11 +344,47 @@ psql -h 127.0.0.1 -p 5432 -U postgres -d soc -c \
 
 Collector 插件在 Agent 连接 Server 后自动启动，按内置周期执行各 Handler 采集数据。
 
-### 4.1 等待自动采集
+### 4.1 测试前准备
+
+部分 Handler 需要系统中有对应服务运行才能采集到数据，**启动 Agent 前**需先准备好测试环境。
+
+#### Web 服务采集（DataType 5060）— 需启动 Nginx 或 httpd
+
+Collector 的 WebServiceHandler 通过扫描进程列表识别 `nginx`/`apache2`/`httpd` 进程，并解析配置文件提取版本、站点域名等信息。如果系统中没有运行 Web 服务器，该 Handler 不会产生数据。
+
+```bash
+# 方式一：启动 Nginx（推荐，大多数 Ubuntu/Debian 系统已安装）
+sudo systemctl start nginx
+# 验证
+systemctl is-active nginx    # 应输出 active
+curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1/   # 应返回 200
+
+# 方式二：启动 Apache httpd（CentOS/RHEL）
+sudo systemctl start httpd
+```
+
+> **提示**：如果需要测试 `site_domain` 字段，可在 nginx 配置中添加 `server_name` 指令。Collector 会解析主配置及一级 `include` 文件中的域名。
+
+#### 容器资产采集（DataType 5056）— 需启动容器
+
+Collector 的 ContainerHandler 通过 Docker API 采集运行中的容器信息。如果没有运行中的容器，该 Handler 不会产生数据。
+
+```bash
+# 拉取 alpine 镜像并启动容器（轻量级，约 7MB）
+docker pull alpine:latest
+docker run -d --name test-alpine alpine:latest sleep 3600
+
+# 验证容器正在运行
+docker ps | grep test-alpine
+```
+
+> **说明**：启动容器后，ContainerHandler（5056）、ImageHandler（5058）、ImagePackageHandler（5059）均可采集到数据。`sleep 3600` 使容器保持运行 1 小时，足够完成测试。
+
+### 4.2 等待自动采集
 
 Agent 启动后，hcids 会自动下发插件配置，collector 插件启动后立即执行首轮采集。等待约 30 秒后即可查询数据库。
 
-### 4.2 数据库验证
+### 4.3 数据库验证
 
 连接数据库后执行以下查询。所有资产表都以 `agent_id` 作为关联键。
 
@@ -440,19 +477,47 @@ LIMIT 10;
 
 验证要点：与 `lsmod | wc -l` 对比
 
-**容器 (asset_container)** — 需要安装 Docker：
+**容器 (asset_container)** — 需先启动容器（参见 4.1）：
 
 ```sql
+SELECT COUNT(*) FROM asset_container WHERE agent_id = '123456';
+
 SELECT container_id, name, state, image_name, runtime
 FROM asset_container WHERE agent_id = '123456';
 ```
 
+验证要点：
+- 与 `docker ps` 对比，运行中的容器应被采集
+- 如果按 4.1 步骤启动了 test-alpine，应至少有 1 条记录
+- `state` 为 `running`，`image_name` 包含 `alpine`
+
 **镜像 (asset_image)** — 需要安装 Docker：
 
 ```sql
+SELECT COUNT(*) FROM asset_image WHERE agent_id = '123456';
+
 SELECT image_id, image_name, image_version, image_size
 FROM asset_image WHERE agent_id = '123456';
 ```
+
+验证要点：
+- 与 `docker images` 对比
+- `image_size` 非空（alpine 镜像约 7MB）
+
+**Web 服务 (asset_web_service)** — 需先启动 Nginx 或 httpd（参见 4.1）：
+
+```sql
+SELECT COUNT(*) FROM asset_web_service WHERE agent_id = '123456';
+
+SELECT name, version, server_type, site_domain, path, created_at
+FROM asset_web_service WHERE agent_id = '123456';
+```
+
+验证要点：
+- 如果按 4.1 步骤启动了 Nginx，应有 1 条记录
+- `name` 为 `nginx`（或 `apache`），`version` 非空
+- `path` 为配置文件路径（如 `/etc/nginx/nginx.conf`）
+- `site_domain` 包含 nginx 配置中 `server_name` 指令的值（过滤 `_`、`localhost`、`*`）
 
 ---
 
@@ -843,7 +908,8 @@ SELECT
     (SELECT COUNT(*) FROM asset_software WHERE agent_id = '123456') AS software_count,
     (SELECT COUNT(*) FROM asset_kmod WHERE agent_id = '123456') AS kmod_count,
     (SELECT COUNT(*) FROM asset_container WHERE agent_id = '123456') AS container_count,
-    (SELECT COUNT(*) FROM asset_image WHERE agent_id = '123456') AS image_count;
+    (SELECT COUNT(*) FROM asset_image WHERE agent_id = '123456') AS image_count,
+    (SELECT COUNT(*) FROM asset_web_service WHERE agent_id = '123456') AS web_service_count;
 
 -- ========== eBPF 事件数据（默认不持久化，预期为 0）==========
 SELECT '=== Event Summary (expect 0 - raw events not persisted by default) ===' AS section;
@@ -891,9 +957,10 @@ SELECT
 | asset_system_service | > 0 条 | systemd 服务数 |
 | asset_software | > 0 条 | 安装软件包数 |
 | asset_kmod | > 0 条 | 内核模块数 |
-| asset_container | > 0 条 | 需要有运行中的容器 |
+| asset_container | > 0 条 | 需先启动容器（参见 4.1） |
 | asset_image | > 0 条 | 需要有容器镜像 |
-| asset_image_package | > 0 条 | 需要有运行中的容器 |
+| asset_image_package | > 0 条 | 需先启动���器（参见 4.1） |
+| asset_web_service | > 0 条 | 需先启动 Nginx 或 httpd（参见 4.1） |
 
 **告警数据：**
 
@@ -950,6 +1017,9 @@ rm -f /etc/cron.d/ebpf_test_cron # crontab 测试文件
 
 # --- 恶意软件扫描测试产物 ---
 rm -f /root/eicar_test.com /root/eicar_1.exe /root/eicar_2.sh  # EICAR 测试文件
+
+# --- 容器测试产物（4.1 中启动的测试容器）---
+docker rm -f test-alpine 2>/dev/null  # 删除测试容器
 
 # --- 反弹 Shell 测试残留 ---
 killall nc 2>/dev/null            # 清理 nc 监听进程
