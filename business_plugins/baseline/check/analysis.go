@@ -1,16 +1,15 @@
 package check
 
 import (
-	"baseline/infra"
 	"encoding/json"
 	"fmt"
 	"strconv"
 )
 
 type RetBaselineInfo struct {
-	BaselineId      int            `json:"baseline_id" bson:"baseline_id"`
+	BaselineId      string         `json:"baseline_id" bson:"baseline_id"`
 	BaselineVersion string         `json:"baseline_version" bson:"baseline_version"`
-	BaselineName    string         `json:"baseline_name" bson:"baseline_name"`
+	TemplateName    string         `json:"template_name" bson:"template_name"`
 	TemplateId      int            `json:"template_id" bson:"template_id"`
 	Status          string         `json:"status" bson:"status"`
 	Msg             string         `json:"msg" bson:"msg"`
@@ -33,7 +32,7 @@ type RetCheckInfo struct {
 }
 
 type TaskData struct {
-	BaselineId   int           `json:"baseline_id"`
+	BaselineId   string        `json:"baseline_id"`
 	CheckIdList  []int         `json:"check_id_list"`
 	BaselineInfo *BaselineInfo `json:"baseline_info,omitempty"` // 服务端下发的完整规则
 }
@@ -43,46 +42,21 @@ var (
 	BaselineStatusSuccess = "success"
 )
 
-// get baselin config info
-func getBaselineConfigData(baselineId int) (baselineInfo BaselineInfo, err error) {
-
-	// bind config file
-	var yamlPath string
-	if baselineId < 6000 {
-		yamlPath = fmt.Sprintf("config/linux/%d.yaml", baselineId)
-	} else {
-		yamlPath = fmt.Sprintf("config/container/%d.yaml", baselineId)
-	}
-	err = infra.BindYaml(yamlPath, &baselineInfo)
-	if err != nil {
-		return
-	}
-	return
-}
-
 // AnalysisBaseline start baseline task
 func AnalysisBaseline(taskData TaskData) (retBaselineInfo RetBaselineInfo, err error) {
 
 	// analysis params
-	baselineId := taskData.BaselineId
 	checkIdList := taskData.CheckIdList
-	retBaselineInfo.BaselineId = baselineId
+	retBaselineInfo.BaselineId = taskData.BaselineId
 
-	var baselineInfo BaselineInfo
-	if taskData.BaselineInfo != nil {
-		// 使用服务端下发的完整规则
-		baselineInfo = *taskData.BaselineInfo
-	} else {
-		// 使用本地 YAML 配置（原有逻辑）
-		baselineInfo, err = getBaselineConfigData(baselineId)
-		if err != nil {
-			infra.Loger.Println("getBaselineConfigData error:", err)
-			return retBaselineInfo, err
-		}
+	if taskData.BaselineInfo == nil {
+		err = fmt.Errorf("baseline_info is required")
+		return retBaselineInfo, err
 	}
+	baselineInfo := *taskData.BaselineInfo
 
 	retBaselineInfo.BaselineVersion = baselineInfo.BaselineVersion
-	retBaselineInfo.BaselineName = baselineInfo.BaselineName
+	retBaselineInfo.TemplateName = baselineInfo.TemplateName
 	retBaselineInfo.TemplateId = baselineInfo.TemplateId
 
 	// get and analysis check rule
@@ -134,20 +108,14 @@ func AnalysisBaseline(taskData TaskData) (retBaselineInfo RetBaselineInfo, err e
 	return retBaselineInfo, err
 }
 
-// Analysis config file
-func Analysis(data interface{}) (retBaselineInfo RetBaselineInfo, err error) {
+// Analysis parse task data and run baseline check
+func Analysis(data string) (retBaselineInfo RetBaselineInfo, err error) {
 	var taskData TaskData
-	switch data.(type) {
-	case int:
-		taskData.BaselineId = data.(int)
-	case string:
-		// analysis parameter
-		err = json.Unmarshal([]byte(data.(string)), &taskData)
-		if err != nil {
-			retBaselineInfo.Status = BaselineStatusError
-			retBaselineInfo.Msg = err.Error()
-			return retBaselineInfo, err
-		}
+	err = json.Unmarshal([]byte(data), &taskData)
+	if err != nil {
+		retBaselineInfo.Status = BaselineStatusError
+		retBaselineInfo.Msg = err.Error()
+		return retBaselineInfo, err
 	}
 
 	// start analysis

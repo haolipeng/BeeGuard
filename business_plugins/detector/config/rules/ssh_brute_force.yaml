@@ -22,6 +22,4 @@ ssh:
       level: 10
       ignore: 60
       group_by: source_ip
-  whitelist:
-    - 127.0.0.1
-    - ::1
+  whitelist: []

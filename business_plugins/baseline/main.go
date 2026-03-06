@@ -3,9 +3,7 @@ package main
 import (
 	"baseline/check"
 	"baseline/infra"
-	"baseline/linux"
 	"encoding/json"
-	"math/rand"
 	"runtime"
 	"strconv"
 	"time"
@@ -18,9 +16,6 @@ var (
 	BaseLineTaskStatusDataType = int32(8010)
 	TaskStatusSuccess          = "succeed"
 	TaskStatusFailed           = "failed"
-	CentosDefaultList          = []int{1200}
-	DebianDefaultList          = []int{1300}
-	UbuntuDefaultList          = []int{1400}
 	pluginClient               *businessplugins.Client
 )
 
@@ -39,8 +34,9 @@ func SendServer(retCheckInfo check.RetBaselineInfo, token string) (err error) {
 	field := make(map[string]string, 0)
 	field["data"] = string(dataInfo)
 	field["token"] = token
-	field["baseline_name"] = retCheckInfo.BaselineName
+	field["template_name"] = retCheckInfo.TemplateName
 	field["template_id"] = strconv.Itoa(retCheckInfo.TemplateId)
+	field["baseline_id"] = retCheckInfo.BaselineId
 	payload.Fields = field
 	record.Data = &payload
 
@@ -52,7 +48,7 @@ func SendServer(retCheckInfo check.RetBaselineInfo, token string) (err error) {
 }
 
 // TaskStatusSendServer send task result to server
-func TaskStatusSendServer(status string, token string, msg string) {
+func TaskStatusSendServer(status string, token string, msg string, baselineId string) {
 	record := businessplugins.Record{}
 	record.DataType = BaseLineTaskStatusDataType
 	record.Timestamp = time.Now().Unix()
@@ -64,6 +60,7 @@ func TaskStatusSendServer(status string, token string, msg string) {
 		field["token"] = token
 	}
 	field["msg"] = msg
+	field["baseline_id"] = baselineId
 	payload.Fields = field
 	record.Data = &payload
 
@@ -96,60 +93,13 @@ func main() {
 
 				// report task result
 				if analysisErr != nil {
-					TaskStatusSendServer(TaskStatusFailed, pluginsTask.Token, analysisErr.Error())
+					TaskStatusSendServer(TaskStatusFailed, pluginsTask.Token, analysisErr.Error(), retBaselineInfo.BaselineId)
 				} else {
-					TaskStatusSendServer(TaskStatusSuccess, pluginsTask.Token, "")
+					TaskStatusSendServer(TaskStatusSuccess, pluginsTask.Token, "", retBaselineInfo.BaselineId)
 				}
 			}()
 		}
 	}()
 
-	// cronjob
-	init := true
-	dailyTicker := time.NewTicker(time.Until(time.Date(time.Now().Year(), time.Now().Month(), time.Now().Day()+1, rand.Intn(6), rand.Intn(60), rand.Intn(60), 0, time.Now().Location())))
-
-	defer dailyTicker.Stop()
-	for {
-		select {
-		// daily task
-		case <-dailyTicker.C:
-			if init {
-				dailyTicker.Reset(time.Hour * 24)
-				init = false
-			}
-
-			var baselineIdList []int
-			// start analysis by system
-			switch linux.GetSystemType() {
-			case "centos":
-				baselineIdList = CentosDefaultList
-			case "debian":
-				baselineIdList = DebianDefaultList
-			case "ubuntu":
-				baselineIdList = UbuntuDefaultList
-			default:
-				return
-			}
-
-			// start analysis
-			for _, baselineId := range baselineIdList {
-				retBaselineInfo, analysisErr := check.Analysis(baselineId)
-
-				// send request to sever
-				err := SendServer(retBaselineInfo, "")
-				if err != nil {
-					infra.Loger.Println("sendServer error", err)
-				} else {
-					infra.Loger.Println("sendServer success:", retBaselineInfo)
-				}
-
-				// report task result
-				if analysisErr != nil {
-					TaskStatusSendServer(TaskStatusFailed, "", analysisErr.Error())
-				} else {
-					TaskStatusSendServer(TaskStatusSuccess, "", "")
-				}
-			}
-		}
-	}
+	select {}
 }

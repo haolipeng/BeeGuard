@@ -326,9 +326,15 @@ test-e2e-collector:
 	@echo "Running Collector E2E tests..."
 	@cd tests/e2e/collector && ./test.sh
 
+# 运行 E2E 测试 - Detector
+.PHONY: test-e2e-detector
+test-e2e-detector:
+	@echo "Running Detector E2E tests..."
+	@cd tests/e2e/detector && go run main.go
+
 # 运行所有 E2E 测试
 .PHONY: test-e2e
-test-e2e: test-e2e-baseline test-e2e-collector
+test-e2e: test-e2e-baseline test-e2e-collector test-e2e-detector
 	@echo "All E2E tests complete"
 
 # 运行所有测试（单元测试 + E2E 测试）

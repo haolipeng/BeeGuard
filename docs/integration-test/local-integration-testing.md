@@ -724,39 +724,196 @@ ORDER BY created_at DESC LIMIT 5;
 
 ## 七、Baseline 插件测试
 
-Baseline 插件在 Agent 连接 Server 后，由 hcids 自动下发基线检查任务（DataType 8000），无需手动触发。
+Baseline 插件需要通过 HTTP API 手动下发基线检查任务（DataType 8000），不再自动触发。
 
-### 7.1 等待自动执行
+### 7.1 前置条件
 
-Agent 启动约 5 秒后，hcids 自动下发基线检查任务。等待约 30 秒后即可查询数据库。
+确保 `baseline_template` 和 `baseline_check_item` 表中已导入测试数据（模板+检查项）。如果是全新数据库，需要先插入测试模板和检查项数据。
 
-### 7.2 数据库验证
+**数据关联关系：**
 
-等待约 30 秒后查询：
+```
+baseline_template (模板)            baseline_check_item (检查项)
+┌──────────────────────┐           ┌───────────────────────────────┐
+│ id=1 Linux系统安全基线 │──┐       │ baseline_id=1, 检查SSH协议版本  │
+│ item_count=3          │  ├─────→│ baseline_id=1, 检查密码最大天数  │
+│                       │  │       │ baseline_id=1, 检查passwd权限   │
+└──────────────────────┘  │       └───────────────────────────────┘
+                          │
+┌──────────────────────┐  │       ┌───────────────────────────────┐
+│ id=2 SSH加固基线      │──┤       │ baseline_id=2, 禁止root远程登录 │
+│ item_count=2          │  ├─────→│ baseline_id=2, SSH空闲超时检查   │
+└──────────────────────┘  │       └───────────────────────────────┘
+                          │
+┌──────────────────────┐  │       ┌───────────────────────────────┐
+│ id=3 文件完整性基线    │──┘       │ baseline_id=3, 检查/tmp是否存在 │
+│ item_count=2          │  ──────→│ baseline_id=3, 检查hosts文件权限│
+└──────────────────────┘          └───────────────────────────────┘
+```
+
+> `baseline_check_item.baseline_id` 关联 `baseline_template.id`，一个模板下有多个检查项。
+> 下发任务时 `template_id` 指定使用哪个模板，服务端自动加载该模板下所有检查项。
+
+**步骤一：插入测试模板（3 个模板）：**
+
+```sql
+-- 模板 1: Linux 系统安全基线（3 个检查项）
+INSERT INTO baseline_template (id, baseline_name, baseline_type, os_type, version, item_count, description, is_enabled)
+VALUES (1, 'Linux 系统安全基线', 'os_security', 'linux', '1.0', 3, 'Linux 系统安全合规检查（账户策略+文件权限+SSH）', 1);
+
+-- 模板 2: SSH 加固基线（2 个检查项）
+INSERT INTO baseline_template (id, baseline_name, baseline_type, os_type, version, item_count, description, is_enabled)
+VALUES (2, 'SSH 加固基线', 'os_security', 'linux', '1.0', 2, 'SSH 服务安全加固检查', 1);
+
+-- 模板 3: 文件完整性基线（2 个检查项）
+INSERT INTO baseline_template (id, baseline_name, baseline_type, os_type, version, item_count, description, is_enabled)
+VALUES (3, '文件完整性基线', 'os_security', 'linux', '1.0', 2, '关键文件存在性和权限检查', 1);
+```
+
+**步骤二：插入测试检查项（按模板分组，共 7 项）：**
+
+检查项通过 `baseline_id` 关联所属模板，覆盖 agent 支持的主要检查类型。
+
+```sql
+-- ============================================================
+-- 模板 1 的检查项（baseline_id=1，Linux 系统安全基线，共 3 项）
+-- ============================================================
+
+-- 1-1: command_check — 检查 SSH 协议版本
+INSERT INTO baseline_check_item (baseline_id, item_name, category, risk_level, check_rules, fix_suggestion)
+VALUES (1, '确保SSH协议版本为2', '访问控制', 'high',
+  '{"condition":"all","rules":[{"type":"command_check","param":["grep -i ''^Protocol'' /etc/ssh/sshd_config | awk ''{print $2}''"],"filter":"","require":"","result":"2"}]}',
+  '编辑 /etc/ssh/sshd_config，设置 Protocol 2');
+
+-- 1-2: file_line_check — 检查密码最大使用天数
+INSERT INTO baseline_check_item (baseline_id, item_name, category, risk_level, check_rules, fix_suggestion)
+VALUES (1, '确保密码最大使用天数不超过90天', '账户策略', 'medium',
+  '{"condition":"all","rules":[{"type":"file_line_check","param":["/etc/login.defs","PASS_MAX_DAYS"],"filter":"[0-9]+","require":"","result":"$(<=)90"}]}',
+  '编辑 /etc/login.defs，设置 PASS_MAX_DAYS 90');
+
+-- 1-3: file_permission — 检查 /etc/passwd 文件权限
+INSERT INTO baseline_check_item (baseline_id, item_name, category, risk_level, check_rules, fix_suggestion)
+VALUES (1, '确保/etc/passwd权限为644或更严格', '文件权限', 'high',
+  '{"condition":"all","rules":[{"type":"file_permission","param":["/etc/passwd"],"filter":"","require":"","result":"644"}]}',
+  '执行 chmod 644 /etc/passwd');
+
+-- ============================================================
+-- 模板 2 的检查项（baseline_id=2，SSH 加固基线，共 2 项）
+-- ============================================================
+
+-- 2-1: command_check — 检查是否禁用root远程登录
+INSERT INTO baseline_check_item (baseline_id, item_name, category, risk_level, check_rules, fix_suggestion)
+VALUES (2, '确保禁止root用户远程SSH登录', 'SSH加固', 'high',
+  '{"condition":"all","rules":[{"type":"command_check","param":["grep -i ''^PermitRootLogin'' /etc/ssh/sshd_config | awk ''{print $2}''"],"filter":"","require":"","result":"no"}]}',
+  '编辑 /etc/ssh/sshd_config，设置 PermitRootLogin no');
+
+-- 2-2: command_check — 检查SSH空闲超时时间
+INSERT INTO baseline_check_item (baseline_id, item_name, category, risk_level, check_rules, fix_suggestion)
+VALUES (2, '确保SSH空闲超时不超过300秒', 'SSH加固', 'medium',
+  '{"condition":"all","rules":[{"type":"command_check","param":["grep -i ''^ClientAliveInterval'' /etc/ssh/sshd_config | awk ''{print $2}''"],"filter":"","require":"","result":"$(<=)300"}]}',
+  '编辑 /etc/ssh/sshd_config，设置 ClientAliveInterval 300');
+
+-- ============================================================
+-- 模板 3 的检查项（baseline_id=3，文件完整性基线，共 2 项）
+-- ============================================================
+
+-- 3-1: if_file_exist — 检查 /tmp 目录是否存在
+INSERT INTO baseline_check_item (baseline_id, item_name, category, risk_level, check_rules, fix_suggestion)
+VALUES (3, '确保/tmp目录存在', '文件完整性', 'low',
+  '{"condition":"all","rules":[{"type":"if_file_exist","param":["/tmp"],"filter":"","require":"","result":true}]}',
+  '执行 mkdir -p /tmp && chmod 1777 /tmp');
+
+-- 3-2: file_permission — 检查 /etc/hosts 文件权限
+INSERT INTO baseline_check_item (baseline_id, item_name, category, risk_level, check_rules, fix_suggestion)
+VALUES (3, '确保/etc/hosts权限为644', '文件完整性', 'medium',
+  '{"condition":"all","rules":[{"type":"file_permission","param":["/etc/hosts"],"filter":"","require":"","result":"644"}]}',
+  '执行 chmod 644 /etc/hosts');
+```
+
+> **check_rules JSON 格式说明：**
+> - `condition`：规则间逻辑关系，`all`=全部通过、`any`=任一通过、`none`=全不通过
+> - `rules[].type`：检查类型，支持 `command_check`（命令输出）、`file_line_check`（文件行匹配）、`file_permission`（文件权限）、`if_file_exist`（文件存在）、`file_user_group`（文件属主）、`file_md5_check`（MD5校验）
+> - `rules[].param`：参数数组，通常为命令或文件路径
+> - `rules[].filter`：正则过滤器，从结果中提取子串
+> - `rules[].result`：期望值，支持字符串精确匹配、正则匹配、关系运算符（`$(<=)90`、`$(>=)1`）
+
+**步骤三：验证关联关系：**
+
+```sql
+-- 查看所有模板
+SELECT id, baseline_name, baseline_type, item_count, is_enabled
+FROM baseline_template ORDER BY id;
+
+-- 查看每个模板下的检查项数量（应与 item_count 一致）
+SELECT t.id AS template_id, t.baseline_name, t.item_count,
+       COUNT(i.id) AS actual_items
+FROM baseline_template t
+LEFT JOIN baseline_check_item i ON i.baseline_id = t.id
+GROUP BY t.id, t.baseline_name, t.item_count
+ORDER BY t.id;
+
+-- 查看所有检查项及其所属模板
+SELECT i.id, i.baseline_id AS template_id, t.baseline_name AS template_name,
+       i.item_name, i.category, i.risk_level
+FROM baseline_check_item i
+JOIN baseline_template t ON t.id = i.baseline_id
+ORDER BY i.baseline_id, i.id;
+```
+
+预期结果为模板 1 有 3 项、模板 2 有 2 项、模板 3 有 2 项，共 7 个检查项。确认无误后即可进行下一步。
+
+### 7.2 手动下发基线检查任务
+
+通过 curl 调用 `POST /api/baseline/check` 下发任务：
+
+```bash
+curl -X POST http://127.0.0.1:8081/api/baseline/check \
+  -H "Content-Type: application/json" \
+  -d '{
+    "agent_ids": ["<your_agent_id>"],
+    "baseline_id": "test-task-001",
+    "template_id": 1
+  }'
+```
+
+参数说明：
+- `agent_ids`：目标 agent 列表（必填）
+- `baseline_id`：检测批次ID，即前端 task_id（string 类型）
+- `template_id`：服务端基线模板 ID（必填，对应 `baseline_template.id`）
+
+### 7.3 数据库验证
+
+任务下发后等待 agent 执行完毕，查询数据库：
 
 **基线检查结果：**
 
 ```sql
-SELECT baseline_id, agent_id, host_ip, host_name,
-       total_items, passed_items, failed_items, check_time
+SELECT baseline_id, template_id, agent_id, host_ip, host_name,
+       total_items, passed_items, failed_items, error_items, check_time
 FROM baseline_check_result
-WHERE agent_id = '123456'
+WHERE agent_id = '<your_agent_id>'
 ORDER BY created_at DESC LIMIT 5;
 ```
 
 **检查项明细：**
 
 ```sql
-SELECT d.result_id, d.item_id, d.agent_id, d.status, d.actual_value, d.expected_value
+SELECT d.result_id, d.item_id, d.item_name, d.agent_id,
+       d.baseline_id, d.template_id, d.template_name,
+       d.status, d.risk_level, d.actual_value, d.error_message
 FROM baseline_check_detail d
-WHERE d.agent_id = '123456'
+WHERE d.agent_id = '<your_agent_id>'
 ORDER BY d.created_at DESC LIMIT 20;
 ```
 
 验证要点：
 - `baseline_check_result` 有汇总记录，`total_items` > 0
+- `baseline_check_result.baseline_id` 为下发时传入的 `"test-task-001"`（VARCHAR 类型）
+- `baseline_check_result.template_id` 为下发时传入的模板 ID
 - `baseline_check_detail` 有逐条检查明细
-- `status` 字段为 PASS 或 FAIL
+- `baseline_check_detail.template_name` 不为空（来自模板名称）
+- `baseline_check_detail.template_id` 与 result 中一致
+- `status` 字段为数字：0=未通过，1=通过，2=检查异常
 
 ---
 
@@ -959,7 +1116,7 @@ SELECT
 | asset_kmod | > 0 条 | 内核模块数 |
 | asset_container | > 0 条 | 需先启动容器（参见 4.1） |
 | asset_image | > 0 条 | 需要有容器镜像 |
-| asset_image_package | > 0 条 | 需先启动���器（参见 4.1） |
+| asset_image_package | > 0 条 | 需先启动容器（参见 4.1） |
 | asset_web_service | > 0 条 | 需先启动 Nginx 或 httpd（参见 4.1） |
 
 **告警数据：**
@@ -980,8 +1137,8 @@ SELECT
 
 | 数据类别 | 预期 | 说明 |
 |---------|------|------|
-| baseline_check_result | > 0 条 | 下发过基线任务后 |
-| baseline_check_detail | > 0 条 | 基线检查项明细 |
+| baseline_check_result | > 0 条 | 手动下发基线任务后（含 baseline_id, template_id） |
+| baseline_check_detail | > 0 条 | 基线检查项明细包含 template_name, template_id, risk_level） |
 
 ---
 

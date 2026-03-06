@@ -38,9 +38,8 @@ type CheckInfo struct {
 }
 
 type BaselineInfo struct {
-	BaselineId      int         `yaml:"baseline_id" json:"baseline_id" bson:"baseline_id"`
 	BaselineVersion string      `yaml:"baseline_version" json:"baseline_version" bson:"baseline_version"`
-	BaselineName    string      `yaml:"baseline_name" json:"baseline_name" bson:"baseline_name"`
+	TemplateName    string      `yaml:"template_name" json:"template_name" bson:"template_name"`
 	TemplateId      int         `yaml:"template_id" json:"template_id" bson:"template_id"`
 	CheckList       []CheckInfo `yaml:"check_list" json:"check_list" bson:"check_list"`
 }
