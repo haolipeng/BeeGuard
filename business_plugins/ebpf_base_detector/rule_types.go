@@ -50,6 +50,8 @@ const (
 
 // 检测类型常量
 const (
-	DetectionTypeDangerousCommand = "dangerous_command" // 高危命令
-	DetectionTypeSensitiveFile    = "sensitive_file"    // 敏感文件
+	DetectionTypeDangerousCommand          = "dangerous_command"           // 高危命令
+	DetectionTypeSensitiveFile             = "sensitive_file"              // 敏感文件
+	DetectionTypeContainerDangerousCommand = "container_dangerous_command" // 容器高危命令
+	DetectionTypeContainerEscape           = "container_escape"            // 容器逃逸
 )

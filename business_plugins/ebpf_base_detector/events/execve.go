@@ -31,6 +31,9 @@ type ExecveEvent struct {
 	RemotePort uint16     // socket 远程端口（网络字节序）
 	LocalPort  uint16     // socket 本地端口（主机字节序）
 	LocalIP    uint32     // socket 本地 IP（网络字节序）
+	// 容器标识字段
+	MntnsID     uint64    // mount 命名空间 ID
+	RootMntnsID uint64    // 宿主机 mount 命名空间 ID
 }
 
 // UnmarshalBinary 从二进制数据反序列化事件
@@ -68,6 +71,11 @@ func (e *ExecveEvent) ToRecord() *businessplugins.Record {
 		fields["local_ip"] = networkIPToString(e.LocalIP)
 		fields["local_port"] = fmt.Sprintf("%d", e.LocalPort)
 	}
+
+	// 容器标识
+	fields["mntns_id"] = fmt.Sprintf("%d", e.MntnsID)
+	fields["root_mntns_id"] = fmt.Sprintf("%d", e.RootMntnsID)
+	fields["is_container"] = fmt.Sprintf("%t", e.MntnsID != e.RootMntnsID && e.RootMntnsID != 0)
 
 	return &businessplugins.Record{
 		DataType:  DataTypeExecve,

@@ -41,6 +41,25 @@ func main() {
 		}
 	}
 
+	// 容器高危命令检测器（独立规则集）
+	var cdcDetector *DangerousCommandDetector
+	cdcConfigPath := getContainerDangerousCommandConfigPath()
+	cdcConfig, err := LoadRules(cdcConfigPath)
+	if err != nil {
+		logger.Warn("Failed to load container dangerous command rules, container command detection disabled",
+			"error", err, "path", cdcConfigPath)
+	} else {
+		cdcDetector, err = NewDangerousCommandDetector(cdcConfig)
+		if err != nil {
+			logger.Warn("Failed to create container dangerous command detector, detection disabled", "error", err)
+			cdcDetector = nil
+		} else {
+			logger.Info("Container dangerous command rules loaded successfully",
+				"version", cdcConfig.Version,
+				"rules", cdcDetector.GetEnabledRuleCount())
+		}
+	}
+
 	rsDetector := &ReverseShellDetector{}
 
 	var mrDetector *MaliciousRequestDetector
@@ -69,6 +88,14 @@ func main() {
 				"rules", sfDetector.GetEnabledRuleCount())
 		}
 	}
+
+	// 容器逃逸检测器
+	ceDetector := NewContainerEscapeDetector()
+	logger.Info("Container escape detector initialized")
+
+	// 容器元数据缓存
+	containerMeta := NewContainerMetaCache(5 * time.Minute)
+	logger.Info("Container metadata cache initialized")
 
 	loader, err := ebpf.NewLoader()
 	if err != nil {
@@ -145,12 +172,15 @@ func main() {
 
 			eventType := events.GetEventType(rec.RawSample)
 			evtCtx := &eventHandlerCtx{
-				client:     client,
-				logger:     logger,
-				dcDetector: dcDetector,
-				rsDetector: rsDetector,
-				mrDetector: mrDetector,
-				sfDetector: sfDetector,
+				client:        client,
+				logger:        logger,
+				dcDetector:    dcDetector,
+				cdcDetector:   cdcDetector,
+				rsDetector:    rsDetector,
+				mrDetector:    mrDetector,
+				sfDetector:    sfDetector,
+				ceDetector:    ceDetector,
+				containerMeta: containerMeta,
 			}
 			var handlerErr error
 			switch eventType {
@@ -168,6 +198,8 @@ func main() {
 				handlerErr = handleDNS(evtCtx, rec.RawSample)
 			case events.EventTypeFile: // 文件操作事件
 				handlerErr = handleFile(evtCtx, rec.RawSample)
+			case events.EventTypeMount: // mount 事件
+				handlerErr = handleMount(evtCtx, rec.RawSample)
 			default:
 				logger.Warn("Unknown event type", "type", eventType) // 未知事件类型
 			}

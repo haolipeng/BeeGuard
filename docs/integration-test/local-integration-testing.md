@@ -62,6 +62,11 @@ Agent                          hcids Server                    PostgreSQL
 | nids | 6007 | alert_network_attack | INSERT | |
 | ebpf_base_detector | 6008 | alert_malicious_request | INSERT |
 | ebpf_base_detector | 6009 | alert_file_integrity | INSERT |
+| vuln (hcids) | - | vuln_info | UPSERT | 漏洞信息，由 hcids 漏洞模块自动写入 |
+| vuln (hcids) | - | host_vuln_scan_task | INSERT | 主机漏洞扫描任务，由 hcids 漏洞模块自动写入 |
+| vuln (hcids) | - | host_vuln_detail | INSERT | 主机漏洞详情，由 hcids 漏洞模块自动写入 |
+| vuln (hcids) | - | image_vuln_scan_task | INSERT | 镜像漏洞扫描任务，由 hcids 漏洞模块自动写入 |
+| vuln (hcids) | - | image_vuln_detail | INSERT | 镜像漏洞详情，由 hcids 漏洞模块自动写入 |
 
 ---
 
@@ -211,14 +216,13 @@ sudo ./bin/hcids -config conf/server.yaml
 在 Terminal A 的输出中，**必须**看到以下日志行：
 
 ```
-INFO  配置加载成功: grpc_port=50051, http_port=8081, log_level=info
 INFO  gRPC Server 启动，监听端口 :50051
 INFO  [HTTP] HTTP API Server 启动，监听端口 :8081
 ```
 
 **判定规则**：
-- 三行均出现 → 启动成功，gRPC 和 HTTP 服务就绪，进入 3.2 启动 Agent
-- `数据库初始化失败` 错误 → 数据库连接异常，检查 2.2 数据库准备 和 2.5 配置中的数据库连接信息
+- 两行均出现 → 启动成功，gRPC 和 HTTP 服务就绪，进入 3.2 启动 Agent
+- `数据库初始化失败` 错误 → 数据库连接异常，检查 2.2 数据库准备 和 2.3 修改hcids数据库配置
 - `listen tcp :50051: bind: address already in use` → 端口被占用，执行 `ss -tlnp | grep 50051` 查看占用进程
 
 #### 日志位置
@@ -257,20 +261,60 @@ sudo ./bin/agent -config agent.yaml -test
 
 #### 启动成功判定
 
-在 Terminal B 的输出中，**必须**看到以下日志行：
+启动后 Terminal B 首先输出两行非结构化日志，确认进入测试模式：
 
 ```
-INFO  Agent started successfully
-INFO  Connected to server
-INFO  Plugin loaded: collector
-INFO  Plugin loaded: ebpf_base_detector
+agent start running!
+Test mode enabled, agent ID: 123456
 ```
+
+随后进入结构化日志阶段，**必须**依次看到以下关键日志：
+
+**阶段 1 — 连接 Server**：
+
+```
+INFO    transport/connection.go    connected to server    {"server": "127.0.0.1:50051"}
+```
+
+**阶段 2 — 接收插件配置**：
+
+```
+INFO    transport/transfer.go    received config command    {"plugin_count": 6, "plugins": ["collector", "baseline", "detector", "ebpf_base_detector", "nids", "scanner"]}
+```
+
+**阶段 3 — 加载所有插件**：
+
+```
+INFO    plugin/plugin.go    plugin has been loaded    {"plugin": "collector", ...}
+INFO    plugin/plugin.go    plugin has been loaded    {"plugin": "baseline", ...}
+INFO    plugin/plugin.go    plugin has been loaded    {"plugin": "detector", ...}
+INFO    plugin/plugin.go    plugin has been loaded    {"plugin": "ebpf_base_detector", ...}
+INFO    plugin/plugin.go    plugin has been loaded    {"plugin": "nids", ...}
+INFO    plugin/plugin.go    plugin has been loaded    {"plugin": "scanner", ...}
+INFO    plugin/plugin.go    sync done
+```
+
+**阶段 4 — 接收任务下发**：
+
+`sync done` 后约 5 秒，Server 自动下发采集/检测任务：
+
+```
+INFO    transport/transfer.go    received task command     {"object_name": "collector", "data_type": 5050, ...}
+INFO    transport/transfer.go    task sent to plugin successfully    {"plugin": "collector", ...}
+INFO    transport/transfer.go    received task command     {"object_name": "ssh", "data_type": 6010, ...}
+INFO    transport/transfer.go    task sent to plugin successfully    {"plugin": "detector", ...}
+INFO    transport/transfer.go    received task command     {"object_name": "scanner", "data_type": 6053, ...}
+INFO    transport/transfer.go    task sent to plugin successfully    {"plugin": "scanner", ...}
+```
+
+> **关于任务下发阶段的 ERROR 日志**：Server 会同时下发多个任务（如 collector 的 5050-5062），但插件一次只能处理一个任务，因此会出现 `send task to plugin failed: plugin is processing task or context has been cancled` 错误。**这是正常行为**，当前任务处理完成后，Server 会在下一轮重新下发未成功的任务。
 
 **判定规则**：
-- `Connected to server` 出现 → Agent 与 hcids 连接成功
-- `Plugin loaded: <插件名>` 出现 → 对应插件加载成功
-- `transport: Error while dialing` 错误 → 连接 hcids 失败，检查 hcids 是否已启动、agent.yaml 中 server 地址是否正确
-- `failed to load eBPF` 错误 → 内核不支持 eBPF，检查内核版本 >= 5.4 且存在 `/sys/kernel/btf/vmlinux`
+- `connected to server` 出现 → Agent 与 hcids gRPC 连接成功
+- `received config command` 出现且 `plugin_count` > 0 → 成功接收服务端下发的插件配置
+- `plugin has been loaded` 对每个插件都出现 → 对应插件加载成功
+- `sync done` 出现 → 所有插件同步完成，Agent 进入正常运行状态
+- `task sent to plugin successfully` 至少出现 1 次 → Server 任务下发链路正常
 
 #### 日志位置
 
@@ -287,13 +331,13 @@ INFO  Plugin loaded: ebpf_base_detector
 
 ```bash
 # 方式一：启动时过滤关键日志
-sudo ./bin/agent -config agent.yaml -test 2>&1 | grep -E "(Plugin loaded|Connected|ERROR)"
+sudo ./bin/agent -config agent.yaml -test 2>&1 | grep -E "(connected to server|plugin has been loaded|sync done|task sent|ERROR)"
 
 # 方式二：保存全部输出到文件，在另一个终端搜索
 sudo ./bin/agent -config agent.yaml -test 2>&1 | tee /tmp/agent_integration_test.log
 # Terminal C 中搜索
 grep "ERROR" /tmp/agent_integration_test.log
-grep "Plugin loaded" /tmp/agent_integration_test.log
+grep "plugin has been loaded" /tmp/agent_integration_test.log
 ```
 
 ### 3.3 验证连接
@@ -870,7 +914,7 @@ ORDER BY i.baseline_id, i.id;
 curl -X POST http://127.0.0.1:8081/api/baseline/check \
   -H "Content-Type: application/json" \
   -d '{
-    "agent_ids": ["<your_agent_id>"],
+    "agent_ids": ["123456"],
     "baseline_id": "test-task-001",
     "template_id": 1
   }'
@@ -1044,7 +1088,375 @@ ORDER BY created_at DESC LIMIT 5;
 
 ---
 
-## 十、完整验证脚本
+## 十、主机漏洞检测测试
+
+hcids 内置漏洞匹配模块，基于 Trivy 漏洞数据库，将 Agent 采集到的主机软件包（`asset_software`, DataType 5055）与已知 CVE 进行版本比对，自动发现存在漏洞的软件包。匹配过程完全在 hcids 服务端执行，Agent 只负责采集软件包数据。
+
+### 10.1 前置条件
+
+1. **Trivy 漏洞数据库**：hcids 启动时会自动从 OCI 仓库下载 Trivy DB（首次下载约 40MB），需确保服务器可访问 `ghcr.io`。
+
+   ```bash
+   # 验证网络连通性
+   curl -sI https://ghcr.io/v2/ | head -1
+   # 预期: HTTP/2 401（能到达即可，不需要认证）
+   ```
+
+   > 如果网络不通，可在有网络的机器上手动下载 Trivy DB 文件，然后拷贝 `trivy.db` 和 `metadata.json` 到 `/opt/cloudsec/data/trivy-db/db/` 目录下。
+
+2. **server.yaml 漏洞模块配置**：确认 `vuln.enabled` 为 `true`（默认已启用）。
+
+   ```yaml
+   vuln:
+     enabled: true
+     db_dir: /opt/cloudsec/data/trivy-db
+     db_repository: "ghcr.io/aquasecurity/trivy-db:2"
+     update_interval: 24
+     scan_cron: "0 2 * * *"
+   ```
+
+3. **软件包采集任务已配置**：确认 `tasks` 中包含 DataType 5055（默认已配置）。
+
+### 10.2 测试流程
+
+主机漏洞检测为全自动流程，无需手动触发：
+
+1. 启动 hcids → 漏洞模块初始化，下载/打开 Trivy DB
+2. 启动 Agent → Collector 采集主机软件包写入 `asset_software`
+3. hcids 启动约 **30 秒**后自动执行首次漏洞匹配
+4. 匹配引擎读取 `asset_software` 中 dpkg/rpm 类型的软件包 → 逐包查询 Trivy DB → 将结果写入 `host_vuln_detail`
+
+**hcids 日志观察**（Terminal A）：
+
+```
+# 漏洞模块初始化
+INFO  [VulnDB] 漏洞数据库初始化成功: /opt/cloudsec/data/trivy-db/db/trivy.db
+INFO  [VulnScheduler] 调度器已启动，匹配间隔: 24h0m0s
+
+# 首次匹配（启动约 30 秒后）
+INFO  [VulnScheduler] 开始执行漏洞匹配任务...
+INFO  [VulnScheduler] 开始匹配 1 台主机的漏洞...
+INFO  [Matcher] 开始匹配主机漏洞: agent=123456, host=xxx, source=ubuntu 22.04, packages=xxx
+INFO  [Matcher] 主机发现 N 个漏洞: agent=123456
+INFO  [VulnScheduler] 漏洞匹配任务完成: 耗时=Xs, 主机=1(发现N个漏洞), 镜像=0(发现0个漏洞)
+```
+
+**判定规则**：
+- `漏洞数据库初始化成功` 出现 → Trivy DB 就绪
+- `调度器已启动` 出现 → 漏洞匹配调度器正常启动
+- `漏洞匹配任务完成` 出现 → 首次匹配已执行
+- 如果出现 `漏洞数据库初始化失败` → 检查网络是否可访问 `ghcr.io`，或手动下载 Trivy DB
+
+### 10.3 数据库验证
+
+等待首次匹配完成后（观察 hcids 日志出现 `漏洞匹配任务完成`），查询数据库。
+
+```bash
+PGPASSWORD=root psql -h 127.0.0.1 -p 5432 -U postgres -d soc
+```
+
+**主机漏洞扫描任务 (host_vuln_scan_task)：**
+
+```sql
+SELECT id, agent_id, host_name, host_ip, scan_status, scan_trigger,
+       total_packages, matched_vulns, scan_duration, scan_time
+FROM host_vuln_scan_task
+WHERE agent_id = '123456'
+ORDER BY created_at DESC LIMIT 5;
+```
+
+验证要点：
+- `scan_status` 为 `1`（成功）。`0`=进行中，`2`=失败
+- `scan_trigger` 为 `auto`
+- `total_packages` > 0（与 `asset_software` 中 dpkg/rpm 包数量一致）
+- `matched_vulns` >= 0（实际漏洞数取决于系统软件版本）
+- `scan_duration` 非空（匹配耗时，单位毫秒）
+
+**漏洞信息 (vuln_info)：**
+
+```sql
+SELECT cve_id, vuln_name, severity, cvss_score
+FROM vuln_info
+ORDER BY cvss_score DESC NULLS LAST
+LIMIT 10;
+```
+
+验证要点：
+- `cve_id` 格式为 `CVE-YYYY-NNNNN`
+- `severity` 为 `critical`/`high`/`medium`/`low` 之一
+- `cvss_score` 在 0.0-10.0 范围内
+
+**主机漏洞详情 (host_vuln_detail)：**
+
+```sql
+SELECT cve_id, package_name, installed_version, fixed_version,
+       severity, cvss_score, status, scan_time
+FROM host_vuln_detail
+WHERE agent_id = '123456'
+ORDER BY cvss_score DESC NULLS LAST
+LIMIT 10;
+```
+
+验证要点：
+- `package_name` 对应系统中实际安装的软件包
+- `installed_version` 为当前安装版本
+- `fixed_version` 为修复版本（可能为空，表示尚无修复版本）
+- `status` 为 `0`（未修复）
+- 每条记录的 `cve_id` 在 `vuln_info` 表中有对应条目
+
+**按等级统计：**
+
+```sql
+SELECT severity, COUNT(*) AS vuln_count
+FROM host_vuln_detail
+WHERE agent_id = '123456'
+GROUP BY severity
+ORDER BY
+  CASE severity
+    WHEN 'critical' THEN 1
+    WHEN 'high' THEN 2
+    WHEN 'medium' THEN 3
+    WHEN 'low' THEN 4
+  END;
+```
+
+### 10.4 HTTP API 验证
+
+漏洞数据也可通过 hcids HTTP API 查询。
+
+**主机漏洞统计列表：**
+
+```bash
+curl -s 'http://localhost:8081/api1/vulns/host/stats?page=1&page_size=10' | python3 -m json.tool
+```
+
+**漏洞视角 — 漏洞主机统计：**
+
+```bash
+curl -s 'http://localhost:8081/api1/vulns/vul/hostscount?page=1&page_size=10' | python3 -m json.tool
+```
+
+**主机漏洞详情列表：**
+
+```bash
+curl -s 'http://localhost:8081/api1/vulns/hostdetail/counts?page=1&page_size=10' | python3 -m json.tool
+```
+
+---
+
+## 十一、容器漏洞检测测试
+
+容器漏洞检测与主机漏洞使用相同的 Trivy 匹配引擎，但数据来源不同：Agent 通过 `docker exec` 进入运行中的容器，枚举容器内已安装的软件包（`asset_image_package`, DataType 5059），hcids 据此进行漏洞匹配。
+
+### 数据流
+
+```
+Collector Plugin                  hcids Server                       PostgreSQL
+┌──────────────────┐  gRPC       ┌─────────────────┐  UPSERT        ┌──────────────────────┐
+│ ImageHandler      │───────────→│ transfer.go      │──────────────→ │ asset_image          │
+│ (DataType 5058)   │            └─────────────────┘                │ (镜像基本信息)       │
+├──────────────────┤             ┌─────────────────┐                ├──────────────────────┤
+│ImagePackageHandler│───────────→│ transfer.go      │──────────────→ │ asset_image_package  │
+│ (DataType 5059)   │            └─────────────────┘                │ (镜像内软件包)       │
+└──────────────────┘                                                └──────────┬───────────┘
+                                                                               │ 读取
+                                 ┌─────────────────┐                ┌──────────▼───────────┐
+                                 │ VulnScheduler    │  查询 CVE      │ Trivy BoltDB         │
+                                 │ matchAllImages() │───────────────→│ (漏洞数据库)         │
+                                 └────────┬────────┘                └──────────────────────┘
+                                          │ 写入匹配结果
+                                 ┌────────▼────────────────┐
+                                 │ vuln_info               │
+                                 │ image_vuln_scan_task    │
+                                 │ image_vuln_detail       │
+                                 └─────────────────────────┘
+```
+
+### 11.1 前置条件
+
+在主机漏洞检测前置条件（10.1）基础上，还需要：
+
+1. **Docker 已安装且有运行中的容器**（参见 4.1 容器资产采集准备）。
+
+2. **server.yaml 中启用镜像和镜像软件包采集任务**：默认 `tasks` 中**未配置** DataType 5058 和 5059，需手动添加。
+
+   在 `server.yaml` 的 `tasks` 列表末尾追加：
+
+   ```yaml
+   tasks:
+     # ... 已有的任务配置 ...
+     - object_name: collector
+       data_type: 5058  # 镜像
+     - object_name: collector
+       data_type: 5059  # 镜像软件包
+   ```
+
+   > **重要**：修改后需重启 hcids 和 Agent 使配置生效。
+
+3. **启动含已知漏洞的容器**（推荐，可产生更多匹配结果）：
+
+   ```bash
+   # 方式一：使用较旧版本的 Debian（含已知漏洞的旧软件包）
+   docker run -d --name test-debian-old debian:bullseye sleep 3600
+   
+   # 方式二：使用 Alpine 旧版本
+   docker run -d --name test-alpine-old alpine:3.16 sleep 3600
+   
+   # 验证容器运行
+   docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}"
+   ```
+
+   > **提示**：使用旧版本镜像可以确保 Trivy 漏洞库中有对应的 CVE 匹配，验证效果更明显。`alpine:latest` 等最新镜像可能漏洞较少。
+
+### 11.2 测试流程
+
+1. 确保 server.yaml 已添加 5058 和 5059 任务配置
+2. 启动测试容器（参见 11.1 步骤 3）
+3. 启动 hcids → 漏洞模块初始化
+4. 启动 Agent → Collector 采集镜像信息和镜像内软件包
+5. hcids 启动约 **30 秒**后自动执行漏洞匹配（含镜像匹配）
+
+**Agent 日志观察**（Terminal B）：
+
+```
+# 镜像软件包采集成功时会输出
+INFO  collector  Image package collection: image=debian:bullseye os=debian 11 type=dpkg packages=xxx
+```
+
+**hcids 日志观察**（Terminal A）：
+
+```
+# 镜像漏洞匹配
+INFO  [VulnScheduler] 开始匹配 N 个镜像的漏洞...
+INFO  [Matcher] 开始匹配镜像漏洞: agent=123456, image=debian:bullseye, source=debian 11, packages=xxx
+INFO  [Matcher] 镜像发现 N 个漏洞: image=debian:bullseye
+INFO  [VulnScheduler] 漏洞匹配任务完成: 耗时=Xs, 主机=1(发现N个漏洞), 镜像=1(发现N个漏洞)
+```
+
+**判定规则**：
+- Agent 日志出现 `Image package collection` → 镜像软件包采集成功
+- hcids 日志 `镜像=0` → 无镜像数据，检查 5058/5059 是否已配置、容器是否在运行
+- hcids 日志 `镜像OS版本信息缺失，跳过` → `asset_image_package.os_version` 为空，需排查
+
+### 11.3 数据库验证 — 资产采集
+
+先确认镜像资产和软件包已正确写入数据库。
+
+```bash
+PGPASSWORD=root psql -h 127.0.0.1 -p 5432 -U postgres -d soc
+```
+
+**镜像资产 (asset_image)：**
+
+```sql
+SELECT image_id, image_name, image_version, image_size
+FROM asset_image WHERE agent_id = '123456';
+```
+
+**镜像软件包 (asset_image_package)：**
+
+```sql
+-- 查看各镜像的软件包数量
+SELECT image_name, package_type, os_version, COUNT(*) AS pkg_count
+FROM asset_image_package
+WHERE agent_id = '123456'
+GROUP BY image_name, package_type, os_version;
+
+-- 查看具体软件包
+SELECT image_name, package_name, package_version, package_type, os_version
+FROM asset_image_package
+WHERE agent_id = '123456'
+ORDER BY image_name, package_name
+LIMIT 20;
+```
+
+验证要点：
+- 每个运行中容器对应的镜像应有软件包记录
+- `package_type` 为 `dpkg`（Debian/Ubuntu）、`rpm`（CentOS）或 `apk`（Alpine）
+- `os_version` 非空（如 `debian 11`、`alpine 3.16`）
+- 软件包数量与容器内实际包数量一致（可通过 `docker exec test-debian-old dpkg -l | wc -l` 对比）
+
+### 11.4 数据库验证 — 漏洞匹配结果
+
+**镜像漏洞扫描任务 (image_vuln_scan_task)：**
+
+```sql
+SELECT id, agent_id, image_id, image_name, scan_status, scan_trigger,
+       total_packages, matched_vulns, scan_duration, scan_time
+FROM image_vuln_scan_task
+WHERE agent_id = '123456'
+ORDER BY created_at DESC LIMIT 5;
+```
+
+验证要点：
+- `scan_status` 为 `1`（成功）。`0`=进行中，`2`=失败
+- `image_name` 对应测试容器的镜像
+- `total_packages` > 0
+- `matched_vulns` >= 0（旧版镜像通常会有漏洞匹配）
+
+**镜像漏洞详情 (image_vuln_detail)：**
+
+```sql
+SELECT image_name, cve_id, package_name,
+       installed_version, fixed_version,
+       severity, cvss_score, status
+FROM image_vuln_detail
+WHERE agent_id = '123456'
+ORDER BY cvss_score DESC NULLS LAST
+LIMIT 10;
+```
+
+验证要点：
+- `image_name` 对应测试容器的镜像
+- `package_name` 为容器内实际存在的软件包
+- `severity` 为 `critical`/`high`/`medium`/`low` 之一
+- `status` 为 `0`（未修复）
+
+**按镜像和等级统计：**
+
+```sql
+SELECT image_name, severity, COUNT(*) AS vuln_count
+FROM image_vuln_detail
+WHERE agent_id = '123456'
+GROUP BY image_name, severity
+ORDER BY image_name,
+  CASE severity
+    WHEN 'critical' THEN 1
+    WHEN 'high' THEN 2
+    WHEN 'medium' THEN 3
+    WHEN 'low' THEN 4
+  END;
+```
+
+### 11.5 HTTP API 验证
+
+**镜像漏洞统计列表：**
+
+```bash
+curl -s 'http://localhost:8081/api1/vulns/image/imagecount?page=1&page_size=10' | python3 -m json.tool
+```
+
+**镜像漏洞详情列表：**
+
+```bash
+curl -s 'http://localhost:8081/api1/vulns/image/details?page=1&page_size=10' | python3 -m json.tool
+```
+
+**镜像漏洞视角统计：**
+
+```bash
+curl -s 'http://localhost:8081/api1/vulns/imagevul/vulcounts?page=1&page_size=10' | python3 -m json.tool
+```
+
+### 11.6 清理测试容器
+
+```bash
+docker rm -f test-debian-old test-alpine-old 2>/dev/null
+```
+
+---
+
+## 十二、完整验证脚本
 
 以下脚本一次性验证所有关键表的数据写入情况（含 scanner 和 nids），可在数据库终端或脚本中执行：
 

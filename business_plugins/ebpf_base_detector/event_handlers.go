@@ -10,12 +10,15 @@ import (
 
 // eventHandlerCtx 事件处理依赖，供各 handleXxx 使用
 type eventHandlerCtx struct {
-	client     *businessplugins.Client
-	logger     *log.Logger
-	dcDetector *DangerousCommandDetector
-	rsDetector *ReverseShellDetector
-	mrDetector *MaliciousRequestDetector
-	sfDetector *SensitiveFileDetector
+	client        *businessplugins.Client
+	logger        *log.Logger
+	dcDetector    *DangerousCommandDetector
+	cdcDetector   *DangerousCommandDetector  // 容器高危命令（复用同类型，加载独立规则）
+	rsDetector    *ReverseShellDetector
+	mrDetector    *MaliciousRequestDetector
+	sfDetector    *SensitiveFileDetector
+	ceDetector    *ContainerEscapeDetector   // 容器逃逸
+	containerMeta *ContainerMetaCache        // 容器元数据缓存
 }
 
 func handleExecve(ctx *eventHandlerCtx, raw []byte) error {
@@ -60,6 +63,41 @@ func handleExecve(ctx *eventHandlerCtx, raw []byte) error {
 		}
 	}
 
+	// 容器高危命令检测
+	isContainer := IsContainer(evt.MntnsID, evt.RootMntnsID)
+	if isContainer && ctx.cdcDetector != nil {
+		comm := cstring(evt.Comm[:])
+		args := argsString(evt.Args[:])
+		result := ctx.cdcDetector.Detect(comm, args)
+		if result != nil {
+			// 容器高危命令使用独立的告警类型，不覆盖宿主机高危命令告警
+			cdcRecord := evt.ToRecord()
+			cdcRecord.Data.Fields["pid_tree"] = pidTreeStr
+			cdcRecord.DataType = businessplugins.AlertTypeContainerDangerousCommand
+			cdcRecord.Data.Fields["detection_type"] = DetectionTypeContainerDangerousCommand
+			cdcRecord.Data.Fields["rule_id"] = fmt.Sprintf("%d", result.RuleID)
+			cdcRecord.Data.Fields["rule_name"] = result.RuleName
+			cdcRecord.Data.Fields["severity"] = result.Severity
+			cdcRecord.Data.Fields["rule_description"] = result.Description
+			cdcRecord.Data.Fields["matched_pattern"] = result.MatchedPattern
+			cleanCmd := readProcCmdline(evt.TGID)
+			if cleanCmd == "" {
+				cleanCmd = comm + " " + args
+			}
+			cdcRecord.Data.Fields["command"] = cleanCmd
+			cdcRecord.Data.Fields["timestamp"] = fmt.Sprintf("%d", cdcRecord.Timestamp)
+			// 填充容器元数据
+			enrichContainerFields(cdcRecord.Data.Fields, evt.TGID, ctx.containerMeta)
+			ctx.logger.Warn("Container dangerous command detected",
+				"rule_id", result.RuleID, "rule_name", result.RuleName, "severity", result.Severity,
+				"uid", evt.UID, "comm", comm, "args", args,
+				"container_id", cdcRecord.Data.Fields["container_id"])
+			if err := ctx.client.SendRecord(cdcRecord); err != nil {
+				ctx.logger.Error("Failed to send container dangerous command record", "error", err)
+			}
+		}
+	}
+
 	rsResult := ctx.rsDetector.Detect(&evt)
 	if rsResult != nil {
 		rsRecord := BuildReverseShellRecord(&evt, rsResult, pidTreeStr)
@@ -77,6 +115,47 @@ func handleExecve(ctx *eventHandlerCtx, raw []byte) error {
 	if record.DataType != events.DataTypeExecve {
 		if err := ctx.client.SendRecord(record); err != nil {
 			return fmt.Errorf("send execve record: %w", err)
+		}
+	}
+	return nil
+}
+
+func handleMount(ctx *eventHandlerCtx, raw []byte) error {
+	var evt events.MountEvent
+	if err := evt.UnmarshalBinary(raw); err != nil {
+		return fmt.Errorf("unmarshal mount event: %w", err)
+	}
+
+	devName := cstring(evt.DevName[:])
+	dirName := cstring(evt.DirName[:])
+	fsType := cstring(evt.FsType[:])
+	ctx.logger.Info("Mount event",
+		"pid", evt.PID, "comm", cstring(evt.Comm[:]),
+		"dev_name", devName, "dir_name", dirName, "fs_type", fsType,
+		"is_container", IsContainer(evt.MntnsID, evt.RootMntnsID))
+
+	// 容器逃逸检测
+	if ctx.ceDetector != nil {
+		result := ctx.ceDetector.DetectMountEscape(&evt)
+		if result != nil {
+			record := evt.ToRecord()
+			record.DataType = businessplugins.AlertTypeContainerEscape
+			record.Data.Fields["detection_type"] = DetectionTypeContainerEscape
+			record.Data.Fields["rule_name"] = result.RuleName
+			record.Data.Fields["severity"] = result.Severity
+			record.Data.Fields["rule_description"] = result.Description
+			record.Data.Fields["pid_tree"] = buildPidTree(evt.TGID, cstring(evt.Comm[:]))
+			record.Data.Fields["timestamp"] = fmt.Sprintf("%d", record.Timestamp)
+			// 填充容器元数据
+			enrichContainerFields(record.Data.Fields, evt.TGID, ctx.containerMeta)
+			ctx.logger.Warn("Container escape detected (mount device)",
+				"rule_name", result.RuleName, "severity", result.Severity,
+				"dev_name", result.DevName, "dir_name", result.DirName,
+				"pid", evt.PID, "comm", cstring(evt.Comm[:]),
+				"container_id", record.Data.Fields["container_id"])
+			if err := ctx.client.SendRecord(record); err != nil {
+				ctx.logger.Error("Failed to send container escape record", "error", err)
+			}
 		}
 	}
 	return nil

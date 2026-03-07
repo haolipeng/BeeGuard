@@ -10,6 +10,7 @@
 #define EVENT_TYPE_ACCEPT        6
 #define EVENT_TYPE_DNS           7
 #define EVENT_TYPE_FILE          8   // 文件操作事件
+#define EVENT_TYPE_MOUNT         9   // mount 事件
 
 // 文件操作 action 常量
 #define FILE_ACTION_CREATE  1   // 文件创建
@@ -18,6 +19,10 @@
 
 // 文件系统 ID 常量
 #define FS_ID_LEN  32   // 文件系统 ID 最大长度（与内核 s_id 一致）
+
+// mount 事件常量
+#define MOUNT_PATH_LEN   256  // 设备路径/挂载点最大长度
+#define MOUNT_FSTYPE_LEN 32   // 文件系统类型最大长度
 
 // 路径相关常量
 #define PATH_MAX_ENTS   16    // dentry 链最大遍历深度
@@ -66,6 +71,9 @@ struct execve_event {
     __u16 remote_port;   // socket 远程端口（网络字节序）
     __u16 local_port;    // socket 本地端口（主机字节序）
     __u32 local_ip;      // socket 本地 IP（网络字节序）
+    // --- 容器标识字段 ---
+    __u64 mntns_id;      // 当前进程 mount 命名空间 ID
+    __u64 root_mntns_id; // 宿主机 mount 命名空间 ID（从 BPF map 读取）
 } __attribute__((packed));
 
 // commit_creds提权事件结构体
@@ -193,6 +201,25 @@ struct file_event {
     char  new_path[PATH_BUF_SIZE]; // 创建：文件路径；重命名：新路径
     char  old_path[PATH_BUF_SIZE]; // 仅重命名：旧路径（创建时全零）
     char  s_id[FS_ID_LEN];  // 文件系统 ID（ext4/xfs/tmpfs 等）
+} __attribute__((packed));
+
+// mount 事件结构体（容器逃逸检测）
+struct mount_event {
+    __u8  event_type;           // EVENT_TYPE_MOUNT = 9
+    __u8  padding1[3];
+    __u32 pid;
+    __u32 tgid;
+    __u32 ppid;
+    __u32 uid;
+    __u64 mntns_id;             // 当前进程 mount 命名空间 ID
+    __u64 root_mntns_id;        // 宿主机 mount 命名空间 ID
+    char  comm[16];
+    char  exe_path[256];
+    char  dev_name[MOUNT_PATH_LEN];   // 挂载源设备（/dev/sda1 等）
+    char  dir_name[MOUNT_PATH_LEN];   // 挂载目标路径
+    char  fs_type[MOUNT_FSTYPE_LEN];  // 文件系统类型（ext4/tmpfs 等）
+    __u32 flags;                      // mount 标志
+    __s32 retval;                     // 系统调用返��值
 } __attribute__((packed));
 
 #endif // __TYPES_H

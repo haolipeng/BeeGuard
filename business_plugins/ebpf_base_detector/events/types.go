@@ -16,6 +16,7 @@ const (
 	EventTypeAccept      uint8 = 6
 	EventTypeDNS         uint8 = 7
 	EventTypeFile        uint8 = 8
+	EventTypeMount       uint8 = 9
 )
 
 // 上报 DataType 常量（与平台约定一致，避免硬编码）
@@ -26,6 +27,7 @@ const (
 	DataTypeAccept  int32 = 62
 	DataTypeDNS     int32 = 63
 	DataTypeFile    int32 = 64
+	DataTypeMount   int32 = 65
 )
 
 // 文件操作 action 常量

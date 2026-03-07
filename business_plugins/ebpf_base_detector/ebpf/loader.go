@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 package ebpf
 
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc clang -cflags "-O2 -g -Wall -Werror -D__TARGET_ARCH_x86" -target amd64 -type execve_event -type commit_creds_event -type connect_event -type bind_event -type accept_event -type dns_event -type stdio_path_buf -type file_event bpf ./bpf/hids.bpf.c -- -I./bpf
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc clang -cflags "-O2 -g -Wall -Werror -D__TARGET_ARCH_x86" -target amd64 -type execve_event -type commit_creds_event -type connect_event -type bind_event -type accept_event -type dns_event -type stdio_path_buf -type file_event -type mount_event bpf ./bpf/hids.bpf.c -- -I./bpf
 
 import (
 	"errors"
@@ -152,4 +152,10 @@ func (l *Loader) GetTrustedExesMap() *ebpf.Map {
 // 供用户态程序填充文件监控白名单
 func (l *Loader) GetFileTrustedExesMap() *ebpf.Map {
 	return l.objs.FileTrustedExes
+}
+
+// GetRootMntnsMap 返回 root_mntns BPF map 句柄
+// 供用户态程序写入宿主机的 mount 命名空间 ID
+func (l *Loader) GetRootMntnsMap() *ebpf.Map {
+	return l.objs.RootMntns
 }

@@ -12,4 +12,8 @@ const (
 	AlertTypeNIDS                = 6007
 	AlertTypeMaliciousRequest    = 6008
 	AlertTypeSensitiveFile       = 6009
+
+	// 容器安全告警
+	AlertTypeContainerDangerousCommand = 7001
+	AlertTypeContainerEscape           = 7002
 )

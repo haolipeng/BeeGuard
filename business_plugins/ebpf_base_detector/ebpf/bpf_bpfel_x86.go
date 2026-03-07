@@ -104,25 +104,27 @@ type bpfExeItem struct {
 }
 
 type bpfExecveEvent struct {
-	EventType  uint8
-	FdType     uint8
-	Padding1   [2]uint8
-	Pid        uint32
-	Tgid       uint32
-	Ppid       uint32
-	Pgid       uint32
-	Uid        uint32
-	SocketPid  uint32
-	Comm       [16]int8
-	ExePath    [256]int8
-	Args       [512]int8
-	StdinPath  [64]int8
-	StdoutPath [64]int8
-	TtyName    [64]int8
-	RemoteIp   uint32
-	RemotePort uint16
-	LocalPort  uint16
-	LocalIp    uint32
+	EventType   uint8
+	FdType      uint8
+	Padding1    [2]uint8
+	Pid         uint32
+	Tgid        uint32
+	Ppid        uint32
+	Pgid        uint32
+	Uid         uint32
+	SocketPid   uint32
+	Comm        [16]int8
+	ExePath     [256]int8
+	Args        [512]int8
+	StdinPath   [64]int8
+	StdoutPath  [64]int8
+	TtyName     [64]int8
+	RemoteIp    uint32
+	RemotePort  uint16
+	LocalPort   uint16
+	LocalIp     uint32
+	MntnsId     uint64
+	RootMntnsId uint64
 }
 
 type bpfFileEvent struct {
@@ -143,6 +145,24 @@ type bpfFileEvent struct {
 	NewPath    [512]int8
 	OldPath    [512]int8
 	S_id       [32]int8
+}
+
+type bpfMountEvent struct {
+	EventType   uint8
+	Padding1    [3]uint8
+	Pid         uint32
+	Tgid        uint32
+	Ppid        uint32
+	Uid         uint32
+	MntnsId     uint64
+	RootMntnsId uint64
+	Comm        [16]int8
+	ExePath     [256]int8
+	DevName     [256]int8
+	DirName     [256]int8
+	FsType      [32]int8
+	Flags       uint32
+	Retval      int32
 }
 
 type bpfPathBuf struct {
@@ -219,8 +239,10 @@ type bpfMapSpecs struct {
 	PercpuDnsData      *ebpf.MapSpec `ebpf:"percpu_dns_data"`
 	PercpuFileBuf      *ebpf.MapSpec `ebpf:"percpu_file_buf"`
 	PercpuFilePathBuf  *ebpf.MapSpec `ebpf:"percpu_file_path_buf"`
+	PercpuMountBuf     *ebpf.MapSpec `ebpf:"percpu_mount_buf"`
 	PercpuPathBuf      *ebpf.MapSpec `ebpf:"percpu_path_buf"`
 	PercpuStdioPathBuf *ebpf.MapSpec `ebpf:"percpu_stdio_path_buf"`
+	RootMntns          *ebpf.MapSpec `ebpf:"root_mntns"`
 	TrustedExes        *ebpf.MapSpec `ebpf:"trusted_exes"`
 }
 
@@ -254,8 +276,10 @@ type bpfMaps struct {
 	PercpuDnsData      *ebpf.Map `ebpf:"percpu_dns_data"`
 	PercpuFileBuf      *ebpf.Map `ebpf:"percpu_file_buf"`
 	PercpuFilePathBuf  *ebpf.Map `ebpf:"percpu_file_path_buf"`
+	PercpuMountBuf     *ebpf.Map `ebpf:"percpu_mount_buf"`
 	PercpuPathBuf      *ebpf.Map `ebpf:"percpu_path_buf"`
 	PercpuStdioPathBuf *ebpf.Map `ebpf:"percpu_stdio_path_buf"`
+	RootMntns          *ebpf.Map `ebpf:"root_mntns"`
 	TrustedExes        *ebpf.Map `ebpf:"trusted_exes"`
 }
 
@@ -272,8 +296,10 @@ func (m *bpfMaps) Close() error {
 		m.PercpuDnsData,
 		m.PercpuFileBuf,
 		m.PercpuFilePathBuf,
+		m.PercpuMountBuf,
 		m.PercpuPathBuf,
 		m.PercpuStdioPathBuf,
+		m.RootMntns,
 		m.TrustedExes,
 	)
 }

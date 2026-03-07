@@ -123,6 +123,22 @@ struct {
     __uint(max_entries, 1);
 } percpu_file_path_buf SEC(".maps");
 
+// root_mntns_id 存储（由 eBPF 自动初始化或 Go 层写入）
+struct {
+    __uint(type, BPF_MAP_TYPE_ARRAY);
+    __type(key, u32);
+    __type(value, __u64);
+    __uint(max_entries, 1);
+} root_mntns SEC(".maps");
+
+// Per-CPU buffer for mount_event
+struct {
+    __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
+    __type(key, u32);
+    __type(value, struct mount_event);
+    __uint(max_entries, 1);
+} percpu_mount_buf SEC(".maps");
+
 // ========== 路径构建函数 ==========
 // 向路径缓冲区追加路径分量 (缓冲区末尾反向写入，正向计数长度)
 // data: 路径缓冲区, len: 已累积长度(含末尾\0), entry: 路径分量, num: 分量字节数
@@ -282,6 +298,14 @@ static __always_inline int read_args(struct task_struct *task, char *buf, int bu
     ret = bpf_probe_read_user(buf, args_len & 511, (void *)arg_start);
     if (ret < 0)
         return 0;
+
+    if (args_len < buf_size) {
+        unsigned int end = args_len & 511;
+        buf[end] = 0;
+        if (end + 1 < 512) buf[end + 1] = 0;
+        if (end + 2 < 512) buf[end + 2] = 0;
+        if (end + 3 < 512) buf[end + 3] = 0;
+    }
 
     return (int)args_len;
 }
@@ -517,6 +541,53 @@ static __noinline struct sock *process_socket(struct task_struct *task, __u32 *o
     return NULL;
 }
 
+// ========== mount 命名空间辅助函数 ==========
+
+// 计算 mntns_id：(~superblock_addr) << 16 | ns.inum
+// 组合 superblock 地址和 inode 号，生成唯一标识
+// 参考 query_mntns_id()
+static __noinline __u64 query_mntns_id(struct task_struct *task)
+{
+    unsigned int inum = BPF_CORE_READ(task, nsproxy, mnt_ns, ns.inum);
+    struct vfsmount *mnt = (struct vfsmount *)BPF_CORE_READ(task, fs, root.mnt);
+    struct super_block *sb = NULL;
+    if (mnt)
+        sb = BPF_CORE_READ(mnt, mnt_sb);
+
+    __u64 mntns_id = sb ? (unsigned long)sb : (__u64)-1;
+    mntns_id = (~mntns_id) << 16;
+    mntns_id = (mntns_id & 0xFFFFFFFF00000000ULL) | inum;
+    return mntns_id;
+}
+
+// 从 BPF map 读取 root_mntns_id
+static __always_inline __u64 get_root_mntns_id(void)
+{
+    u32 key = 0;
+    __u64 *val = bpf_map_lookup_elem(&root_mntns, &key);
+    return val ? *val : 0;
+}
+
+// 确保 root_mntns_id 已初始化
+// 在首次 execve 事件时自动遍历 real_parent 到 PID 1，计算并缓存
+static __noinline void ensure_root_mntns(struct task_struct *task)
+{
+    u32 key = 0;
+    __u64 *existing = bpf_map_lookup_elem(&root_mntns, &key);
+    if (existing && *existing != 0)
+        return;
+
+    struct task_struct *t = task;
+    for (int i = 0; i < 32; i++) {
+        struct task_struct *parent = BPF_CORE_READ(t, real_parent);
+        if (!parent || parent == t)
+            break;
+        t = parent;
+    }
+    __u64 root_id = query_mntns_id(t);
+    bpf_map_update_elem(&root_mntns, &key, &root_id, BPF_ANY);
+}
+
 // ========== eBPF 程序入口 ==========
 
 // handle_execve_event: 采集并输出 execve 事件（包含 socket 信息 enrich）
@@ -545,6 +616,7 @@ static __noinline int handle_execve_event(
 
     task = (struct task_struct *)bpf_get_current_task();
 
+    ensure_root_mntns(task);
     u64 id = bpf_get_current_pid_tgid();
     evt->pid = id;
     evt->tgid = id >> 32;
@@ -630,6 +702,9 @@ static __noinline int handle_execve_event(
         evt->local_ip = BPF_CORE_READ(sk, __sk_common.skc_rcv_saddr);
         evt->local_port = BPF_CORE_READ(sk, __sk_common.skc_num);
     }
+
+    evt->mntns_id = query_mntns_id(task);
+    evt->root_mntns_id = get_root_mntns_id();
 
     bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU,
                           evt, sizeof(*evt));
@@ -884,7 +959,8 @@ int tp_sys_exit(struct bpf_raw_tracepoint_args *ctx)
     bpf_probe_read_kernel(&syscall_nr, sizeof(syscall_nr), &regs->orig_ax);
 
     if (syscall_nr != 42 && syscall_nr != 49 && syscall_nr != 43 &&
-        syscall_nr != 288 && syscall_nr != 45 && syscall_nr != 47)
+        syscall_nr != 288 && syscall_nr != 45 && syscall_nr != 47 &&
+        syscall_nr != 165)
         return 0;
 
     struct task_struct *task = (struct task_struct *)bpf_get_current_task();
@@ -1097,6 +1173,44 @@ int tp_sys_exit(struct bpf_raw_tracepoint_args *ctx)
         read_full_exe_path(task, evt->exe_path, sizeof(evt->exe_path));
 
         bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, evt, sizeof(*evt));
+        return 0;
+    }
+
+    if (syscall_nr == 165) {
+        if (retval != 0)
+            return 0;
+
+        u32 mkey = 0;
+        struct mount_event *mevt = bpf_map_lookup_elem(&percpu_mount_buf, &mkey);
+        if (!mevt)
+            return 0;
+
+        __builtin_memset(mevt, 0, sizeof(*mevt));
+        mevt->event_type = EVENT_TYPE_MOUNT;
+        mevt->retval = (__s32)retval;
+
+        FILL_PROCESS_INFO(task, mevt);
+
+        mevt->mntns_id = query_mntns_id(task);
+        mevt->root_mntns_id = get_root_mntns_id();
+
+        void *u_dev = (void *)parm1;
+        void *u_dir = (void *)parm2;
+        __u64 parm3 = 0;
+        bpf_probe_read_kernel(&parm3, sizeof(parm3), &regs->dx);
+        void *u_type = (void *)parm3;
+
+        __u64 raw_flags = 0;
+        bpf_probe_read_kernel(&raw_flags, sizeof(raw_flags), &regs->r10);
+        mevt->flags = (__u32)raw_flags;
+
+        bpf_probe_read_user_str(mevt->dev_name, sizeof(mevt->dev_name), u_dev);
+        bpf_probe_read_user_str(mevt->dir_name, sizeof(mevt->dir_name), u_dir);
+        bpf_probe_read_user_str(mevt->fs_type, sizeof(mevt->fs_type), u_type);
+
+        read_full_exe_path(task, mevt->exe_path, sizeof(mevt->exe_path));
+
+        bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, mevt, sizeof(*mevt));
         return 0;
     }
 

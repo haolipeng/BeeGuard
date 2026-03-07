@@ -7,11 +7,12 @@ import (
 
 // 默认配置文件路径
 const (
-	defaultConfigPath                 = "config/dangerous_commands.yaml"
-	defaultTrustedConfigPath          = "config/privilege_escalation_whitelist.yaml"
-	defaultMaliciousRequestConfigPath = "config/malicious_request_rules.yaml"
-	defaultSensitiveFileConfigPath    = "config/sensitive_file_rules.yaml"
-	defaultFileMonitorWhitelistPath   = "config/file_monitor_whitelist.yaml"
+	defaultConfigPath                          = "config/dangerous_commands.yaml"
+	defaultTrustedConfigPath                   = "config/privilege_escalation_whitelist.yaml"
+	defaultMaliciousRequestConfigPath          = "config/malicious_request_rules.yaml"
+	defaultSensitiveFileConfigPath             = "config/sensitive_file_rules.yaml"
+	defaultFileMonitorWhitelistPath            = "config/file_monitor_whitelist.yaml"
+	defaultContainerDangerousCommandConfigPath = "config/container_dangerous_commands.yaml"
 )
 
 func getConfigPath() string {
@@ -72,4 +73,16 @@ func getFileMonitorWhitelistPath() string {
 		}
 	}
 	return defaultFileMonitorWhitelistPath
+}
+
+func getContainerDangerousCommandConfigPath() string {
+	execPath, err := os.Executable()
+	if err == nil {
+		dir := filepath.Dir(execPath)
+		configPath := filepath.Join(dir, defaultContainerDangerousCommandConfigPath)
+		if _, err := os.Stat(configPath); err == nil {
+			return configPath
+		}
+	}
+	return defaultContainerDangerousCommandConfigPath
 }

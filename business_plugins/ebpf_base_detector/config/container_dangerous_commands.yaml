@@ -1,0 +1,53 @@
+version: "1.0"
+description: "容器侧高危命令检测规则"
+
+rules:
+  # 包管理器安装（容器内安装软件包通常不符合不可变容器原则）
+  - id: 3001
+    name: "容器内包管理器安装"
+    description: "检测容器内通过包管理器安装软件包的行为"
+    severity: "medium"
+    enabled: true
+    match:
+      type: "regex"
+      patterns:
+        - "apt(-get)?\\s+install"
+        - "yum\\s+install"
+        - "dnf\\s+install"
+        - "apk\\s+add"
+        - "pip3?\\s+install"
+        - "npm\\s+install"
+        - "gem\\s+install"
+
+  # 网络��载/工具（容器内使用网络下载工具可能是攻击者下载恶意负载）
+  - id: 3002
+    name: "容器内网络下载工具"
+    description: "检测容器内使用网络下载工具的行为"
+    severity: "high"
+    enabled: true
+    match:
+      type: "prefix"
+      patterns:
+        - "wget"
+        - "curl"
+        - "nc"
+        - "ncat"
+        - "socat"
+
+  # 系统配置修改（容器内修改系统配置文件，存在持久化后门风险）
+  - id: 3003
+    name: "容器内系统配置修改"
+    description: "检测容器内修改关键系统配置文件的行为"
+    severity: "high"
+    enabled: true
+    match:
+      type: "regex"
+      patterns:
+        - "(vi|vim|nano|sed|tee)\\s+.*/etc/passwd"
+        - "(vi|vim|nano|sed|tee)\\s+.*/etc/shadow"
+        - "(vi|vim|nano|sed|tee)\\s+.*/etc/crontab"
+        - "(vi|vim|nano|sed|tee)\\s+.*/etc/sudoers"
+        - "useradd\\s+"
+        - "usermod\\s+"
+        - "passwd\\s+"
+        - "crontab\\s+-e"
