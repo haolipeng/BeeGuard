@@ -1,7 +1,7 @@
 baseline_id: 5000
 baseline_version: 1.0
 baseline_name: "弱口令基线检查"
-baseline_name_en: "bytedance Standard-weakpassword Security Baseline Check"
+baseline_name_en: "Standard-weakpassword Security Baseline Check"
 system:
   - "debian"
   - "ubuntu"

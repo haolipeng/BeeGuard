@@ -66,9 +66,11 @@ build-plugins: generate-ebpf
 	@echo "  Building ebpf_base_detector plugin..."
 	@cd $(DRIVER_SRC) && $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/ebpf_base_detector/ebpf_base_detector .
 	@cp $(DRIVER_SRC)/config/dangerous_commands.yaml $(PLUGINS_DIR)/ebpf_base_detector/config/
+	@cp $(DRIVER_SRC)/config/container_dangerous_commands.yaml $(PLUGINS_DIR)/ebpf_base_detector/config/
 	@cp $(DRIVER_SRC)/config/privilege_escalation_whitelist.yaml $(PLUGINS_DIR)/ebpf_base_detector/config/
 	@cp $(DRIVER_SRC)/config/malicious_request_rules.yaml $(PLUGINS_DIR)/ebpf_base_detector/config/
 	@cp $(DRIVER_SRC)/config/sensitive_file_rules.yaml $(PLUGINS_DIR)/ebpf_base_detector/config/
+	@cp $(DRIVER_SRC)/config/file_monitor_whitelist.yaml $(PLUGINS_DIR)/ebpf_base_detector/config/
 	@echo "  Building nids plugin..."
 	@cd $(NIDS_SRC) && $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/nids/nids .
 	@cp $(NIDS_SRC)/config/nids.yaml $(PLUGINS_DIR)/nids/config/
@@ -98,9 +100,11 @@ build-driver: generate-ebpf
 	@mkdir -p $(PLUGINS_DIR)/ebpf_base_detector/config
 	@cd $(DRIVER_SRC) && $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/ebpf_base_detector/ebpf_base_detector .
 	@cp $(DRIVER_SRC)/config/dangerous_commands.yaml $(PLUGINS_DIR)/ebpf_base_detector/config/
+	@cp $(DRIVER_SRC)/config/container_dangerous_commands.yaml $(PLUGINS_DIR)/ebpf_base_detector/config/
 	@cp $(DRIVER_SRC)/config/privilege_escalation_whitelist.yaml $(PLUGINS_DIR)/ebpf_base_detector/config/
 	@cp $(DRIVER_SRC)/config/malicious_request_rules.yaml $(PLUGINS_DIR)/ebpf_base_detector/config/
 	@cp $(DRIVER_SRC)/config/sensitive_file_rules.yaml $(PLUGINS_DIR)/ebpf_base_detector/config/
+	@cp $(DRIVER_SRC)/config/file_monitor_whitelist.yaml $(PLUGINS_DIR)/ebpf_base_detector/config/
 	@echo "Build complete: $(PLUGINS_DIR)/ebpf_base_detector/"
 
 # 编译 nids 插件
@@ -231,8 +235,10 @@ deploy: build
 	@echo "  Config:  $(DEPLOY_DIR)/agent.yaml"
 	@echo "  Config:  $(DEPLOY_DIR)/plugins/detector/config/rules/*.yaml"
 	@echo "  Config:  $(DEPLOY_DIR)/plugins/ebpf_base_detector/config/dangerous_commands.yaml"
+	@echo "  Config:  $(DEPLOY_DIR)/plugins/ebpf_base_detector/config/container_dangerous_commands.yaml"
 	@echo "  Config:  $(DEPLOY_DIR)/plugins/ebpf_base_detector/config/privilege_escalation_whitelist.yaml"
 	@echo "  Config:  $(DEPLOY_DIR)/plugins/ebpf_base_detector/config/malicious_request_rules.yaml"
+	@echo "  Config:  $(DEPLOY_DIR)/plugins/ebpf_base_detector/config/file_monitor_whitelist.yaml"
 
 # 仅部署 agent（不含插件）
 .PHONY: deploy-agent
