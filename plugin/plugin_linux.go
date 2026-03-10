@@ -156,7 +156,7 @@ func Load(ctx context.Context, config proto.Config) (plg *Plugin, err error) {
 		reader:              bufio.NewReaderSize(rx_r, 1024*128),
 		tx:                  tx_w,
 		done:                make(chan struct{}),
-		taskCh:              make(chan proto.Task),
+		taskCh:              make(chan proto.Task, 32),
 		wg:                  &sync.WaitGroup{},
 		useStandardProtocol: useStandardProtocol,
 		SugaredLogger:       logger,

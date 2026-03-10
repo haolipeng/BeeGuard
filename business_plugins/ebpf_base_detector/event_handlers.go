@@ -18,6 +18,7 @@ type eventHandlerCtx struct {
 	mrDetector    *MaliciousRequestDetector
 	sfDetector    *SensitiveFileDetector
 	ceDetector    *ContainerEscapeDetector   // 容器逃逸
+	crsDetector   *ContainerReverseShellDetector // 容器反弹 Shell
 	containerMeta *ContainerMetaCache        // 容器元数据缓存
 }
 
@@ -98,17 +99,35 @@ func handleExecve(ctx *eventHandlerCtx, raw []byte) error {
 		}
 	}
 
-	rsResult := ctx.rsDetector.Detect(&evt)
-	if rsResult != nil {
-		rsRecord := BuildReverseShellRecord(&evt, rsResult, pidTreeStr)
-		ctx.logger.Warn("Reverse shell detected (userspace)",
-			"rule", rsResult.RuleName, "confidence", rsResult.Confidence,
-			"pid", evt.PID, "tgid", evt.TGID, "comm", cstring(evt.Comm[:]),
-			"exe_path", cstring(evt.ExePath[:]), "stdin_path", cstring(evt.StdinPath[:]),
-			"stdout_path", cstring(evt.StdoutPath[:]), "pid_tree", pidTreeStr,
-			"tty_name", cstring(evt.TTYName[:]), "socket_pid", evt.SocketPID)
-		if err := ctx.client.SendRecord(rsRecord); err != nil {
-			ctx.logger.Error("Failed to send reverse shell record to agent", "error", err)
+	// 反弹 Shell 检测：容器进程走容器检测器（7003），非容器进程走主机检测器（6004）
+	if isContainer && ctx.crsDetector != nil {
+		crsResult := ctx.crsDetector.Detect(&evt)
+		if crsResult != nil {
+			crsRecord := BuildContainerReverseShellRecord(&evt, crsResult, pidTreeStr, ctx.containerMeta)
+			ctx.logger.Warn("Container reverse shell detected",
+				"rule", crsResult.RuleName, "confidence", crsResult.Confidence,
+				"pid", evt.PID, "tgid", evt.TGID, "comm", cstring(evt.Comm[:]),
+				"exe_path", cstring(evt.ExePath[:]), "stdin_path", cstring(evt.StdinPath[:]),
+				"stdout_path", cstring(evt.StdoutPath[:]), "pid_tree", pidTreeStr,
+				"tty_name", cstring(evt.TTYName[:]), "socket_pid", evt.SocketPID,
+				"container_id", crsRecord.Data.Fields["container_id"])
+			if err := ctx.client.SendRecord(crsRecord); err != nil {
+				ctx.logger.Error("Failed to send container reverse shell record", "error", err)
+			}
+		}
+	} else {
+		rsResult := ctx.rsDetector.Detect(&evt)
+		if rsResult != nil {
+			rsRecord := BuildReverseShellRecord(&evt, rsResult, pidTreeStr)
+			ctx.logger.Warn("Reverse shell detected (userspace)",
+				"rule", rsResult.RuleName, "confidence", rsResult.Confidence,
+				"pid", evt.PID, "tgid", evt.TGID, "comm", cstring(evt.Comm[:]),
+				"exe_path", cstring(evt.ExePath[:]), "stdin_path", cstring(evt.StdinPath[:]),
+				"stdout_path", cstring(evt.StdoutPath[:]), "pid_tree", pidTreeStr,
+				"tty_name", cstring(evt.TTYName[:]), "socket_pid", evt.SocketPID)
+			if err := ctx.client.SendRecord(rsRecord); err != nil {
+				ctx.logger.Error("Failed to send reverse shell record to agent", "error", err)
+			}
 		}
 	}
 	// 仅上报检测引擎触发的告警（高危命令等），不上报原始 execve 事件
