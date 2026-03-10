@@ -147,18 +147,18 @@ grep '"rule_id":"IOC001"' /tmp/ebpf_test.log
 
 ### 用例 2：规则 IOC002 — 已知矿池域名（high）
 
-**指标类型**：domain，匹配 `pool.minexmr.com` 等矿池域名
+**指标类型**：domain，匹配 `minersns.com` 等矿池域名
 
 **测试命令**（Terminal B）：
 
 ```bash
-dig pool.minexmr.com 2>/dev/null; true
+dig minersns.com 2>/dev/null; true
 ```
 
 **预期日志**（`/tmp/ebpf_test.log`）：
 
 ```json
-{"timestamp":...,"data_type":6008,"event_type":"dns","rule_id":"IOC002","rule_name":"已知矿池域名","severity":"high","threat_type":"mining","indicator_type":"domain","matched_value":"pool.minexmr.com","comm":"dig",...}
+{"timestamp":...,"data_type":6008,"event_type":"dns","rule_id":"IOC002","rule_name":"已知矿池域名","severity":"high","threat_type":"mining","indicator_type":"domain","matched_value":"minersns.com","comm":"dig",...}
 ```
 
 **验证命令**：
@@ -167,7 +167,7 @@ dig pool.minexmr.com 2>/dev/null; true
 grep '"rule_id":"IOC002"' /tmp/ebpf_test.log
 ```
 
-**PASS 判定**：上述命令有输出，且 JSON 中 `"rule_id":"IOC002"`，`"indicator_type":"domain"`，`"matched_value"` 包含 `pool.minexmr.com`。
+**PASS 判定**：上述命令有输出，且 JSON 中 `"rule_id":"IOC002"`，`"indicator_type":"domain"`，`"matched_value"` 包含 `minersns.com`。
 
 > 说明：DNS 检测依赖 eBPF 捕获 `recvfrom`/`recvmsg` 中的 DNS 响应包（UDP 端口 53/5353）。部分系统使用 `systemd-resolved` 代理 DNS 查询，此时捕获的进程可能是 `systemd-resolve` 而非 `dig`。
 
@@ -268,7 +268,7 @@ grep '"rule_id":"IOC005"' /tmp/ebpf_test.log
 | # | 规则 ID | 规则名称 | 严重程度 | 测试命令 | 预期 | 实际 | PASS/FAIL |
 |---|---------|----------|----------|----------|------|------|-----------|
 | 1 | IOC001 | 常见矿池端口 | medium | `nc -w 1 127.0.0.1 3333` | 告警 | | |
-| 2 | IOC002 | 已知矿池域名 | high | `dig pool.minexmr.com` | 告警 | | |
+| 2 | IOC002 | 已知矿池域名 | high | `dig minersns.com` | 告警 | | |
 | 3 | IOC003 | 已知C2域名 | critical | `dig test.cobalt-strike.example.com` | 告警 | | |
 | 4 | IOC004 | 已知C2端点 | critical | `nc -w 2 185.141.27.100 443` | 告警 | | |
 | 5 | IOC005 | 已知钓鱼域名 | high | `dig login.phishing-example.com` | 告警 | | |
@@ -329,7 +329,7 @@ sleep 1
 
 # 3. 测试域名规则（指定 @127.0.0.1 使用本地 DNS）
 # IOC003 - 已知矿池域名
-dig @127.0.0.1 pool.minexmr.com 2>/dev/null; true
+dig @127.0.0.1 minersns.com 2>/dev/null; true
 
 # IOC004 - 已知 C2 域名
 dig @127.0.0.1 test.cobalt-strike.example.com 2>/dev/null; true
@@ -373,7 +373,7 @@ DNS_PID=$!
 sleep 1
 
 # 3. 执行域名测试（同 A.2 步骤 3）
-dig @127.0.0.1 pool.minexmr.com 2>/dev/null; true
+dig @127.0.0.1 minersns.com 2>/dev/null; true
 dig @127.0.0.1 test.cobalt-strike.example.com 2>/dev/null; true
 dig @127.0.0.1 login.phishing-example.com 2>/dev/null; true
 
