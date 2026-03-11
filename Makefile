@@ -18,7 +18,7 @@ NIDS_SRC=$(PLUGINS_SRC_DIR)/nids
 SCANNER_SRC=$(PLUGINS_SRC_DIR)/scanner
 
 # 部署目录
-DEPLOY_DIR=/opt/cloudsec
+DEPLOY_DIR=/opt/cloudsec/agent
 
 # 版本信息（可通过命令行覆盖）
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -193,7 +193,7 @@ install: build
 	@install -m 755 $(BUILD_DIR)/$(BINARY_NAME) /usr/local/bin/$(BINARY_NAME)
 	@echo "Install complete: /usr/local/bin/$(BINARY_NAME)"
 
-# 部署到 /opt/cloudsec/
+# 部署到 /opt/cloudsec/agent/
 .PHONY: deploy
 deploy: build
 	@echo "Deploying to $(DEPLOY_DIR)..."
@@ -229,6 +229,8 @@ deploy: build
 	@sudo chmod 755 $(DEPLOY_DIR)/plugins/scanner/scanner
 	@sudo cp agent.yaml $(DEPLOY_DIR)/
 	@sudo cp agent-standalone.yaml $(DEPLOY_DIR)/
+	@sudo cp deploy/agent-start.sh $(DEPLOY_DIR)/
+	@sudo chmod +x $(DEPLOY_DIR)/agent-start.sh
 	@echo "Deploy complete!"
 	@echo "  Agent:   $(DEPLOY_DIR)/bin/$(BINARY_NAME)"
 	@echo "  Plugins: $(DEPLOY_DIR)/plugins/"

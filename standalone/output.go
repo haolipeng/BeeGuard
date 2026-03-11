@@ -67,6 +67,31 @@ type ReverseShellOutput struct {
 	Description string `json:"description"`
 }
 
+// ContainerReverseShellOutput 容器反弹 Shell 检测结果输出结构
+type ContainerReverseShellOutput struct {
+	Timestamp        int64  `json:"timestamp"`
+	DataType         int32  `json:"data_type"`
+	PID              string `json:"pid"`
+	TGID             string `json:"tgid"`
+	PPID             string `json:"ppid"`
+	UID              string `json:"uid"`
+	Comm             string `json:"comm"`
+	ExePath          string `json:"exe_path"`
+	Args             string `json:"args,omitempty"`
+	FDType           string `json:"fd_type"`
+	StdinPath        string `json:"stdin_path,omitempty"`
+	StdoutPath       string `json:"stdout_path,omitempty"`
+	RemoteIP         string `json:"remote_ip,omitempty"`
+	RemotePort       string `json:"remote_port,omitempty"`
+	RuleName         string `json:"rule_name"`
+	Confidence       string `json:"confidence"`
+	Description      string `json:"description"`
+	ContainerID      string `json:"container_id,omitempty"`
+	ContainerIDShort string `json:"container_id_short,omitempty"`
+	ContainerName    string `json:"container_name,omitempty"`
+	ImageName        string `json:"image_name,omitempty"`
+}
+
 // MaliciousRequestOutput 恶意请求检测结果输出结构
 type MaliciousRequestOutput struct {
 	Timestamp     int64  `json:"timestamp"`
@@ -163,6 +188,13 @@ func processRecords(recs []*proto.EncodedRecord, file *os.File) {
 				writeJSON(file, output)
 			} else {
 				logReverseShell(output)
+			}
+		case businessplugins.AlertTypeContainerReverseShell:
+			output := buildContainerReverseShellOutput(rec, payload)
+			if file != nil {
+				writeJSON(file, output)
+			} else {
+				logContainerReverseShell(output)
 			}
 		case businessplugins.AlertTypeMaliciousRequest:
 			output := buildMaliciousRequestOutput(rec, payload)
@@ -331,6 +363,53 @@ func logReverseShell(output *ReverseShellOutput) {
 		"remote_port", output.RemotePort,
 		"rule_name", output.RuleName,
 		"confidence", output.Confidence,
+	)
+}
+
+// buildContainerReverseShellOutput 构建容器反弹 Shell 事件输出结构
+func buildContainerReverseShellOutput(rec *proto.EncodedRecord, payload *businessplugins.Payload) *ContainerReverseShellOutput {
+	fields := payload.Fields
+
+	return &ContainerReverseShellOutput{
+		Timestamp:        rec.Timestamp,
+		DataType:         rec.DataType,
+		PID:              fields["pid"],
+		TGID:             fields["tgid"],
+		PPID:             fields["ppid"],
+		UID:              fields["uid"],
+		Comm:             fields["comm"],
+		ExePath:          fields["exe_path"],
+		Args:             fields["args"],
+		FDType:           fields["fd_type"],
+		StdinPath:        fields["stdin_path"],
+		StdoutPath:       fields["stdout_path"],
+		RemoteIP:         fields["remote_ip"],
+		RemotePort:       fields["remote_port"],
+		RuleName:         fields["rule_name"],
+		Confidence:       fields["confidence"],
+		Description:      fields["description"],
+		ContainerID:      fields["container_id"],
+		ContainerIDShort: fields["container_id_short"],
+		ContainerName:    fields["container_name"],
+		ImageName:        fields["image_name"],
+	}
+}
+
+// logContainerReverseShell 将容器反弹 Shell 事件输出到日志
+func logContainerReverseShell(output *ContainerReverseShellOutput) {
+	zap.S().Warnw("Container reverse shell detected",
+		"pid", output.PID,
+		"tgid", output.TGID,
+		"ppid", output.PPID,
+		"comm", output.Comm,
+		"exe_path", output.ExePath,
+		"fd_type", output.FDType,
+		"remote_ip", output.RemoteIP,
+		"remote_port", output.RemotePort,
+		"rule_name", output.RuleName,
+		"confidence", output.Confidence,
+		"container_id", output.ContainerID,
+		"container_name", output.ContainerName,
 	)
 }
 

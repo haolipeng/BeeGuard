@@ -5,12 +5,12 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -239,9 +239,8 @@ func Load(ctx context.Context, config proto.Config) (plg *Plugin, err error) {
 					}
 					return
 				}
-				fmt.Println("send task", n)
-				//atomic.AddUint64(&plg.rxCnt, 1)
-				//atomic.AddUint64(&plg.rxBytes, uint64(n))
+				atomic.AddUint64(&plg.rxCnt, 1)
+				atomic.AddUint64(&plg.rxBytes, uint64(n))
 			}
 		}
 	}()

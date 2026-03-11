@@ -160,11 +160,11 @@ func ValidateAndSetDefaults(cfg *Config) error {
 	}
 
 	if cfg.PluginsDirectory == "" {
-		cfg.PluginsDirectory = "/opt/cloudsec/plugins"
+		cfg.PluginsDirectory = "/opt/cloudsec/agent/plugins"
 	}
 
 	if cfg.LogDirectory == "" {
-		cfg.LogDirectory = "/opt/cloudsec/logs"
+		cfg.LogDirectory = "/opt/cloudsec/agent/logs"
 	}
 
 	if cfg.RetryMaxCount <= 0 {

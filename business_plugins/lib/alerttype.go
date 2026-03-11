@@ -16,4 +16,5 @@ const (
 	// 容器安全告警
 	AlertTypeContainerDangerousCommand = 7001
 	AlertTypeContainerEscape           = 7002
+	AlertTypeContainerReverseShell     = 7003
 )

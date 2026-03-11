@@ -46,7 +46,8 @@ rules:
     severity: "high"
     enabled: true
     indicators:
-      - "pool.minexmr.com"
+      - "minersns.com"
+      - "666pool.com"
       - "xmr.pool.minergate.com"
       - "*.monerohash.com"
       - "*.nanopool.org"

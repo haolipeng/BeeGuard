@@ -93,6 +93,10 @@ func main() {
 	ceDetector := NewContainerEscapeDetector()
 	logger.Info("Container escape detector initialized")
 
+	// 容器反弹 Shell 检测器
+	crsDetector := &ContainerReverseShellDetector{}
+	logger.Info("Container reverse shell detector initialized")
+
 	// 容器元数据缓存
 	containerMeta := NewContainerMetaCache(5 * time.Minute)
 	logger.Info("Container metadata cache initialized")
@@ -180,6 +184,7 @@ func main() {
 				mrDetector:    mrDetector,
 				sfDetector:    sfDetector,
 				ceDetector:    ceDetector,
+				crsDetector:   crsDetector,
 				containerMeta: containerMeta,
 			}
 			var handlerErr error

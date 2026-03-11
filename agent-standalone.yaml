@@ -3,9 +3,9 @@
 
 # 基础配置（standalone 模式下 server 不是必须的）
 # server: "127.0.0.1:50051"
-working_directory: "/opt/cloudsec/data/agent"
-plugins_directory: "/opt/cloudsec/plugins"
-log_directory: "/opt/cloudsec/logs"
+working_directory: "/opt/cloudsec/agent/data/agent"
+plugins_directory: "/opt/cloudsec/agent/plugins"
+log_directory: "/opt/cloudsec/agent/logs"
 
 # Standalone 模式配置
 standalone:

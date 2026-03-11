@@ -545,7 +545,6 @@ static __noinline struct sock *process_socket(struct task_struct *task, __u32 *o
 
 // 计算 mntns_id：(~superblock_addr) << 16 | ns.inum
 // 组合 superblock 地址和 inode 号，生成唯一标识
-// 参考 query_mntns_id()
 static __noinline __u64 query_mntns_id(struct task_struct *task)
 {
     unsigned int inum = BPF_CORE_READ(task, nsproxy, mnt_ns, ns.inum);
