@@ -64,8 +64,8 @@ build/
 make deploy
 
 # 确认部署
-ls -la /opt/cloudsec/bin/agent
-ls -la /opt/cloudsec/plugins/collector/collector
+ls -la /opt/cloudsec/agent/bin/agent
+ls -la /opt/cloudsec/agent/plugins/collector/collector
 ```
 
 ---
@@ -395,7 +395,7 @@ plugin not found: collector
 ls -la build/plugins/collector/collector
 
 # deploy 目录模式
-ls -la /opt/cloudsec/plugins/collector/collector
+ls -la /opt/cloudsec/agent/plugins/collector/collector
 ```
 
 ### 6.3 容器/镜像相关 Handler 无输出
@@ -416,5 +416,5 @@ ls -la /opt/cloudsec/plugins/collector/collector
 ls -la /tmp/cloudsec-agent/plugins/collector/
 
 # deploy 目录启动
-cat /opt/cloudsec/logs/plugins/collector/collector.log
+cat /opt/cloudsec/agent/logs/plugins/collector/collector.log
 ```

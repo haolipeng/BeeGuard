@@ -58,7 +58,7 @@ cd /home/work/goProject/src/company/agent
 # 编译 Agent + 所有插件 (自动生成 eBPF 代码)
 make build
 
-# 部署到 /opt/cloudsec/
+# 部署到 /opt/cloudsec/agent/
 make deploy
 ```
 
@@ -117,7 +117,7 @@ build/
 ### 部署后目录结构
 
 ```
-/opt/cloudsec/
+/opt/cloudsec/agent/
 ├── bin/
 │   └── agent                   # Agent 主程序
 ├── agent.yaml                  # 配置文件
@@ -198,12 +198,12 @@ make package
 
 | 类别 | 文件 | 安装路径 |
 |------|------|----------|
-| 二进制 | agent | `/opt/cloudsec/bin/agent` |
-| 二进制 | cloudsecctl | `/opt/cloudsec/bin/cloudsecctl` |
-| 服务 | cloudsec-agent.service | `/opt/cloudsec/cloudsec-agent.service` |
-| 配置 | agent.yaml | `/opt/cloudsec/agent.yaml` |
-| 插件 | collector, baseline, detector, ebpf_base_detector, nids, scanner | `/opt/cloudsec/plugins/<name>/<name>` |
-| 插件配置 | detector rules, ebpf configs, baseline configs, nids configs, scanner config | `/opt/cloudsec/plugins/<name>/config/` |
+| 二进制 | agent | `/opt/cloudsec/agent/bin/agent` |
+| 二进制 | cloudsecctl | `/opt/cloudsec/agent/bin/cloudsecctl` |
+| 服务 | cloudsec-agent.service | `/opt/cloudsec/agent/cloudsec-agent.service` |
+| 配置 | agent.yaml | `/opt/cloudsec/agent/agent.yaml` |
+| 插件 | collector, baseline, detector, ebpf_base_detector, nids, scanner | `/opt/cloudsec/agent/plugins/<name>/<name>` |
+| 插件配置 | detector rules, ebpf configs, baseline configs, nids configs, scanner config | `/opt/cloudsec/agent/plugins/<name>/config/` |
 
 ---
 
@@ -227,7 +227,7 @@ sudo rpm -i cloudsec-agent-<version>.<arch>.rpm
 
 安装过程自动完成：
 1. 检查 systemd 环境（`preinstall.sh`）
-2. 创建运行时目录（`/opt/cloudsec/data/`、`/opt/cloudsec/logs/`）
+2. 创建运行时目录（`/opt/cloudsec/agent/data/`、`/opt/cloudsec/agent/logs/`）
 3. 注册并启用 systemd 服务
 4. 启动 agent
 
@@ -251,12 +251,12 @@ sudo SPECIFIED_SERVER="10.0.0.1:50051" SPECIFIED_AGENT_ID="agent-001" dpkg -i cl
 使用 `cloudsecctl` 工具管理服务：
 
 ```bash
-sudo /opt/cloudsec/bin/cloudsecctl status     # 查看状态
-sudo /opt/cloudsec/bin/cloudsecctl start      # 启动
-sudo /opt/cloudsec/bin/cloudsecctl stop       # 停止
-sudo /opt/cloudsec/bin/cloudsecctl restart    # 重启
-sudo /opt/cloudsec/bin/cloudsecctl set --server="<addr>"  # 修改服务端地址
-sudo /opt/cloudsec/bin/cloudsecctl set --id="<id>"        # 修改 Agent ID
+sudo /opt/cloudsec/agent/bin/cloudsecctl status     # 查看状态
+sudo /opt/cloudsec/agent/bin/cloudsecctl start      # 启动
+sudo /opt/cloudsec/agent/bin/cloudsecctl stop       # 停止
+sudo /opt/cloudsec/agent/bin/cloudsecctl restart    # 重启
+sudo /opt/cloudsec/agent/bin/cloudsecctl set --server="<addr>"  # 修改服务端地址
+sudo /opt/cloudsec/agent/bin/cloudsecctl set --id="<id>"        # 修改 Agent ID
 ```
 
 ### 5.5 升级
@@ -286,7 +286,7 @@ sudo rpm -e cloudsec-agent
 卸载时自动完成：
 1. 停止 agent 服务
 2. 移除 systemd 服务注册
-3. 清理运行时数据和日志（`/opt/cloudsec/data/`、`/opt/cloudsec/logs/`）
+3. 清理运行时数据和日志（`/opt/cloudsec/agent/data/`、`/opt/cloudsec/agent/logs/`）
 
 配置文件在卸载后保留，如需完全清理：
 
@@ -321,10 +321,10 @@ connect_timeout: 30
 working_directory: "/var/run/cloudsec-agent"
 
 # 插件目录
-plugins_directory: "/opt/cloudsec/plugins"
+plugins_directory: "/opt/cloudsec/agent/plugins"
 
 # 日志目录
-log_directory: "/opt/cloudsec/logs"
+log_directory: "/opt/cloudsec/agent/logs"
 
 # 连接失败最大重试次数
 retry_max_count: 10
@@ -347,7 +347,7 @@ retry_interval: 5
 
 ```bash
 # 方式一：使用部署目录（推荐）
-cd /opt/cloudsec
+cd /opt/cloudsec/agent
 sudo ./bin/agent
 
 # 方式二：使用源码目录（开发调试）
@@ -355,12 +355,12 @@ sudo ./bin/agent
 cd /home/work/goProject/src/company/agent
 make build
 make deploy
-cd /opt/cloudsec
+cd /opt/cloudsec/agent
 sudo ./bin/agent
 
 # 方式三：后台运行
-cd /opt/cloudsec
-sudo nohup ./bin/agent > /opt/cloudsec/logs/agent/agent.log 2>&1 &
+cd /opt/cloudsec/agent
+sudo nohup ./bin/agent > /opt/cloudsec/agent/logs/agent/agent.log 2>&1 &
 ```
 
 ### 启动日志
@@ -380,14 +380,14 @@ sudo nohup ./bin/agent > /opt/cloudsec/logs/agent/agent.log 2>&1 &
 
 ```bash
 # 停止 Agent
-sudo pkill -f "/opt/cloudsec/bin/agent"
+sudo pkill -f "/opt/cloudsec/agent/bin/agent"
 
 # 清理日志
-sudo rm -rf /opt/cloudsec/logs/agent/*
-sudo rm -rf /opt/cloudsec/logs/plugins/*
+sudo rm -rf /opt/cloudsec/agent/logs/agent/*
+sudo rm -rf /opt/cloudsec/agent/logs/plugins/*
 
 # 清理运行时数据
-sudo rm -rf /opt/cloudsec/data/*
+sudo rm -rf /opt/cloudsec/agent/data/*
 
 # 清理编译产物
 cd /home/work/goProject/src/company/agent

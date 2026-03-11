@@ -41,7 +41,7 @@ make deploy
 **验证**：
 
 ```bash
-ls -la /opt/cloudsec/bin/agent /opt/cloudsec/plugins/ebpf_base_detector/ebpf_base_detector
+ls -la /opt/cloudsec/agent/bin/agent /opt/cloudsec/agent/plugins/ebpf_base_detector/ebpf_base_detector
 ```
 
 两个文件都存在即成功。
@@ -53,7 +53,7 @@ ls -la /opt/cloudsec/bin/agent /opt/cloudsec/plugins/ebpf_base_detector/ebpf_bas
 打开 **Terminal A**，执行：
 
 ```bash
-cd /opt/cloudsec
+cd /opt/cloudsec/agent
 rm -f /tmp/ebpf_test.log
 sudo ./bin/agent -standalone -plugins=ebpf_base_detector -output=/tmp/ebpf_test.log -test
 ```
@@ -69,7 +69,7 @@ INFO  eBPF program loaded successfully
 同时在插件日志中应看到：
 
 ```bash
-grep "Container reverse shell detector initialized" /opt/cloudsec/logs/plugins/ebpf_base_detector/ebpf_base_detector.log
+grep "Container reverse shell detector initialized" /opt/cloudsec/agent/logs/plugins/ebpf_base_detector/ebpf_base_detector.log
 ```
 
 预期输出：
@@ -87,7 +87,7 @@ INFO  Container reverse shell detector initialized
 | 位置 | 内容 | 说明 |
 |------|------|------|
 | Terminal A (stderr) | Agent 主进程日志 | 用于确认启动状态 |
-| `/opt/cloudsec/logs/plugins/ebpf_base_detector/ebpf_base_detector.log` | 插件日志，包含 `Container reverse shell detected` | **推荐用此日志验证**，包含 `container_id` |
+| `/opt/cloudsec/agent/logs/plugins/ebpf_base_detector/ebpf_base_detector.log` | 插件日志，包含 `Container reverse shell detected` | **推荐用此日志验证**，包含 `container_id` |
 | `/tmp/ebpf_test.log` | 检测结果 JSON 输出 | **主要验证位置** |
 
 ### 搜索技巧
@@ -106,7 +106,7 @@ grep '"remote_port":"9001"' /tmp/ebpf_test.log
 cat /tmp/ebpf_test.log | jq 'select(.data_type==7003)'
 
 # 实时监控插件日志中的容器反弹 Shell 告警
-tail -f /opt/cloudsec/logs/plugins/ebpf_base_detector/ebpf_base_detector.log | grep "Container reverse shell detected"
+tail -f /opt/cloudsec/agent/logs/plugins/ebpf_base_detector/ebpf_base_detector.log | grep "Container reverse shell detected"
 
 # 实时监控新告警
 tail -f /tmp/ebpf_test.log

@@ -30,7 +30,7 @@ make build
 make deploy
 ```
 
-**验证**：执行 `ls -la /opt/cloudsec/bin/agent /opt/cloudsec/plugins/ebpf_base_detector/ebpf_base_detector`，两个文件都存在即成功。
+**验证**：执行 `ls -la /opt/cloudsec/agent/bin/agent /opt/cloudsec/agent/plugins/ebpf_base_detector/ebpf_base_detector`，两个文件都存在即成功。
 
 ---
 
@@ -39,7 +39,7 @@ make deploy
 清空之前的测试输出并启动 Agent：
 
 ```bash
-cd /opt/cloudsec
+cd /opt/cloudsec/agent
 rm -f /tmp/ebpf_test.log
 sudo ./bin/agent -standalone -plugins=ebpf_base_detector -output=/tmp/ebpf_test.log -test
 ```
@@ -54,7 +54,7 @@ INFO  Malicious request rules loaded  count=7  source=config/malicious_request_r
 
 **判定规则**：
 - `count=7` → 启动成功，7 条规则全部加载，进入 Step 3
-- `count=0` 或该行未出现 → 启动失败，检查 `malicious_request_rules.yaml` 是否在 `/opt/cloudsec/plugins/ebpf_base_detector/config/` 目录下
+- `count=0` 或该行未出现 → 启动失败，检查 `malicious_request_rules.yaml` 是否在 `/opt/cloudsec/agent/plugins/ebpf_base_detector/config/` 目录下
 - `failed to load eBPF` 错误 → 内核不支持，检查前置条件 2、3
 
 ### 日志位置
@@ -62,7 +62,7 @@ INFO  Malicious request rules loaded  count=7  source=config/malicious_request_r
 | 位置 | 说明 |
 |------|------|
 | Terminal A (stderr) | 操作日志（启动、错误等），用于确认启动状态和规则加载 |
-| `/opt/cloudsec/logs/ebpf_base_detector.log` | 操作日志持久化文件 |
+| `/opt/cloudsec/agent/logs/ebpf_base_detector.log` | 操作日志持久化文件 |
 | `/tmp/ebpf_test.log` | **检测结果输出文件**，JSON 格式，每行一条记录，**主要验证位置** |
 
 ### 搜索技巧
@@ -295,7 +295,7 @@ rm -f /tmp/ebpf_test.log
 |---------|---------|---------|
 | Agent 启动报 `failed to load eBPF` | 内核不支持或无 root 权限 | 1) `whoami` 确认 root；2) `uname -r` 确认 >= 5.4；3) `ls /sys/kernel/btf/vmlinux` 确认 BTF |
 | `/tmp/ebpf_test.log` 未生成 | Agent 未成功启动或路径无写权限 | 1) 确认 Terminal A 中出现 `detection results will be written to: /tmp/ebpf_test.log`；2) `ls -la /tmp/ebpf_test.log` 确认文件存在 |
-| 规则加载 count=0 | 配置文件缺失或格式错误 | 1) `ls /opt/cloudsec/plugins/ebpf_base_detector/config/malicious_request_rules.yaml` 确认文件存在；2) 用 `python3 -c "import yaml; yaml.safe_load(open('...'))"` 检查 YAML 语法；3) 确认规则 `enabled: true` |
+| 规则加载 count=0 | 配置文件缺失或格式错误 | 1) `ls /opt/cloudsec/agent/plugins/ebpf_base_detector/config/malicious_request_rules.yaml` 确认文件存在；2) 用 `python3 -c "import yaml; yaml.safe_load(open('...'))"` 检查 YAML 语法；3) 确认规则 `enabled: true` |
 | 端口规则（IOC001）不触发 | connect 未成功（retval != 0） | 1) 确认本地监听已启动：`ss -tlnp \| grep 3333`；2) connect 必须返回 0 才触发，目标不可达时不会告警 |
 | 域名规则（IOC002/003/005）不触发 | DNS 响应未被捕获 | 1) 先确认 DNS 可用：`dig +short example.com`，无输出则 DNS 不可用，改用附录 A 方案；2) DNS 检测依赖 UDP 端口 53/5353 的 recvfrom/recvmsg；3) 检查系统是否使用 `systemd-resolved` 代理：`systemctl status systemd-resolved`；4) 尝试 `nslookup` 替代 `dig` |
 | ip_port 规则（IOC004）不触发 | 目标不可达或端口不匹配 | 1) `ip_port` 要求 IP 和端口同时匹配；2) connect 必须成功；3) 如目标不可达，使用本地监听方式测试 |

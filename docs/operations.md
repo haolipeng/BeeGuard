@@ -10,19 +10,19 @@
 
 ```bash
 # 前台启动
-cd /opt/cloudsec
+cd /opt/cloudsec/agent
 sudo ./bin/agent
 
 # 后台启动
-cd /opt/cloudsec
-sudo nohup ./bin/agent > /opt/cloudsec/logs/agent/agent.log 2>&1 &
+cd /opt/cloudsec/agent
+sudo nohup ./bin/agent > /opt/cloudsec/agent/logs/agent/agent.log 2>&1 &
 ```
 
 ### 停止 Agent
 
 ```bash
 # 优雅停止
-sudo pkill -SIGTERM -f "/opt/cloudsec/bin/agent"
+sudo pkill -SIGTERM -f "/opt/cloudsec/agent/bin/agent"
 
 # 强制停止（包括所有插件）
 sudo pkill -9 -f "/opt/cloudsec"
@@ -31,9 +31,9 @@ sudo pkill -9 -f "/opt/cloudsec"
 ### 重启 Agent
 
 ```bash
-sudo pkill -SIGTERM -f "/opt/cloudsec/bin/agent" && sleep 2 && \
-cd /opt/cloudsec && \
-sudo nohup ./bin/agent > /opt/cloudsec/logs/agent/agent.log 2>&1 &
+sudo pkill -SIGTERM -f "/opt/cloudsec/agent/bin/agent" && sleep 2 && \
+cd /opt/cloudsec/agent && \
+sudo nohup ./bin/agent > /opt/cloudsec/agent/logs/agent/agent.log 2>&1 &
 ```
 
 ---
@@ -48,7 +48,7 @@ ps aux | grep -E "agent|collector|baseline|detector|ebpf_base_detector|nids|scan
 netstat -anp | grep agent
 
 # 查看最近日志
-tail -50 /opt/cloudsec/logs/agent/agent.log
+tail -50 /opt/cloudsec/agent/logs/agent/agent.log
 ```
 
 ---
@@ -59,18 +59,18 @@ tail -50 /opt/cloudsec/logs/agent/agent.log
 
 | 组件 | 路径 |
 |------|------|
-| Agent | `/opt/cloudsec/logs/agent/` |
-| 插件 | `/opt/cloudsec/logs/plugins/<plugin>/` |
+| Agent | `/opt/cloudsec/agent/logs/agent/` |
+| 插件 | `/opt/cloudsec/agent/logs/plugins/<plugin>/` |
 
 ### 日志清理
 
 ```bash
 # 清理所有日志
-sudo rm -rf /opt/cloudsec/logs/agent/*
-sudo rm -rf /opt/cloudsec/logs/plugins/*
+sudo rm -rf /opt/cloudsec/agent/logs/agent/*
+sudo rm -rf /opt/cloudsec/agent/logs/plugins/*
 
 # 清理 7 天前的日志
-find /opt/cloudsec/logs -name "*.log" -mtime +7 -delete
+find /opt/cloudsec/agent/logs -name "*.log" -mtime +7 -delete
 ```
 
 ---
@@ -79,11 +79,11 @@ find /opt/cloudsec/logs -name "*.log" -mtime +7 -delete
 
 ```bash
 # 1. 编辑配置
-sudo vim /opt/cloudsec/agent.yaml
+sudo vim /opt/cloudsec/agent/agent.yaml
 
 # 2. 重启生效
-sudo pkill -SIGTERM -f "/opt/cloudsec/bin/agent"
-cd /opt/cloudsec
+sudo pkill -SIGTERM -f "/opt/cloudsec/agent/bin/agent"
+cd /opt/cloudsec/agent
 sudo ./bin/agent &
 ```
 
@@ -93,7 +93,7 @@ sudo ./bin/agent &
 
 ```bash
 # 1. 停止 Agent
-sudo pkill -SIGTERM -f "/opt/cloudsec/bin/agent"
+sudo pkill -SIGTERM -f "/opt/cloudsec/agent/bin/agent"
 
 # 2. 备份（可选）
 sudo cp -r /opt/cloudsec /opt/cloudsec.bak
@@ -103,7 +103,7 @@ cd /path/to/agent
 make build && make deploy
 
 # 4. 启动
-cd /opt/cloudsec
+cd /opt/cloudsec/agent
 sudo ./bin/agent &
 ```
 
@@ -112,7 +112,7 @@ sudo ./bin/agent &
 ## 六、目录结构
 
 ```
-/opt/cloudsec/
+/opt/cloudsec/agent/
 ├── bin/agent              # 主程序
 ├── agent.yaml             # 配置文件
 ├── plugins/               # 插件目录

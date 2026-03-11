@@ -28,7 +28,7 @@ make build
 make deploy
 ```
 
-**验证**：执行 `ls -la /opt/cloudsec/bin/agent /opt/cloudsec/plugins/ebpf_base_detector/ebpf_base_detector`，两个文件都存在即成功。
+**验证**：执行 `ls -la /opt/cloudsec/agent/bin/agent /opt/cloudsec/agent/plugins/ebpf_base_detector/ebpf_base_detector`，两个文件都存在即成功。
 
 ---
 
@@ -37,7 +37,7 @@ make deploy
 清空之前的测试输出并启动 Agent：
 
 ```bash
-cd /opt/cloudsec
+cd /opt/cloudsec/agent
 rm -f /tmp/ebpf_test.log
 sudo ./bin/agent -standalone -plugins=ebpf_base_detector -output=/tmp/ebpf_test.log -test
 ```
@@ -60,7 +60,7 @@ INFO  eBPF program loaded successfully
 | 位置 | 说明 |
 |------|------|
 | Terminal A (stderr) | 操作日志（启动、错误等），用于确认启动状态 |
-| `/opt/cloudsec/logs/ebpf_base_detector.log` | 操作日志持久化文件 |
+| `/opt/cloudsec/agent/logs/ebpf_base_detector.log` | 操作日志持久化文件 |
 | `/tmp/ebpf_test.log` | **检测结果输出文件**，JSON 格式，每行一条记录，**主要验证位置** |
 
 ### 搜索技巧

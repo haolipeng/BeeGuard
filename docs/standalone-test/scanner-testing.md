@@ -28,7 +28,7 @@ make build
 make deploy
 ```
 
-**验证**：执行 `ls -la /opt/cloudsec/bin/agent /opt/cloudsec/plugins/scanner/scanner`，两个文件都存在即成功。
+**验证**：执行 `ls -la /opt/cloudsec/agent/bin/agent /opt/cloudsec/agent/plugins/scanner/scanner`，两个文件都存在即成功。
 
 ---
 
@@ -37,7 +37,7 @@ make deploy
 打开 **Terminal A**，执行：
 
 ```bash
-cd /opt/cloudsec
+cd /opt/cloudsec/agent
 sudo ./bin/agent -standalone -plugins=scanner -output=/tmp/scanner_test.log -test
 ```
 
@@ -66,13 +66,13 @@ INFO  Virus database loaded  path=/var/lib/clamav
 | 位置 | 说明 |
 |------|------|
 | `/tmp/scanner_test.log` | standalone 模式检测输出，**主要验证位置** |
-| `/opt/cloudsec/logs/scanner.log` | 插件内部运行日志 |
+| `/opt/cloudsec/agent/logs/scanner.log` | 插件内部运行日志 |
 
 ### 搜索技巧
 
 ```bash
 # 搜索恶意文件检测结果
-grep "Malware detected" /opt/cloudsec/logs/scanner.log
+grep "Malware detected" /opt/cloudsec/agent/logs/scanner.log
 
 # 搜索扫描状态
 grep "DataType: 6060\|DataType: 6061" /tmp/scanner_test.log
@@ -145,7 +145,7 @@ curl -X POST http://localhost:8081/api/task \
   -d '{"agent_id":"123456","object_name":"scanner","data_type":6053,"data":"{\"path\":\"/tmp/scanner_test\"}","token":"test-scan-001"}'
 ```
 
-**预期日志**（插件日志 `/opt/cloudsec/logs/scanner.log`）：
+**预期日志**（插件日志 `/opt/cloudsec/agent/logs/scanner.log`）：
 
 ```
 INFO  Malware detected  detail=[Malware] /tmp/scanner_test/eicar_test.com (Eicar-Signature) - 68B md5=44d88612fea8a8f36de82e1278abb02f
@@ -177,7 +177,7 @@ echo 'X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*' > /t
 
 ```bash
 # 验证检测数量
-grep "Malware detected" /opt/cloudsec/logs/scanner.log | grep "/tmp/scanner_test/" | wc -l
+grep "Malware detected" /opt/cloudsec/agent/logs/scanner.log | grep "/tmp/scanner_test/" | wc -l
 ```
 
 **PASS 判定**：检测到的文件数 >= 3（加上用例 1 的文件共 4 个）。
@@ -200,7 +200,7 @@ echo 'X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*' > /o
 
 ```bash
 # 验证白名单路径文件未被扫描
-grep "eicar_safe.com" /opt/cloudsec/logs/scanner.log
+grep "eicar_safe.com" /opt/cloudsec/agent/logs/scanner.log
 ```
 
 **PASS 判定**：grep 无输出（白名单路径下的文件被过滤，不触发检测）。
@@ -240,5 +240,5 @@ rm -f /tmp/scanner_test.log
 | EICAR 文件未被检测 | 扫描尚未触发 | 1) 定时扫描默认 24 小时，首次需手动触发或等待；2) 通过 hcids API 发送 6053 任务触发目录扫描 |
 | 白名单路径文件被检测到 | `scanner.yaml` 白名单配置错误 | 检查 `config/scanner.yaml` 中 `filter.path_whitelist` 是否包含 `/opt/cloudsec` |
 | 扫描导致系统卡顿 | cgroup 资源限制未生效 | 检查 `scanner.yaml` 中 `cgroup.enabled: true`；`cat /sys/fs/cgroup/*/scanner/` 确认 cgroup 已创建 |
-| 插件启动后立即退出 | 配置文件缺失 | `ls /opt/cloudsec/plugins/scanner/config/scanner.yaml` 确认配置文件存在 |
-| 日志文件无内容 | 输出路径错误 | 确认启动命令使用 `-output=/tmp/scanner_test.log`；检查 `/opt/cloudsec/logs/scanner.log` 插件日志 |
+| 插件启动后立即退出 | 配置文件缺失 | `ls /opt/cloudsec/agent/plugins/scanner/config/scanner.yaml` 确认配置文件存在 |
+| 日志文件无内容 | 输出路径错误 | 确认启动命令使用 `-output=/tmp/scanner_test.log`；检查 `/opt/cloudsec/agent/logs/scanner.log` 插件日志 |

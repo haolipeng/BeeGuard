@@ -46,10 +46,10 @@ make deploy
 
 ```bash
 # 确认二进制文件存在
-ls -la /opt/cloudsec/bin/agent /opt/cloudsec/plugins/ebpf_base_detector/ebpf_base_detector
+ls -la /opt/cloudsec/agent/bin/agent /opt/cloudsec/agent/plugins/ebpf_base_detector/ebpf_base_detector
 
 # 确认容器高危命令规则文件存在
-ls -la /opt/cloudsec/plugins/ebpf_base_detector/config/container_dangerous_commands.yaml
+ls -la /opt/cloudsec/agent/plugins/ebpf_base_detector/config/container_dangerous_commands.yaml
 ```
 
 两个二进制文件和规则文件都存在即成功。
@@ -61,7 +61,7 @@ ls -la /opt/cloudsec/plugins/ebpf_base_detector/config/container_dangerous_comma
 打开 **Terminal A**，执行：
 
 ```bash
-cd /opt/cloudsec
+cd /opt/cloudsec/agent
 sudo ./bin/agent -standalone -plugins=ebpf_base_detector -output=stderr -test
 ```
 
@@ -70,7 +70,7 @@ sudo ./bin/agent -standalone -plugins=ebpf_base_detector -output=stderr -test
 启动后查看**插件日志文件**，**必须**看到以下日志行：
 
 ```bash
-grep "Container dangerous command rules loaded" /opt/cloudsec/logs/plugins/ebpf_base_detector/ebpf_base_detector.log
+grep "Container dangerous command rules loaded" /opt/cloudsec/agent/logs/plugins/ebpf_base_detector/ebpf_base_detector.log
 ```
 
 预期输出：
@@ -81,7 +81,7 @@ INFO  Container dangerous command rules loaded successfully  {"version": "1.0", 
 
 **判定规则**：
 - `"rules": 3` → 启动成功，3 条容器规则全部加载，进入 Step 3
-- 出现 `Failed to load container dangerous command rules` → 规则文件缺失或格式错误，检查 `container_dangerous_commands.yaml` 是否在 `/opt/cloudsec/plugins/ebpf_base_detector/config/` 目录下
+- 出现 `Failed to load container dangerous command rules` → 规则文件缺失或格式错误，检查 `container_dangerous_commands.yaml` 是否在 `/opt/cloudsec/agent/plugins/ebpf_base_detector/config/` 目录下
 - `failed to load eBPF` 错误 → 内核不支持，检查前置条件 2、3
 
 同时还应看到：
@@ -98,7 +98,7 @@ Agent 启动后产生两个日志流：
 | 位置 | 内容 | 说明 |
 |------|------|------|
 | Terminal A (stderr) | `dangerous command detected` | Agent 主进程的 standalone 输出，包含 `rule_id`、`rule_name`、`command`、`pid` 等字段，**不包含** `container_id` |
-| `/opt/cloudsec/logs/plugins/ebpf_base_detector/ebpf_base_detector.log` | `Container dangerous command detected` | 插件进程日志，包含 `rule_id`、`comm`、`args`、**`container_id`** 等字段，**推荐用此日志验证** |
+| `/opt/cloudsec/agent/logs/plugins/ebpf_base_detector/ebpf_base_detector.log` | `Container dangerous command detected` | 插件进程日志，包含 `rule_id`、`comm`、`args`、**`container_id`** 等字段，**推荐用此日志验证** |
 
 > **重要**：Terminal A 的 stderr 中显示的是 `dangerous command detected`（不区分容器/宿主机），而包含 `container_id` 的 `Container dangerous command detected` 仅出现在插件日志文件中。测试时应以插件日志为准。
 
@@ -106,17 +106,17 @@ Agent 启动后产生两个日志流：
 
 ```bash
 # 方式一：实时查看插件日志中的容器高危命令告警
-tail -f /opt/cloudsec/logs/plugins/ebpf_base_detector/ebpf_base_detector.log | grep "Container dangerous command detected"
+tail -f /opt/cloudsec/agent/logs/plugins/ebpf_base_detector/ebpf_base_detector.log | grep "Container dangerous command detected"
 
 # 方式二：按规则 ID 精确搜索
-grep "rule_id.*3001" /opt/cloudsec/logs/plugins/ebpf_base_detector/ebpf_base_detector.log
+grep "rule_id.*3001" /opt/cloudsec/agent/logs/plugins/ebpf_base_detector/ebpf_base_detector.log
 
 # 方式三：查看 Terminal A 的 standalone 输出（不含 container_id）
 # 在 Terminal A 的 stderr 中可以看到类似如下的 JSON 日志：
 # INFO  dangerous command detected  {"rule_id": "3001", "rule_name": "容器内包管理器安装", ...}
 
 # 方式四：搜索已轮转的压缩日志（日志量大时当前文件可能已被轮转）
-zcat /opt/cloudsec/logs/plugins/ebpf_base_detector/ebpf_base_detector-*.log.gz 2>/dev/null | grep "Container dangerous command detected"
+zcat /opt/cloudsec/agent/logs/plugins/ebpf_base_detector/ebpf_base_detector-*.log.gz 2>/dev/null | grep "Container dangerous command detected"
 ```
 
 > **注意**：插件日志配置了自动轮转，当容器内安装大量软件包时会产生海量文件事件，可能导致日志快速轮转。如果在当前日志文件中找不到预期告警，请同时搜索已轮转的 `.log.gz` 文件。
@@ -349,9 +349,9 @@ docker ps -a | grep container_test
 | 问题现象 | 可能原因 | 排查步骤 |
 |---------|---------|---------|
 | 容器内命令未触发告警 | 命令不存在 | eBPF 的 `sched_process_exec` 仅在 `execve()` 成功时触发；在容器内用 `which <命令>` 确认二进制文件存在，不存在则需先安装 |
-| 容器内命令未触发告警 | 容器规则文件缺失 | 1) `ls /opt/cloudsec/plugins/ebpf_base_detector/config/container_dangerous_commands.yaml` 确认文件存在；2) 在插件日志中搜索 `Container dangerous command rules loaded` 确认加载成功 |
+| 容器内命令未触发告警 | 容器规则文件缺失 | 1) `ls /opt/cloudsec/agent/plugins/ebpf_base_detector/config/container_dangerous_commands.yaml` 确认文件存在；2) 在插件日志中搜索 `Container dangerous command rules loaded` 确认加载成功 |
 | 容器内命令未触发告警 | mntns_id 判断不生效 | 在插件日志中搜索 `is_container`，确认容器进程的 `is_container=true`；如果 `root_mntns_id=0` 说明 eBPF 自动初始化未完成，先在宿主机执行任意命令触发首次 execve |
-| Terminal A 看不到 `Container dangerous command detected` | 正常行为 | Terminal A 的 stderr 显示的是 standalone 输出 `dangerous command detected`（不区分容器/宿主机）；`Container dangerous command detected`（含 `container_id`）仅出现在插件日志 `/opt/cloudsec/logs/plugins/ebpf_base_detector/ebpf_base_detector.log` 中 |
+| Terminal A 看不到 `Container dangerous command detected` | 正常行为 | Terminal A 的 stderr 显示的是 standalone 输出 `dangerous command detected`（不区分容器/宿主机）；`Container dangerous command detected`（含 `container_id`）仅出现在插件日志 `/opt/cloudsec/agent/logs/plugins/ebpf_base_detector/ebpf_base_detector.log` 中 |
 | `container_id` 为空 | cgroup 格式不匹配 | 在容器内查看 `cat /proc/1/cgroup`，确认输出中包含 Docker 容器 ID（64 位十六进制字符串） |
 | 宿主机命令也触发了容器告警 | mntns_id 计算错误 | 检查插件日志中宿主机进程的 `mntns_id` 和 `root_mntns_id` 是否相等；如不相等说明初始化有误 |
 | Docker 不可用 | Docker 服务未启动 | `systemctl status docker`，确认服务运行中 |
@@ -359,5 +359,5 @@ docker ps -a | grep container_test
 | 容器内 pip/npm/gem 未触发告警 | 脚本类命令限制 | 这些命令本质是脚本文件，内核 `comm` 字段为解释器名（如 `python3`），检测器的反误报机制会过滤掉 `comm` 与规则期望命令名不一致的事件，属于已知限制 |
 | 告警出现但 `rule_id` 不符 | 命令同时匹配多条规则 | 正常现象，检查命令是否匹配了其他规则的 pattern |
 | 告警延迟超过 5 秒 | standalone 刷新间隔较长 | eBPF 事件本身无延迟，延迟来自用户态轮询；检查日志轮转配置 |
-| 之前的告警在当前日志中消失 | 日志轮转 | 大量容器内操作（如 `apt-get install`）会产生海量文件事件导致日志快速轮转；用 `zcat /opt/cloudsec/logs/plugins/ebpf_base_detector/ebpf_base_detector-*.log.gz \| grep "Container dangerous command detected"` 搜索已归档日志 |
+| 之前的告警在当前日志中消失 | 日志轮转 | 大量容器内操作（如 `apt-get install`）会产生海量文件事件导致日志快速轮转；用 `zcat /opt/cloudsec/agent/logs/plugins/ebpf_base_detector/ebpf_base_detector-*.log.gz \| grep "Container dangerous command detected"` 搜索已归档日志 |
 | 其他已运行容器产生干扰告警 | 环境中存在带健康检查的容器 | 通过 `container_id` 字段区分不同容器的告警；可用 `docker ps` 查看当前运行的容器及其 ID |

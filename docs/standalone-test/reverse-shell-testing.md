@@ -29,7 +29,7 @@ make build
 make deploy
 ```
 
-**验证**：执行 `ls -la /opt/cloudsec/bin/agent /opt/cloudsec/plugins/ebpf_base_detector/ebpf_base_detector`，两个文件都存在即成功。
+**验证**：执行 `ls -la /opt/cloudsec/agent/bin/agent /opt/cloudsec/agent/plugins/ebpf_base_detector/ebpf_base_detector`，两个文件都存在即成功。
 
 ---
 
@@ -38,7 +38,7 @@ make deploy
 清空之前的测试输出并启动 Agent：
 
 ```bash
-cd /opt/cloudsec
+cd /opt/cloudsec/agent
 rm -f /tmp/ebpf_test.log
 sudo ./bin/agent -standalone -plugins=ebpf_base_detector -output=/tmp/ebpf_test.log -test
 ```
@@ -61,7 +61,7 @@ INFO  eBPF program loaded successfully
 | 位置 | 说明 |
 |------|------|
 | Terminal A (stderr) | 操作日志（启动、错误等），用于确认启动状态 |
-| `/opt/cloudsec/logs/ebpf_base_detector.log` | 操作日志持久化文件 |
+| `/opt/cloudsec/agent/logs/ebpf_base_detector.log` | 操作日志持久化文件 |
 | `/tmp/ebpf_test.log` | **检测结果输出文件**，JSON 格式，每行一条记录，**主要验证位置** |
 
 ### 搜索技巧
@@ -271,7 +271,7 @@ rm -f /tmp/ebpf_test.log
 | `/tmp/ebpf_test.log` 未生成 | Agent 未成功启动或路径无写权限 | 1) 确认 Terminal A 中出现 `detection results will be written to: /tmp/ebpf_test.log`；2) `ls -la /tmp/ebpf_test.log` 确认文件存在 |
 | `nc -e` 报错 `invalid option` | 系统默认 nc 不支持 -e 选项 | 安装 `netcat-traditional`：`sudo apt install netcat-traditional`，使用 `nc.traditional -e` |
 | bash /dev/tcp 报错 `No such file` | 使用了 dash/sh 而非 bash | 确认使用 bash：`bash -c 'echo $BASH_VERSION'`；确保触发命令以 `bash -c` 开头 |
-| 命令执行了但无告警 | 监听端未启动或连接失败 | 1) 确认 Terminal B 的 `nc -lvp` 在运行；2) 确认端口号一致；3) 检查操作日志：`grep "Reverse shell" /opt/cloudsec/logs/ebpf_base_detector.log` |
+| 命令执行了但无告警 | 监听端未启动或连接失败 | 1) 确认 Terminal B 的 `nc -lvp` 在运行；2) 确认端口号一致；3) 检查操作日志：`grep "Reverse shell" /opt/cloudsec/agent/logs/ebpf_base_detector.log` |
 | fd_type=1 或 2（不是 3） | 只有一个 FD 指向 socket | 检查反弹命令是否正确重定向了 stdin 和 stdout；fd_type=1 表示仅 stdin，fd_type=2 表示仅 stdout |
 | remote_ip 显示 0.0.0.0 | socket 未成功连接 | 检查 Terminal B 监听端是否在触发命令之前启动 |
 | 告警延迟超过 5 秒 | standalone 刷新间隔较长 | 检查配置中 `flush_interval`（默认 1 秒）；eBPF 事件本身无延迟，延迟来自用户态轮询 |

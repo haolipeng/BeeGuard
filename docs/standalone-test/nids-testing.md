@@ -33,9 +33,9 @@ make build
 make deploy
 ```
 
-**验证**：执行 `ls -la /opt/cloudsec/bin/agent /opt/cloudsec/plugins/nids/nids`，两个文件都存在即成功。
+**验证**：执行 `ls -la /opt/cloudsec/agent/bin/agent /opt/cloudsec/agent/plugins/nids/nids`，两个文件都存在即成功。
 
-**验证规则文件**：执行 `ls -la /opt/cloudsec/plugins/nids/config/nids.rules`，文件存在且非空。
+**验证规则文件**：执行 `ls -la /opt/cloudsec/agent/plugins/nids/config/nids.rules`，文件存在且非空。
 
 ---
 
@@ -44,7 +44,7 @@ make deploy
 打开 **Terminal A**，执行：
 
 ```bash
-cd /opt/cloudsec
+cd /opt/cloudsec/agent
 sudo ./bin/agent -standalone -plugins=nids -output=stderr -test
 ```
 
@@ -61,16 +61,16 @@ sudo ./bin/agent -standalone -plugins=nids -output=stderr -test
 
 **判定规则**：
 - `Suricata rules loaded  count=20` → 启动成功，20 条规则全部加载，进入 Step 3
-- `count=0` 或该行未出现 → 启动失败，检查 `nids.rules` 是否在 `/opt/cloudsec/plugins/nids/config/` 目录下
+- `count=0` 或该行未出现 → 启动失败，检查 `nids.rules` 是否在 `/opt/cloudsec/agent/plugins/nids/config/` 目录下
 - `Failed to create packet capture` 错误 → 无 root 权限或 libpcap 缺失，检查前置条件 2、4
-- `Failed to load config` 错误 → 检查 `nids.yaml` 是否在 `/opt/cloudsec/plugins/nids/config/` 目录下
+- `Failed to load config` 错误 → 检查 `nids.yaml` 是否在 `/opt/cloudsec/agent/plugins/nids/config/` 目录下
 
 ### 日志位置
 
 | 位置 | 说明 |
 |------|------|
 | Terminal A (stderr) | 实时输出，**主要观察位置** |
-| `/opt/cloudsec/logs/plugins/nids/nids.log` | 同内容持久化文件，可用 grep 搜索 |
+| `/opt/cloudsec/agent/logs/plugins/nids/nids.log` | 同内容持久化文件，可用 grep 搜索 |
 
 ### 搜索技巧
 
@@ -390,10 +390,10 @@ sudo systemctl stop nginx
 
 | 问题现象 | 可能原因 | 排查步骤 |
 |---------|---------|---------|
-| Agent 启动后 nids 插件未加载 | 插件文件缺失或无执行权限 | 1) `ls -la /opt/cloudsec/plugins/nids/nids` 确认文件存在且有执行权限；2) 确认启动命令包含 `-plugins=nids` |
+| Agent 启动后 nids 插件未加载 | 插件文件缺失或无执行权限 | 1) `ls -la /opt/cloudsec/agent/plugins/nids/nids` 确认文件存在且有执行权限；2) 确认启动命令包含 `-plugins=nids` |
 | 启动报 `Failed to create packet capture` | 无 root 权限或 libpcap 缺失 | 1) `whoami` 确认 root；2) `ldconfig -p \| grep libpcap` 确认 libpcap 已安装 |
-| 启动报 `Failed to load config` | 配置文件缺失 | `ls /opt/cloudsec/plugins/nids/config/nids.yaml` 确认文件存在；检查 YAML 格式 |
-| 规则加载 count=0 | 规则文件缺失或格式错误 | 1) `ls /opt/cloudsec/plugins/nids/config/nids.rules` 确认文件存在；2) 检查规则文件格式是否符合 Suricata 语法 |
+| 启动报 `Failed to load config` | 配置文件缺失 | `ls /opt/cloudsec/agent/plugins/nids/config/nids.yaml` 确认文件存在；检查 YAML 格式 |
+| 规则加载 count=0 | 规则文件缺失或格式错误 | 1) `ls /opt/cloudsec/agent/plugins/nids/config/nids.rules` 确认文件存在；2) 检查规则文件格式是否符合 Suricata 语法 |
 | curl 发送请求但无告警 | Nginx 未运行或网卡配置错误 | 1) `curl http://127.0.0.1/` 确认 Nginx 响应；2) 确认 `nids.yaml` 的 interface 为 `lo`；3) `tcpdump -i lo port 80 -c 5` 验证能抓到包 |
 | 路径遍历（SID 4001/4003）未触发 | curl 自动规范化路径 | 确认 curl 加了 `--path-as-is`，否则 `../` 会被自动去除 |
 | Log4j2 URI（SID 1002）未触发 | curl globbing 破坏 `${}` | 确认 curl 加了 `-g`，否则 `{` `}` 会被当作 globbing 语法处理 |

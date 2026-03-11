@@ -41,7 +41,7 @@ make deploy
 **验证**：
 
 ```bash
-ls -la /opt/cloudsec/bin/agent /opt/cloudsec/plugins/ebpf_base_detector/ebpf_base_detector
+ls -la /opt/cloudsec/agent/bin/agent /opt/cloudsec/agent/plugins/ebpf_base_detector/ebpf_base_detector
 ```
 
 两个文件都存在即成功。
@@ -73,7 +73,7 @@ sda      disk  50G
 打开 **Terminal A**，执行：
 
 ```bash
-cd /opt/cloudsec
+cd /opt/cloudsec/agent
 sudo ./bin/agent -standalone -plugins=ebpf_base_detector -output=stderr -test
 ```
 

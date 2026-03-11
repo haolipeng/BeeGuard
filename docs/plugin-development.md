@@ -351,7 +351,7 @@ go build -o your_plugin
 ### 6.2 部署结构
 
 ```
-/opt/cloudsec/plugins/
+/opt/cloudsec/agent/plugins/
 ├── your_plugin/
 │   ├── your_plugin          # 可执行文件
 │   └── config/              # 配置目录（可选）
@@ -363,7 +363,7 @@ go build -o your_plugin
 在 Agent 主配置中指定插件目录：
 
 ```yaml
-plugins_directory: "/opt/cloudsec/plugins"
+plugins_directory: "/opt/cloudsec/agent/plugins"
 ```
 
 ---
@@ -376,8 +376,8 @@ plugins_directory: "/opt/cloudsec/plugins"
 
 ```bash
 # 仅加载你的插件
-cd /opt/cloudsec
-sudo ./bin/agent -standalone -plugins=your_plugin -output=/opt/cloudsec/logs/agent.log -test
+cd /opt/cloudsec/agent
+sudo ./bin/agent -standalone -plugins=your_plugin -output=/opt/cloudsec/agent/logs/agent.log -test
 ```
 
 ### 7.2 日志输出

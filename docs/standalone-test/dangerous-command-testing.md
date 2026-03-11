@@ -26,7 +26,7 @@ make build
 make deploy
 ```
 
-**验证**：执行 `ls -la /opt/cloudsec/bin/agent /opt/cloudsec/plugins/ebpf_base_detector/ebpf_base_detector`，两个文件都存在即成功。
+**验证**：执行 `ls -la /opt/cloudsec/agent/bin/agent /opt/cloudsec/agent/plugins/ebpf_base_detector/ebpf_base_detector`，两个文件都存在即成功。
 
 ---
 
@@ -35,7 +35,7 @@ make deploy
 打开 **Terminal A**，执行：
 
 ```bash
-cd /opt/cloudsec
+cd /opt/cloudsec/agent
 sudo ./bin/agent -standalone -plugins=ebpf_base_detector -output=stderr -test
 ```
 
@@ -49,7 +49,7 @@ INFO  Detection rules loaded  count=4  source=config/dangerous_commands.yaml
 
 **判定规则**：
 - `count=4` → 启动成功，4 条规则全部加载，进入 Step 3
-- `count=0` 或该行未出现 → 启动失败，检查 `dangerous_commands.yaml` 是否在 `/opt/cloudsec/plugins/ebpf_base_detector/config/` 目录下
+- `count=0` 或该行未出现 → 启动失败，检查 `dangerous_commands.yaml` 是否在 `/opt/cloudsec/agent/plugins/ebpf_base_detector/config/` 目录下
 - `failed to load eBPF` 错误 → 内核不支持，检查前置条件 2、3
 
 ### 日志位置
@@ -57,7 +57,7 @@ INFO  Detection rules loaded  count=4  source=config/dangerous_commands.yaml
 | 位置 | 说明 |
 |------|------|
 | Terminal A (stderr) | 实时输出，**主要观察位置** |
-| `/opt/cloudsec/logs/ebpf_base_detector.log` | 同内容持久化文件，可用 grep 搜索 |
+| `/opt/cloudsec/agent/logs/ebpf_base_detector.log` | 同内容持久化文件，可用 grep 搜索 |
 
 ### 搜索技巧
 
@@ -218,8 +218,8 @@ rm -f /tmp/dc003_test /tmp/dc003_suid
 |---------|---------|---------|
 | Agent 启动报 `failed to load eBPF` | 内核不支持或无 root 权限 | 1) `whoami` 确认 root；2) `uname -r` 确认 >= 5.4；3) `ls /sys/kernel/btf/vmlinux` 确认 BTF |
 | Terminal A 无任何输出 | 输出重定向错误 | 确认启动命令使用 `-output=stderr`，而非文件路径 |
-| 规则加载 count=0 | 配置文件缺失或格式错误 | 1) `ls /opt/cloudsec/plugins/ebpf_base_detector/config/dangerous_commands.yaml` 确认文件存在；2) 用 `python3 -c "import yaml; yaml.safe_load(open('...'))"` 检查 YAML 语法 |
-| 命令执行了但无告警 | 命令参数不匹配规则 | 1) 对照规则的 `patterns` 检查命令行是否匹配；2) 在日志文件中搜索：`grep "rule_id" /opt/cloudsec/logs/ebpf_base_detector.log` |
+| 规则加载 count=0 | 配置文件缺失或格式错误 | 1) `ls /opt/cloudsec/agent/plugins/ebpf_base_detector/config/dangerous_commands.yaml` 确认文件存在；2) 用 `python3 -c "import yaml; yaml.safe_load(open('...'))"` 检查 YAML 语法 |
+| 命令执行了但无告警 | 命令参数不匹配规则 | 1) 对照规则的 `patterns` 检查命令行是否匹配；2) 在日志文件中搜索：`grep "rule_id" /opt/cloudsec/agent/logs/ebpf_base_detector.log` |
 | 管道命令未触发告警 | 管道中每个子命令是独立 execve | 使用 `bash -c '完整管道命令'` 包装，让 eBPF 在 bash 的 execve 参数中捕获完整字符串 |
 | bash 内建命令未触发 | 内建命令不产生 execve 事件 | `history`、`export`、`cd` 等是 shell 内建命令，eBPF 无法捕获；需 `bash -c "..."` 包装 |
 | 告警出现但 rule_id 不符预期 | 命令同时匹配多条规则 | 正常现象，一条命令可能触发多条规则告警 |

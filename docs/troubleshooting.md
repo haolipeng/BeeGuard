@@ -19,10 +19,10 @@ netstat -tlnp | grep 50051
 telnet <server_ip> 50051
 
 # 3. 检查配置文件中 server 地址
-cat /opt/cloudsec/agent.yaml | grep server
+cat /opt/cloudsec/agent/agent.yaml | grep server
 
 # 4. 查看 Agent 日志
-tail -f /opt/cloudsec/logs/agent/agent.log
+tail -f /opt/cloudsec/agent/logs/agent/agent.log
 ```
 
 ---
@@ -36,10 +36,10 @@ tail -f /opt/cloudsec/logs/agent/agent.log
 **排查步骤：**
 ```bash
 # 1. 检查插件文件是否存在
-ls -la /opt/cloudsec/plugins/
+ls -la /opt/cloudsec/agent/plugins/
 
 # 2. 检查文件权限
-chmod +x /opt/cloudsec/plugins/*/
+chmod +x /opt/cloudsec/agent/plugins/*/
 
 # 3. 检查依赖（ebpf_base_detector 插件需要 eBPF 环境）
 ls /sys/kernel/btf/vmlinux
@@ -54,8 +54,8 @@ ls /sys/kernel/btf/vmlinux
 
 **排查：** 使用 Standalone 模式本地测试
 ```bash
-cd /opt/cloudsec
-sudo ./bin/agent -standalone -plugins=ebpf_base_detector -output=/opt/cloudsec/logs/agent.log -test
+cd /opt/cloudsec/agent
+sudo ./bin/agent -standalone -plugins=ebpf_base_detector -output=/opt/cloudsec/agent/logs/agent.log -test
 ```
 
 ---
@@ -83,7 +83,7 @@ whoami
 **排查步骤：**
 ```bash
 # 1. 检查规则配置
-cat /opt/cloudsec/plugins/ebpf_base_detector/config/dangerous_commands.yaml
+cat /opt/cloudsec/agent/plugins/ebpf_base_detector/config/dangerous_commands.yaml
 
 # 2. 确认 ebpf_base_detector 已启动
 ps aux | grep ebpf_base_detector
@@ -95,11 +95,11 @@ ps aux | grep ebpf_base_detector
 
 | 组件 | 日志路径 |
 |------|----------|
-| Agent | `/opt/cloudsec/logs/agent/agent.log` |
-| Collector | `/opt/cloudsec/logs/plugins/collector/collector.log` |
-| Baseline | `/opt/cloudsec/logs/plugins/baseline/baseline.log` |
-| Detector | `/opt/cloudsec/logs/plugins/detector/detector.log` |
-| ebpf_base_detector | `/opt/cloudsec/logs/plugins/ebpf_base_detector/ebpf_base_detector.log` |
+| Agent | `/opt/cloudsec/agent/logs/agent/agent.log` |
+| Collector | `/opt/cloudsec/agent/logs/plugins/collector/collector.log` |
+| Baseline | `/opt/cloudsec/agent/logs/plugins/baseline/baseline.log` |
+| Detector | `/opt/cloudsec/agent/logs/plugins/detector/detector.log` |
+| ebpf_base_detector | `/opt/cloudsec/agent/logs/plugins/ebpf_base_detector/ebpf_base_detector.log` |
 
 ---
 
@@ -113,7 +113,7 @@ ps aux | grep agent
 ps aux | grep -E "collector|baseline|detector|ebpf_base_detector|nids|scanner"
 
 # 查看最近错误
-grep -i error /opt/cloudsec/logs/agent/agent.log | tail -20
+grep -i error /opt/cloudsec/agent/logs/agent/agent.log | tail -20
 
 # 检查端口占用
 netstat -tlnp | grep agent
