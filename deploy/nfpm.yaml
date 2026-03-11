@@ -14,7 +14,7 @@ license: Proprietary
 contents:
   # --- Agent binary ---
   - src: ../build/agent
-    dst: /opt/cloudsec/bin/agent
+    dst: /opt/cloudsec/agent/bin/agent
     file_info:
       mode: 0755
       owner: root
@@ -22,7 +22,7 @@ contents:
 
   # --- cloudsecctl ---
   - src: ../build/cloudsecctl
-    dst: /opt/cloudsec/bin/cloudsecctl
+    dst: /opt/cloudsec/agent/bin/cloudsecctl
     file_info:
       mode: 0755
       owner: root
@@ -30,7 +30,7 @@ contents:
 
   # --- Service file ---
   - src: ./cloudsec-agent.service
-    dst: /opt/cloudsec/cloudsec-agent.service
+    dst: /opt/cloudsec/agent/cloudsec-agent.service
     file_info:
       mode: 0644
       owner: root
@@ -38,7 +38,7 @@ contents:
 
   # --- Agent config ---
   - src: ./agent.yaml
-    dst: /opt/cloudsec/agent.yaml
+    dst: /opt/cloudsec/agent/agent.yaml
     type: config|noreplace
     file_info:
       mode: 0644
@@ -47,42 +47,42 @@ contents:
 
   # --- Plugin binaries ---
   - src: ../build/plugins/collector
-    dst: /opt/cloudsec/plugins/collector/collector
+    dst: /opt/cloudsec/agent/plugins/collector/collector
     file_info:
       mode: 0755
       owner: root
       group: root
 
   - src: ../build/plugins/baseline
-    dst: /opt/cloudsec/plugins/baseline/baseline
+    dst: /opt/cloudsec/agent/plugins/baseline/baseline
     file_info:
       mode: 0755
       owner: root
       group: root
 
   - src: ../build/plugins/detector
-    dst: /opt/cloudsec/plugins/detector/detector
+    dst: /opt/cloudsec/agent/plugins/detector/detector
     file_info:
       mode: 0755
       owner: root
       group: root
 
   - src: ../build/plugins/ebpf_base_detector
-    dst: /opt/cloudsec/plugins/ebpf_base_detector/ebpf_base_detector
+    dst: /opt/cloudsec/agent/plugins/ebpf_base_detector/ebpf_base_detector
     file_info:
       mode: 0755
       owner: root
       group: root
 
   - src: ../build/plugins/nids
-    dst: /opt/cloudsec/plugins/nids/nids
+    dst: /opt/cloudsec/agent/plugins/nids/nids
     file_info:
       mode: 0755
       owner: root
       group: root
 
   - src: ../build/plugins/scanner
-    dst: /opt/cloudsec/plugins/scanner/scanner
+    dst: /opt/cloudsec/agent/plugins/scanner/scanner
     file_info:
       mode: 0755
       owner: root
@@ -90,7 +90,7 @@ contents:
 
   # --- detector config ---
   - src: ../business_plugins/detector/config/rules/ssh_brute_force.yaml
-    dst: /opt/cloudsec/plugins/detector/config/rules/ssh_brute_force.yaml
+    dst: /opt/cloudsec/agent/plugins/detector/config/rules/ssh_brute_force.yaml
     type: config|noreplace
     file_info:
       mode: 0644
@@ -98,7 +98,7 @@ contents:
       group: root
 
   - src: ../business_plugins/detector/config/rules/ftp_brute_force.yaml
-    dst: /opt/cloudsec/plugins/detector/config/rules/ftp_brute_force.yaml
+    dst: /opt/cloudsec/agent/plugins/detector/config/rules/ftp_brute_force.yaml
     type: config|noreplace
     file_info:
       mode: 0644
@@ -106,7 +106,7 @@ contents:
       group: root
 
   - src: ../business_plugins/detector/config/rules/ssh_anomaly_login.yaml
-    dst: /opt/cloudsec/plugins/detector/config/rules/ssh_anomaly_login.yaml
+    dst: /opt/cloudsec/agent/plugins/detector/config/rules/ssh_anomaly_login.yaml
     type: config|noreplace
     file_info:
       mode: 0644
@@ -115,7 +115,7 @@ contents:
 
   # --- ebpf_base_detector config ---
   - src: ../business_plugins/ebpf_base_detector/config/dangerous_commands.yaml
-    dst: /opt/cloudsec/plugins/ebpf_base_detector/config/dangerous_commands.yaml
+    dst: /opt/cloudsec/agent/plugins/ebpf_base_detector/config/dangerous_commands.yaml
     type: config|noreplace
     file_info:
       mode: 0644
@@ -123,7 +123,7 @@ contents:
       group: root
 
   - src: ../business_plugins/ebpf_base_detector/config/privilege_escalation_whitelist.yaml
-    dst: /opt/cloudsec/plugins/ebpf_base_detector/config/privilege_escalation_whitelist.yaml
+    dst: /opt/cloudsec/agent/plugins/ebpf_base_detector/config/privilege_escalation_whitelist.yaml
     type: config|noreplace
     file_info:
       mode: 0644
@@ -131,7 +131,7 @@ contents:
       group: root
 
   - src: ../business_plugins/ebpf_base_detector/config/malicious_request_rules.yaml
-    dst: /opt/cloudsec/plugins/ebpf_base_detector/config/malicious_request_rules.yaml
+    dst: /opt/cloudsec/agent/plugins/ebpf_base_detector/config/malicious_request_rules.yaml
     type: config|noreplace
     file_info:
       mode: 0644
@@ -139,7 +139,7 @@ contents:
       group: root
 
   - src: ../business_plugins/ebpf_base_detector/config/sensitive_file_rules.yaml
-    dst: /opt/cloudsec/plugins/ebpf_base_detector/config/sensitive_file_rules.yaml
+    dst: /opt/cloudsec/agent/plugins/ebpf_base_detector/config/sensitive_file_rules.yaml
     type: config|noreplace
     file_info:
       mode: 0644
@@ -147,7 +147,7 @@ contents:
       group: root
 
   - src: ../business_plugins/ebpf_base_detector/config/file_monitor_whitelist.yaml
-    dst: /opt/cloudsec/plugins/ebpf_base_detector/config/file_monitor_whitelist.yaml
+    dst: /opt/cloudsec/agent/plugins/ebpf_base_detector/config/file_monitor_whitelist.yaml
     type: config|noreplace
     file_info:
       mode: 0644
@@ -156,7 +156,7 @@ contents:
 
   # --- baseline config ---
   - src: ../business_plugins/baseline/config/linux/1200.yaml
-    dst: /opt/cloudsec/plugins/baseline/config/linux/1200.yaml
+    dst: /opt/cloudsec/agent/plugins/baseline/config/linux/1200.yaml
     type: config|noreplace
     file_info:
       mode: 0644
@@ -164,7 +164,7 @@ contents:
       group: root
 
   - src: ../business_plugins/baseline/config/linux/1200_simple.yaml
-    dst: /opt/cloudsec/plugins/baseline/config/linux/1200_simple.yaml
+    dst: /opt/cloudsec/agent/plugins/baseline/config/linux/1200_simple.yaml
     type: config|noreplace
     file_info:
       mode: 0644
@@ -172,7 +172,7 @@ contents:
       group: root
 
   - src: ../business_plugins/baseline/config/linux/1300.yaml
-    dst: /opt/cloudsec/plugins/baseline/config/linux/1300.yaml
+    dst: /opt/cloudsec/agent/plugins/baseline/config/linux/1300.yaml
     type: config|noreplace
     file_info:
       mode: 0644
@@ -180,7 +180,7 @@ contents:
       group: root
 
   - src: ../business_plugins/baseline/config/linux/1400.yaml
-    dst: /opt/cloudsec/plugins/baseline/config/linux/1400.yaml
+    dst: /opt/cloudsec/agent/plugins/baseline/config/linux/1400.yaml
     type: config|noreplace
     file_info:
       mode: 0644
@@ -188,7 +188,7 @@ contents:
       group: root
 
   - src: ../business_plugins/baseline/config/linux/5000.yaml
-    dst: /opt/cloudsec/plugins/baseline/config/linux/5000.yaml
+    dst: /opt/cloudsec/agent/plugins/baseline/config/linux/5000.yaml
     type: config|noreplace
     file_info:
       mode: 0644
@@ -197,7 +197,7 @@ contents:
 
   # --- nids config ---
   - src: ../business_plugins/nids/config/nids.yaml
-    dst: /opt/cloudsec/plugins/nids/config/nids.yaml
+    dst: /opt/cloudsec/agent/plugins/nids/config/nids.yaml
     type: config|noreplace
     file_info:
       mode: 0644
@@ -205,7 +205,7 @@ contents:
       group: root
 
   - src: ../business_plugins/nids/config/nids.rules
-    dst: /opt/cloudsec/plugins/nids/config/nids.rules
+    dst: /opt/cloudsec/agent/plugins/nids/config/nids.rules
     type: config|noreplace
     file_info:
       mode: 0644
@@ -214,7 +214,7 @@ contents:
 
   # --- scanner config ---
   - src: ../business_plugins/scanner/config/scanner.yaml
-    dst: /opt/cloudsec/plugins/scanner/config/scanner.yaml
+    dst: /opt/cloudsec/agent/plugins/scanner/config/scanner.yaml
     type: config|noreplace
     file_info:
       mode: 0644

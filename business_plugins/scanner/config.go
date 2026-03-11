@@ -156,7 +156,7 @@ func defaultConfig() *ScannerConfig {
 				{Path: "/var/www", MaxDepth: 20},
 			},
 			Filter: FilterConfig{
-				PathWhitelist: []string{"/dev", "/proc", "/sys", "/boot", "/opt/cloudsec"},
+				PathWhitelist: []string{"/dev", "/proc", "/sys", "/boot", "/opt/cloudsec/agent"},
 				SkipFileTypes: []string{"video", "audio", "image"},
 				MinFileSize:   4,
 				MaxFileSize:   18874368,

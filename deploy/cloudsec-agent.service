@@ -5,14 +5,14 @@ After=network-online.target network.target syslog.target
 
 [Service]
 Type=simple
-ExecStart=/opt/cloudsec/bin/agent -config /opt/cloudsec/agent.yaml
-WorkingDirectory=/opt/cloudsec
+ExecStart=/opt/cloudsec/agent/bin/agent -config /opt/cloudsec/agent/agent.yaml
+WorkingDirectory=/opt/cloudsec/agent
 Restart=always
 RestartSec=45
 KillMode=control-group
 MemoryMax=500M
 CPUQuota=20%
-EnvironmentFile=-/opt/cloudsec/specified_env
+EnvironmentFile=-/opt/cloudsec/agent/specified_env
 
 [Install]
 WantedBy=multi-user.target

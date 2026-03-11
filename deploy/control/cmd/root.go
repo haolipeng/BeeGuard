@@ -7,7 +7,7 @@ import (
 
 const (
 	serviceName  = "cloudsec-agent"
-	agentWorkDir = "/opt/cloudsec/"
+	agentWorkDir = "/opt/cloudsec/agent/"
 	agentFile    = agentWorkDir + "bin/agent"
 	agentConfig  = agentWorkDir + "agent.yaml"
 	cfgFile      = agentWorkDir + "specified_env"

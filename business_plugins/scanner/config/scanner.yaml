@@ -30,7 +30,7 @@ scanner:
       - "/proc"
       - "/sys"
       - "/boot"
-      - "/opt/cloudsec"
+      - "/opt/cloudsec/agent"
       - "/usr/bin/upx"
       - "/usr/bin/nc"
     skip_file_types:
