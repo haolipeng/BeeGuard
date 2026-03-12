@@ -1246,6 +1246,8 @@ static __noinline int handle_inode_create(struct pt_regs *ctx)
     evt->new_path[0] = 0;
     evt->old_path[0] = 0;
     evt->s_id[0] = 0;
+    evt->mntns_id = 0;
+    evt->root_mntns_id = 0;
 
     task = (struct task_struct *)bpf_get_current_task();
 
@@ -1288,6 +1290,9 @@ static __noinline int handle_inode_create(struct pt_regs *ctx)
         evt->local_port = BPF_CORE_READ(sk, __sk_common.skc_num);
     }
 
+    evt->mntns_id = query_mntns_id(task);
+    evt->root_mntns_id = get_root_mntns_id();
+
     bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, evt, sizeof(*evt));
 
     return 0;
@@ -1329,6 +1334,8 @@ static __noinline int handle_inode_rename(struct pt_regs *ctx)
     evt->new_path[0] = 0;
     evt->old_path[0] = 0;
     evt->s_id[0] = 0;
+    evt->mntns_id = 0;
+    evt->root_mntns_id = 0;
 
     task = (struct task_struct *)bpf_get_current_task();
 
@@ -1372,6 +1379,9 @@ static __noinline int handle_inode_rename(struct pt_regs *ctx)
 
     if (new_path_len > 1 && new_path_len <= PATH_BUF_SIZE)
         bpf_probe_read_kernel(evt->new_path, new_path_len & PATH_BUF_MASK, new_path_start);
+
+    evt->mntns_id = query_mntns_id(task);
+    evt->root_mntns_id = get_root_mntns_id();
 
     bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, evt, sizeof(*evt));
 
@@ -1417,6 +1427,8 @@ static __noinline int handle_inode_unlink(struct pt_regs *ctx)
     evt->new_path[0] = 0;
     evt->old_path[0] = 0;
     evt->s_id[0] = 0;
+    evt->mntns_id = 0;
+    evt->root_mntns_id = 0;
 
     task = (struct task_struct *)bpf_get_current_task();
 
@@ -1458,6 +1470,9 @@ static __noinline int handle_inode_unlink(struct pt_regs *ctx)
         evt->local_ip = BPF_CORE_READ(sk, __sk_common.skc_rcv_saddr);
         evt->local_port = BPF_CORE_READ(sk, __sk_common.skc_num);
     }
+
+    evt->mntns_id = query_mntns_id(task);
+    evt->root_mntns_id = get_root_mntns_id();
 
     bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, evt, sizeof(*evt));
 
