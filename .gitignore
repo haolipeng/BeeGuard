@@ -51,6 +51,9 @@ vendor/
 develop/
 scripts/
 
+# 文档目录
+docs/
+
 # Machine ID 文件
 machine-id
 bin/agent

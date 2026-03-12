@@ -17,6 +17,7 @@ type eventHandlerCtx struct {
 	rsDetector    *ReverseShellDetector
 	mrDetector    *MaliciousRequestDetector
 	sfDetector    *SensitiveFileDetector
+	csfDetector   *SensitiveFileDetector      // 容器敏感文件（复用同类型，加载独立规则）
 	ceDetector    *ContainerEscapeDetector   // 容器逃逸
 	crsDetector   *ContainerReverseShellDetector // 容器反弹 Shell
 	containerMeta *ContainerMetaCache        // 容器元数据缓存
@@ -320,6 +321,22 @@ func handleFile(ctx *eventHandlerCtx, raw []byte) error {
 				"action", actionStr, "new_path", newPath, "pid", evt.PID, "comm", cstring(evt.Comm[:]))
 			if err := ctx.client.SendRecord(alertRecord); err != nil {
 				ctx.logger.Error("Failed to send sensitive file alert record to agent", "error", err)
+			}
+		}
+	}
+	// 容器敏感文件检测
+	isContainer := IsContainer(evt.MntnsID, evt.RootMntnsID)
+	if isContainer && ctx.csfDetector != nil {
+		csfResult := ctx.csfDetector.Detect(newPath)
+		if csfResult != nil {
+			csfRecord := BuildContainerSensitiveFileRecord(&evt, csfResult, pidTreeStr, ctx.containerMeta)
+			ctx.logger.Warn("Container sensitive file operation detected",
+				"rule_id", csfResult.RuleID, "rule_name", csfResult.RuleName,
+				"severity", csfResult.Severity, "action", actionStr,
+				"new_path", newPath, "pid", evt.PID, "comm", cstring(evt.Comm[:]),
+				"container_id", csfRecord.Data.Fields["container_id"])
+			if err := ctx.client.SendRecord(csfRecord); err != nil {
+				ctx.logger.Error("Failed to send container sensitive file record", "error", err)
 			}
 		}
 	}

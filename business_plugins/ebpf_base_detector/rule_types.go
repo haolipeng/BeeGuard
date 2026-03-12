@@ -55,4 +55,5 @@ const (
 	DetectionTypeContainerDangerousCommand = "container_dangerous_command" // 容器高危命令
 	DetectionTypeContainerEscape           = "container_escape"            // 容器逃逸
 	DetectionTypeContainerReverseShell     = "container_reverse_shell"     // 容器反弹 Shell
+	DetectionTypeContainerSensitiveFile    = "container_sensitive_file"    // 容器敏感文件
 )

@@ -17,4 +17,5 @@ const (
 	AlertTypeContainerDangerousCommand = 7001
 	AlertTypeContainerEscape           = 7002
 	AlertTypeContainerReverseShell     = 7003
+	AlertTypeContainerSensitiveFile    = 7004
 )

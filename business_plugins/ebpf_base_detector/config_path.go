@@ -13,6 +13,7 @@ const (
 	defaultSensitiveFileConfigPath             = "config/sensitive_file_rules.yaml"
 	defaultFileMonitorWhitelistPath            = "config/file_monitor_whitelist.yaml"
 	defaultContainerDangerousCommandConfigPath = "config/container_dangerous_commands.yaml"
+	defaultContainerSensitiveFileConfigPath    = "config/container_sensitive_file_rules.yaml"
 )
 
 func getConfigPath() string {
@@ -85,4 +86,16 @@ func getContainerDangerousCommandConfigPath() string {
 		}
 	}
 	return defaultContainerDangerousCommandConfigPath
+}
+
+func getContainerSensitiveFileConfigPath() string {
+	execPath, err := os.Executable()
+	if err == nil {
+		dir := filepath.Dir(execPath)
+		configPath := filepath.Join(dir, defaultContainerSensitiveFileConfigPath)
+		if _, err := os.Stat(configPath); err == nil {
+			return configPath
+		}
+	}
+	return defaultContainerSensitiveFileConfigPath
 }

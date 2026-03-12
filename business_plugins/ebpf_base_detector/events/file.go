@@ -29,6 +29,8 @@ type FileEvent struct {
 	NewPath    [512]byte  // 创建：文件路径；重命名：新路径
 	OldPath    [512]byte  // 仅重命名有值
 	SID        [32]byte   // 文件系统 ID
+	MntnsID    uint64     // 当前进程 mount 命名空间 ID
+	RootMntnsID uint64   // 宿主机 mount 命名空间 ID
 }
 
 // UnmarshalBinary 从二进制数据反序列化事件

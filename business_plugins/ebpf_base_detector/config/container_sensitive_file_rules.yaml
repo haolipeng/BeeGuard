@@ -1,0 +1,26 @@
+version: "1.0"
+description: "容器敏感文件操作检测规则"
+
+rules:
+  - id: 2001
+    name: "容器内 passwd/shadow 文件修改"
+    description: "检测容器内对用户账户和认证文件的创建或重命名操作"
+    severity: "critical"
+    enabled: true
+    match:
+      type: "regex"
+      patterns:
+        - "^/etc/passwd"
+        - "^/etc/shadow"
+        - "^/etc/sudoers"
+
+  - id: 2005
+    name: "容器内 DNS/hosts 篡改"
+    description: "检测容器内对 DNS 和主机名解析配置的修改"
+    severity: "high"
+    enabled: true
+    match:
+      type: "exact"
+      patterns:
+        - "/etc/resolv.conf"
+        - "/etc/hosts"

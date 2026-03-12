@@ -97,6 +97,25 @@ func main() {
 	crsDetector := &ContainerReverseShellDetector{}
 	logger.Info("Container reverse shell detector initialized")
 
+	// 容器敏感文件检测器（独立规则集）
+	var csfDetector *SensitiveFileDetector
+	csfConfigPath := getContainerSensitiveFileConfigPath()
+	csfConfig, err := LoadRules(csfConfigPath)
+	if err != nil {
+		logger.Warn("Failed to load container sensitive file rules, container sensitive file detection disabled",
+			"error", err, "path", csfConfigPath)
+	} else {
+		csfDetector, err = NewSensitiveFileDetector(csfConfig)
+		if err != nil {
+			logger.Warn("Failed to create container sensitive file detector, detection disabled", "error", err)
+			csfDetector = nil
+		} else {
+			logger.Info("Container sensitive file rules loaded successfully",
+				"version", csfConfig.Version,
+				"rules", csfDetector.GetEnabledRuleCount())
+		}
+	}
+
 	// 容器元数据缓存
 	containerMeta := NewContainerMetaCache(5 * time.Minute)
 	logger.Info("Container metadata cache initialized")
@@ -183,6 +202,7 @@ func main() {
 				rsDetector:    rsDetector,
 				mrDetector:    mrDetector,
 				sfDetector:    sfDetector,
+				csfDetector:   csfDetector,
 				ceDetector:    ceDetector,
 				crsDetector:   crsDetector,
 				containerMeta: containerMeta,
