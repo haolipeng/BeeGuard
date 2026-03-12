@@ -201,6 +201,9 @@ struct file_event {
     char  new_path[PATH_BUF_SIZE]; // 创建：文件路径；重命名：新路径
     char  old_path[PATH_BUF_SIZE]; // 仅重命名：旧路径（创建时全零）
     char  s_id[FS_ID_LEN];  // 文件系统 ID（ext4/xfs/tmpfs 等）
+    // --- 容器标识字段 ---
+    __u64 mntns_id;         // 当前进程 mount 命名空间 ID
+    __u64 root_mntns_id;    // 宿主机 mount 命名空间 ID
 } __attribute__((packed));
 
 // mount 事件结构体（容器逃逸检测）

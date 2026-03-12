@@ -128,23 +128,25 @@ type bpfExecveEvent struct {
 }
 
 type bpfFileEvent struct {
-	EventType  uint8
-	Action     uint8
-	Padding1   [2]uint8
-	Pid        uint32
-	Tgid       uint32
-	Ppid       uint32
-	Uid        uint32
-	SocketPid  uint32
-	RemoteIp   uint32
-	RemotePort uint16
-	LocalPort  uint16
-	LocalIp    uint32
-	Comm       [16]int8
-	ExePath    [256]int8
-	NewPath    [512]int8
-	OldPath    [512]int8
-	S_id       [32]int8
+	EventType   uint8
+	Action      uint8
+	Padding1    [2]uint8
+	Pid         uint32
+	Tgid        uint32
+	Ppid        uint32
+	Uid         uint32
+	SocketPid   uint32
+	RemoteIp    uint32
+	RemotePort  uint16
+	LocalPort   uint16
+	LocalIp     uint32
+	Comm        [16]int8
+	ExePath     [256]int8
+	NewPath     [512]int8
+	OldPath     [512]int8
+	S_id        [32]int8
+	MntnsId     uint64
+	RootMntnsId uint64
 }
 
 type bpfMountEvent struct {
