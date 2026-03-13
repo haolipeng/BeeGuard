@@ -71,47 +71,49 @@ func NewStatusRecord(status, msg string) *businessplugins.Record {
 // ParseVirusName 解析 ClamAV 病毒名
 // 格式：Type.Class.Name.UNOFFICIAL 或 Platform.Type.Name
 // 示例：
-//   "Linux.Trojan.Mirai"    → threatType="Trojan", malwareFamily="Mirai"
-//   "Php.Webshell.eval"     → threatType="Webshell", malwareFamily="eval"
-//   "Win.Trojan.Agent-123"  → threatType="Trojan", malwareFamily="Agent-123"
+//   "Linux.Trojan.Mirai"    → threatType="trojan", malwareFamily="Mirai"
+//   "Php.Webshell.eval"     → threatType="webshell", malwareFamily="eval"
+//   "Win.Trojan.Agent-123"  → threatType="trojan", malwareFamily="Agent-123"
 func ParseVirusName(virusName string) (threatType, malwareFamily string) {
 	// 去除 UNOFFICIAL 后缀
 	name := strings.TrimSuffix(virusName, ".UNOFFICIAL")
 
 	parts := strings.Split(name, ".")
 	if len(parts) < 2 {
-		return "Malware", virusName
+		return "malware", virusName
 	}
 
 	// 尝试从 parts 中找到威胁类型
-	threatType = "Malware"
+	threatType = "malware"
 	malwareFamily = parts[len(parts)-1]
 
 	for _, p := range parts {
 		lower := strings.ToLower(p)
 		switch lower {
+		case "virus":
+			threatType = "virus"
 		case "trojan":
-			threatType = "Trojan"
+			threatType = "trojan"
 		case "webshell":
-			threatType = "Webshell"
+			threatType = "webshell"
 		case "miner", "coinminer":
-			threatType = "Miner"
+			threatType = "miner"
 		case "backdoor":
-			threatType = "Backdoor"
+			threatType = "backdoor"
 		case "ransomware", "ransom":
-			threatType = "Ransomware"
+			threatType = "ransomware"
 		case "worm":
-			threatType = "Worm"
+			threatType = "worm"
 		case "rootkit":
-			threatType = "Rootkit"
+			threatType = "rootkit"
 		case "exploit":
-			threatType = "Exploit"
+			threatType = "exploit"
 		case "adware":
-			threatType = "Adware"
+			threatType = "adware"
 		case "downloader":
-			threatType = "Downloader"
+			threatType = "downloader"
 		case "dropper":
-			threatType = "Dropper"
+			threatType = "dropper"
 		}
 	}
 

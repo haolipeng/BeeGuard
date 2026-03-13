@@ -13,6 +13,7 @@ rules:
     description: "检测可能导致系统损坏的删除命令，如 rm -rf /"
     severity: "critical"
     enabled: true
+    category: "file_delete"
     match:
       type: "regex"
       patterns:
@@ -29,6 +30,7 @@ rules:
     description: "检测对敏感系统文件的读取或修改操作"
     severity: "high"
     enabled: true
+    category: "filesystem_operation"
     match:
       type: "regex"
       patterns:
@@ -48,6 +50,7 @@ rules:
     description: "检测危险的文件权限修改操作，如设置777权限或SUID位"
     severity: "high"
     enabled: true
+    category: "permission_modify"
     match:
       type: "regex"
       patterns:
@@ -65,6 +68,7 @@ rules:
     description: "检测内核模块的加载或卸载操作"
     severity: "high"
     enabled: true
+    category: "filesystem_operation"
     match:
       type: "prefix"
       patterns:

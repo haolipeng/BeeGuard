@@ -51,7 +51,11 @@ func handleExecve(ctx *eventHandlerCtx, raw []byte) error {
 				cleanCmd = comm + " " + args // 进程已退出时回退到 eBPF 数据
 			}
 			record.Data.Fields["command"] = cleanCmd
-			record.Data.Fields["command_type"] = fmt.Sprintf("%d", result.RuleID)
+			if result.Category != "" {
+				record.Data.Fields["command_type"] = result.Category
+			} else {
+				record.Data.Fields["command_type"] = fmt.Sprintf("%d", result.RuleID)
+			}
 			record.Data.Fields["user"] = record.Data.Fields["uid"]
 			if evt.UID == 0 {
 				record.Data.Fields["privilege_level"] = "root"

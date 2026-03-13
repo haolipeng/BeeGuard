@@ -7,6 +7,7 @@ type DetectionResult struct {
 	Severity       string // 严重级别: critical/high/medium/low
 	Description    string // 规则描述
 	MatchedPattern string // 匹配的模式
+	Category       string // 命令类型分类(如 file_delete, permission_modify 等)
 }
 
 // Rule 检测规则
@@ -16,6 +17,7 @@ type Rule struct {
 	Description string `yaml:"description"` // 规则描述
 	Severity    string `yaml:"severity"`    // 严重级别: critical/high/medium/low
 	Enabled     bool   `yaml:"enabled"`     // 是否启用
+	Category    string `yaml:"category"`    // 命令类型分类(如 file_delete, permission_modify 等)
 	Match       Match  `yaml:"match"`       // 匹配配置
 }
 

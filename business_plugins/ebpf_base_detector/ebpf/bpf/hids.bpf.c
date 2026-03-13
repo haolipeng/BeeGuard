@@ -6,20 +6,17 @@
 #include <bpf/bpf_endian.h>
 #include "types.h"
 
-// container_of 宏 (BPF 程序中需自行定义)
 #ifndef container_of
 #define container_of(ptr, type, member) \
     ((type *)((void *)(ptr) - __builtin_offsetof(type, member)))
 #endif
 
-// Perf Event Array Map - 用于将事件从内核态传递到用户态
 struct {
     __uint(type, BPF_MAP_TYPE_PERF_EVENT_ARRAY);
     __uint(key_size, sizeof(u32));
     __uint(value_size, sizeof(u32));
 } events SEC(".maps");
 
-// Per-CPU Array Map - 用于存储大结构体，避免栈溢出（eBPF栈限制512字节）
 struct {
     __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
     __type(key, u32);
@@ -27,7 +24,6 @@ struct {
     __uint(max_entries, 1);
 } percpu_buf SEC(".maps");
 
-// Per-CPU Array Map for commit_creds event - 用于提权检测
 struct {
     __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
     __type(key, u32);
@@ -35,15 +31,13 @@ struct {
     __uint(max_entries, 1);
 } percpu_creds_buf SEC(".maps");
 
-// 可信任可执行文件白名单 Map - 用于过滤提权事件
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __uint(max_entries, 2048);
-    __type(key, __u64);      // Murmur 哈希值
+    __type(key, __u64);
     __type(value, struct exe_item);
 } trusted_exes SEC(".maps");
 
-// Per-CPU buffer for path construction - 避免栈溢出
 struct {
     __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
     __type(key, u32);
@@ -51,7 +45,6 @@ struct {
     __uint(max_entries, 1);
 } percpu_path_buf SEC(".maps");
 
-// Per-CPU buffer for stdin/stdout path construction - 避免与 exe_path 冲突
 struct {
     __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
     __type(key, u32);
@@ -59,7 +52,6 @@ struct {
     __uint(max_entries, 1);
 } percpu_stdio_path_buf SEC(".maps");
 
-// Per-CPU Array Map for connect_event - 用于出站连接监控
 struct {
     __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
     __type(key, u32);
@@ -67,7 +59,6 @@ struct {
     __uint(max_entries, 1);
 } percpu_connect_buf SEC(".maps");
 
-// Per-CPU Array Map for bind_event - 用于端口绑定监控
 struct {
     __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
     __type(key, u32);
@@ -75,7 +66,6 @@ struct {
     __uint(max_entries, 1);
 } percpu_bind_buf SEC(".maps");
 
-// Per-CPU Array Map for accept_event - 用于入站连接监控
 struct {
     __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
     __type(key, u32);
@@ -83,7 +73,6 @@ struct {
     __uint(max_entries, 1);
 } percpu_accept_buf SEC(".maps");
 
-// Per-CPU Array Map for dns_event - 用于DNS查询监控
 struct {
     __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
     __type(key, u32);
@@ -91,7 +80,6 @@ struct {
     __uint(max_entries, 1);
 } percpu_dns_buf SEC(".maps");
 
-// Per-CPU Array Map for DNS raw data buffer - 避免栈溢出
 struct {
     __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
     __type(key, u32);
@@ -99,7 +87,6 @@ struct {
     __uint(max_entries, 1);
 } percpu_dns_data SEC(".maps");
 
-// Per-CPU buffer for file_event（避免栈溢出）
 struct {
     __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
     __type(key, u32);
@@ -107,7 +94,6 @@ struct {
     __uint(max_entries, 1);
 } percpu_file_buf SEC(".maps");
 
-// 文件监控独立白名单
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __uint(max_entries, 2048);
@@ -115,7 +101,6 @@ struct {
     __type(value, struct exe_item);
 } file_trusted_exes SEC(".maps");
 
-// 文件路径构建用的第二个 per-CPU path_buf（重命名事件需要两次路径构建）
 struct {
     __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
     __type(key, u32);
@@ -123,7 +108,6 @@ struct {
     __uint(max_entries, 1);
 } percpu_file_path_buf SEC(".maps");
 
-// root_mntns_id 存储（由 eBPF 自动初始化或 Go 层写入）
 struct {
     __uint(type, BPF_MAP_TYPE_ARRAY);
     __type(key, u32);
@@ -131,7 +115,6 @@ struct {
     __uint(max_entries, 1);
 } root_mntns SEC(".maps");
 
-// Per-CPU buffer for mount_event
 struct {
     __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
     __type(key, u32);
@@ -139,9 +122,6 @@ struct {
     __uint(max_entries, 1);
 } percpu_mount_buf SEC(".maps");
 
-// ========== 路径构建函数 ==========
-// 向路径缓冲区追加路径分量 (缓冲区末尾反向写入，正向计数长度)
-// data: 路径缓冲区, len: 已累积长度(含末尾\0), entry: 路径分量, num: 分量字节数
 static __noinline int prepend_path(char *data, __u32 *len, char *entry, int num)
 {
     if (!num)
@@ -155,8 +135,6 @@ static __noinline int prepend_path(char *data, __u32 *len, char *entry, int num)
     return 0;
 }
 
-// 读取 dentry 名称并追加到路径缓冲区
-// swap 布局: swap[3]='/' 前缀, swap[4..] 存 dentry 名称
 static __noinline int prepend_entry(char *data, __u32 *len, char *swap, struct dentry *de)
 {
     char *name;
@@ -177,22 +155,18 @@ static __noinline int prepend_entry(char *data, __u32 *len, char *swap, struct d
     return rc;
 }
 
-// 从 vfsmount 反推 mount 结构体
 static __always_inline struct mount *real_mount(struct vfsmount *mnt)
 {
     return container_of(mnt, struct mount, mnt);
 }
 
-// 构建完整路径 (支持跨挂载点遍历)
-// 处理 bind mount, overlay 等跨文件系统场景
-// 返回路径在 data 中的起始指针，sz 返回总长度(含\0)
 static __noinline char *build_d_path(char *data, char *swap,
                                      struct dentry *dentry, struct vfsmount *vfsmnt,
                                      __u32 *sz)
 {
     struct mount *mount = real_mount(vfsmnt);
     struct mount *mnt_parent;
-    __u32 len = 1;  // trailing \0
+    __u32 len = 1;
 
     mnt_parent = BPF_CORE_READ(mount, mnt_parent);
     data[PATH_BUF_MASK] = 0;
@@ -223,14 +197,6 @@ static __noinline char *build_d_path(char *data, char *swap,
     return &data[(PATH_BUF_SIZE - len) & PATH_BUF_MASK];
 }
 
-// 读取可执行文件完整路径 (支持跨挂载点)
-// 功能: 从 task_struct 中获取当前进程对应的可执行文件在磁盘上的完整路径，如 /usr/bin/nginx
-// 返回: 不含 \0 的路径长度，0 表示失败
-//
-// 原理简述:
-//   Linux 中每个打开的文件由 struct file 表示，file->f_path 包含 (dentry, vfsmount)。
-//   dentry 是目录项，形成树状结构；从文件的 dentry 沿 d_parent 向上遍历到根，
-//   可拼接出路径。遇到 bind mount、overlay 等需跨挂载点，build_d_path 负责处理。
 static __always_inline int read_full_exe_path(struct task_struct *task, char *out_buf, int out_size)
 {
     u32 key = 0;
@@ -242,36 +208,26 @@ static __always_inline int read_full_exe_path(struct task_struct *task, char *ou
 
     __builtin_memset(out_buf, 0, out_size);
 
-    // 从 Per-CPU Map 获取路径构建缓冲区（eBPF 栈只有 512 字节，大缓冲区必须放 Map 里）
     pbuf = bpf_map_lookup_elem(&percpu_path_buf, &key);
     if (!pbuf)
         return 0;
 
-    // task->mm->exe_file 指向该进程的可执行文件对应的 struct file
-    // f_path.mnt: 挂载点，f_path.dentry: 文件对应的目录项
     exe_mnt = BPF_CORE_READ(task, mm, exe_file, f_path.mnt);
     exe_dentry = BPF_CORE_READ(task, mm, exe_file, f_path.dentry);
     if (!exe_mnt || !exe_dentry)
         return 0;
 
-    // build_d_path: 从 dentry 向上遍历到根，拼接出完整路径，支持跨挂载点
-    // 路径在 pbuf->data 中反向写入（先写文件名，再写父目录），path_start 指向实际起始位置
     path_start = build_d_path(pbuf->data, pbuf->swap, exe_dentry, exe_mnt, &path_len);
 
-    // path_len 含末尾 \0，<=1 表示空路径，>out_size 则放不下
     if (path_len <= 1 || path_len > (__u32)out_size)
         return 0;
 
-    // 将内核缓冲区中的路径拷贝到输出缓冲区
     bpf_probe_read_kernel(out_buf, path_len & PATH_BUF_MASK, path_start);
 
-    return (int)(path_len - 1);  // 返回不含 \0 的字符数
+    return (int)(path_len - 1);
 }
 
-// ========== 辅助函数 ==========
 
-// Helper: 读取命令行参数
-// 从 task->mm->arg_start 到 arg_end 读取用户态内存
 static __always_inline int read_args(struct task_struct *task, char *buf, int buf_size)
 {
     unsigned long arg_start, arg_end;
@@ -310,8 +266,6 @@ static __always_inline int read_args(struct task_struct *task, char *buf, int bu
     return (int)args_len;
 }
 
-// Murmur OAAT64 哈希函数 (必须与 Go 版本字节级兼容)
-// BPF 验证器限制: 使用有界循环,最多处理 256 字节
 static __always_inline __u64 hash_murmur_OAAT64(const char *s, int len)
 {
     __u64 h = 525201411107845655ull;
@@ -329,7 +283,6 @@ static __always_inline __u64 hash_murmur_OAAT64(const char *s, int len)
     return h;
 }
 
-// 检查可执行文件是否可信任
 static __noinline int exe_is_trusted(const char *exe_path, int path_len)
 {
     __u64 hash = hash_murmur_OAAT64(exe_path, path_len);
@@ -340,9 +293,7 @@ static __noinline int exe_is_trusted(const char *exe_path, int path_len)
     return (ei && ei->len == path_len);
 }
 
-// ========== 文件监控辅助函数 ==========
 
-// 检查可执行文件是否在文件监控白名单中（使用独立的 file_trusted_exes map）
 static __noinline int file_exe_is_trusted(const char *exe_path, int path_len)
 {
     __u64 hash = hash_murmur_OAAT64(exe_path, path_len);
@@ -353,8 +304,6 @@ static __noinline int file_exe_is_trusted(const char *exe_path, int path_len)
     return (ei && ei->len == path_len);
 }
 
-// query_s_id_by_dentry: 从 dentry 获取文件系统 ID（如 ext4/xfs/tmpfs）
-// 通过 dentry->d_sb->s_id 读取超级块的文件系统标识符
 static __noinline int query_s_id_by_dentry(char *s_id, struct dentry *de)
 {
     char *id = (char *)BPF_CORE_READ(de, d_sb, s_id);
@@ -364,9 +313,6 @@ static __noinline int query_s_id_by_dentry(char *s_id, struct dentry *de)
     return 0;
 }
 
-// dentry_path: 纯 dentry 链遍历构建路径（不依赖 vfsmount）
-// 适用于 security_inode_create/rename 等只有 dentry 参数的 LSM hook
-// 返回路径在 data 中的起始指针，sz 返回总长度（含 \0）
 static __noinline char *dentry_path(char *data, char *swap,
                                      struct dentry *de, __u32 *sz)
 {
@@ -387,11 +333,7 @@ static __noinline char *dentry_path(char *data, char *swap,
     return &data[(PATH_BUF_SIZE - len) & PATH_BUF_MASK];
 }
 
-// ========== 反弹 Shell 增强采集辅助函数 ==========
 
-// read_fd_path: 从 task 的指定 FD 获取文件路径（通过 dentry 遍历）
-// 使用 percpu_stdio_path_buf 作为工作缓冲区
-// 返回路径长度（不含 \0），0 表示失败
 static __noinline int read_fd_path(struct task_struct *task, int fd,
                                     char *out_buf, int out_size)
 {
@@ -446,9 +388,6 @@ static __noinline int read_fd_path(struct task_struct *task, int fd,
     return (int)(path_len - 1);
 }
 
-// find_sockfd: 扫描当前进程的 FD 0-15，寻找连接状态的 IPv4 socket
-// 仅扫描当前进程（不遍历父进程链），返回第一个找到的 sock 指针
-// 返回: sock 指针（NULL=未找到）
 static __noinline struct sock *find_sockfd(struct task_struct *task)
 {
     struct files_struct *files;
@@ -510,9 +449,6 @@ static __noinline struct sock *find_sockfd(struct task_struct *task)
     return NULL;
 }
 
-// process_socket: 向上查找当前进程及父进程链的 socket
-// 扫描当前进程 → 父进程 → 祖父进程的 FD 表，查找已连接的 IPv4 socket
-// 返回 sock 指针，out_pid 记录持有 socket 的进程 PID
 static __noinline struct sock *process_socket(struct task_struct *task, __u32 *out_pid)
 {
     struct sock *sk;
@@ -541,10 +477,7 @@ static __noinline struct sock *process_socket(struct task_struct *task, __u32 *o
     return NULL;
 }
 
-// ========== mount 命名空间辅助函数 ==========
 
-// 计算 mntns_id：(~superblock_addr) << 16 | ns.inum
-// 组合 superblock 地址和 inode 号，生成唯一标识
 static __noinline __u64 query_mntns_id(struct task_struct *task)
 {
     unsigned int inum = BPF_CORE_READ(task, nsproxy, mnt_ns, ns.inum);
@@ -559,7 +492,6 @@ static __noinline __u64 query_mntns_id(struct task_struct *task)
     return mntns_id;
 }
 
-// 从 BPF map 读取 root_mntns_id
 static __always_inline __u64 get_root_mntns_id(void)
 {
     u32 key = 0;
@@ -567,8 +499,6 @@ static __always_inline __u64 get_root_mntns_id(void)
     return val ? *val : 0;
 }
 
-// 确保 root_mntns_id 已初始化
-// 在首次 execve 事件时自动遍历 real_parent 到 PID 1，计算并缓存
 static __noinline void ensure_root_mntns(struct task_struct *task)
 {
     u32 key = 0;
@@ -587,12 +517,7 @@ static __noinline void ensure_root_mntns(struct task_struct *task)
     bpf_map_update_elem(&root_mntns, &key, &root_id, BPF_ANY);
 }
 
-// ========== eBPF 程序入口 ==========
 
-// handle_execve_event: 采集并输出 execve 事件（包含 socket 信息 enrich）
-// 独立 __noinline 函数，SEC 入口极薄，重逻辑在 subprogram 中
-// BPF verifier 对每个 subprogram 独立验证，各有 1M 指令预算
-// 反弹 Shell 检测由用户态 Go 程序完成
 static __noinline int handle_execve_event(
     struct bpf_raw_tracepoint_args *ctx)
 {
@@ -692,7 +617,6 @@ static __noinline int handle_execve_event(
         }
     }
 
-    // TODO: 可扩展到扫描当前进程的父进程 FD 0-15的信息
     struct sock *sk = find_sockfd(task);
     if (sk) {
         evt->socket_pid = evt->tgid;
@@ -711,18 +635,12 @@ static __noinline int handle_execve_event(
     return 0;
 }
 
-// 监听进程执行事件
-// Hook点: sched_process_exec - 在execve系统调用成功后触发
-// SEC 入口极薄，所有逻辑在 handle_execve_event subprogram 中
 SEC("raw_tracepoint/sched_process_exec")
 int tp_proc_exec(struct bpf_raw_tracepoint_args *ctx)
 {
     return handle_execve_event(ctx);
 }
 
-// 监听commit_creds调用，检测本地提权行为
-// Hook点: kprobe/commit_creds - 在凭证提交前触发
-// 检测条件: 原uid和euid都非0，新uid或euid为0（非root -> root）
 SEC("kprobe/commit_creds")
 int kp_commit_creds(struct pt_regs *ctx)
 {
@@ -800,8 +718,6 @@ int kp_commit_creds(struct pt_regs *ctx)
     return 0;
 }
 
-// ========== 网络监控辅助函数 ==========
-// 从 fd 获取 file 结构体
 static __noinline struct file *fget_raw(struct task_struct *task, int nr)
 {
     if (nr < 0 || nr >= 1024)
@@ -819,7 +735,6 @@ static __noinline struct file *fget_raw(struct task_struct *task, int nr)
     return file;
 }
 
-// 从 file 获取 sock 结构体
 static __noinline struct sock *sock_from_file(struct file *file)
 {
     if (!file) return NULL;
@@ -833,7 +748,6 @@ static __noinline struct sock *sock_from_file(struct file *file)
     return BPF_CORE_READ(sock, sk);
 }
 
-// 组合 fd -> sock
 static __noinline struct sock *sockfd_lookup(struct task_struct *task, int fd)
 {
     struct file *file = fget_raw(task, fd);
@@ -841,7 +755,6 @@ static __noinline struct sock *sockfd_lookup(struct task_struct *task, int fd)
     return sock_from_file(file);
 }
 
-// CO-RE 位域读取 sk_protocol
 static __noinline int sock_prot(struct sock *sk)
 {
     unsigned long long prot = 0;
@@ -857,14 +770,11 @@ static __noinline int sock_prot(struct sock *sk)
     return (int)prot;
 }
 
-// 获取 socket address family
 static __always_inline unsigned short sock_family(struct sock *sk)
 {
     return BPF_CORE_READ(sk, __sk_common.skc_family);
 }
 
-// 从 sock 提取 IPv4 地址信息
-// 包含 fallback 逻辑：skc_rcv_saddr 为 0 时尝试 inet_saddr
 static __always_inline void query_ipv4(struct sock *sk,
     __u32 *src_ip, __u16 *src_port,
     __u32 *dst_ip, __u16 *dst_port)
@@ -880,7 +790,6 @@ static __always_inline void query_ipv4(struct sock *sk,
     }
 }
 
-// 填充通用进程信息到事件中（使用局部变量避免 packed struct 地址警告）
 #define FILL_PROCESS_INFO(task, evt) do { \
     u64 _id = bpf_get_current_pid_tgid(); \
     (evt)->pid = _id; \
@@ -892,10 +801,6 @@ static __always_inline void query_ipv4(struct sock *sk,
     bpf_get_current_comm(&(evt)->comm, 16); \
 } while (0)
 
-// DNS 解析主循环
-// 从 DNS 原始数据中提取域名和查询类型
-// 将长度前缀编码的域名 (如 3www6google3com0) 转换为点分格式 (www.google.com)
-// 返回: 0=成功, -1=失败
 static __noinline int query_dns_record(char *data, int data_len, char *domain, int domain_size, __u16 *query_type)
 {
     if (data_len < 12)
@@ -946,7 +851,6 @@ static __noinline int query_dns_record(char *data, int data_len, char *domain, i
     return 0;
 }
 
-// ========== sys_exit: 处理系统调用返回 ==========
 
 SEC("raw_tracepoint/sys_exit")
 int tp_sys_exit(struct bpf_raw_tracepoint_args *ctx)
@@ -1059,7 +963,7 @@ int tp_sys_exit(struct bpf_raw_tracepoint_args *ctx)
         if (!sk)
             return 0;
 
-        if (sock_family(sk) != 2)  // AF_INET
+        if (sock_family(sk) != 2)
             return 0;
 
         u32 key = 0;
@@ -1216,10 +1120,7 @@ int tp_sys_exit(struct bpf_raw_tracepoint_args *ctx)
     return 0;
 }
 
-// ========== 文件监控 kprobe ==========
 
-// handle_inode_create: 处理文件创建事件
-// 独立 __noinline subprogram，有独立 1M 指令预算
 static __noinline int handle_inode_create(struct pt_regs *ctx)
 {
     u32 key = 0;
@@ -1298,16 +1199,12 @@ static __noinline int handle_inode_create(struct pt_regs *ctx)
     return 0;
 }
 
-// 监听文件创建事件
-// Hook点: security_inode_create(struct inode *dir, struct dentry *dentry, umode_t mode)
 SEC("kprobe/security_inode_create")
 int kp_inode_create(struct pt_regs *ctx)
 {
     return handle_inode_create(ctx);
 }
 
-// handle_inode_rename: 处理文件重命名事件
-// 独立 __noinline subprogram，有独立 1M 指令预算
 static __noinline int handle_inode_rename(struct pt_regs *ctx)
 {
     u32 key = 0;
@@ -1388,19 +1285,12 @@ static __noinline int handle_inode_rename(struct pt_regs *ctx)
     return 0;
 }
 
-// 监听文件重命名事件
-// Hook点: security_inode_rename(struct inode *old_dir, struct dentry *old_dentry,
-//                               struct inode *new_dir, struct dentry *new_dentry, unsigned int flags)
 SEC("kprobe/security_inode_rename")
 int kp_inode_rename(struct pt_regs *ctx)
 {
     return handle_inode_rename(ctx);
 }
 
-// handle_inode_unlink: 处理文件删除事件
-// 独立 __noinline subprogram，有独立 1M 指令预算
-// security_inode_unlink 签名与 security_inode_create 相同：
-//   security_inode_unlink(struct inode *dir, struct dentry *dentry)
 static __noinline int handle_inode_unlink(struct pt_regs *ctx)
 {
     u32 key = 0;
@@ -1479,8 +1369,6 @@ static __noinline int handle_inode_unlink(struct pt_regs *ctx)
     return 0;
 }
 
-// 监听文件删除事件
-// Hook点: security_inode_unlink(struct inode *dir, struct dentry *dentry)
 SEC("kprobe/security_inode_unlink")
 int kp_inode_unlink(struct pt_regs *ctx)
 {

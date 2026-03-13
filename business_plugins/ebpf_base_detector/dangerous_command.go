@@ -62,6 +62,7 @@ func (d *DangerousCommandDetector) Detect(comm, args string) *DetectionResult {
 				Severity:       rule.Severity,
 				Description:    rule.Description,
 				MatchedPattern: matchedPattern,
+				Category:       rule.Category,
 			}
 		}
 	}
@@ -141,6 +142,7 @@ func (d *DangerousCommandDetector) DetectAll(comm, args string) []*DetectionResu
 				Severity:       rule.Severity,
 				Description:    rule.Description,
 				MatchedPattern: matchedPattern,
+				Category:       rule.Category,
 			})
 		}
 	}
