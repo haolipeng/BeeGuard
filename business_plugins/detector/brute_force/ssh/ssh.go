@@ -14,16 +14,21 @@ import (
 
 // Detector SSH暴力破解检测器
 type Detector struct {
-	mu      sync.RWMutex
-	config  config.SSHConfig
-	windows map[string]*engine.SlidingWindow // 每个规则一个滑动窗口
+	mu             sync.RWMutex
+	config         config.SSHConfig
+	windows        map[string]*engine.SlidingWindow // 每个规则一个滑动窗口
+	bfMu           sync.Mutex                       // bruteForceIPs 的独立互斥锁
+	bruteForceIPs  map[string]time.Time             // 触发暴力破解告警的 IP 及时间
 }
+
+const successWindow = 10 * time.Minute
 
 // New 创建SSH检测器
 func New(cfg config.SSHConfig) *Detector {
 	d := &Detector{
-		config:  cfg,
-		windows: make(map[string]*engine.SlidingWindow),
+		config:        cfg,
+		windows:       make(map[string]*engine.SlidingWindow),
+		bruteForceIPs: make(map[string]time.Time),
 	}
 
 	// 为每个规则创建滑动窗口
@@ -70,6 +75,18 @@ func (d *Detector) Parse(line string) *engine.Event {
 		return nil
 	}
 
+	// 成功登录事件不需要匹配规则，直接返回
+	if parsed.Action == "success" {
+		return &engine.Event{
+			Timestamp: parsed.Timestamp,
+			SourceIP:  parsed.SourceIP,
+			Username:  parsed.Username,
+			Action:    parsed.Action,
+			Raw:       line,
+			Count:     parsed.Count,
+		}
+	}
+
 	// 查找匹配的规则
 	var matchedRule *config.Rule
 	for i := range d.config.Rules {
@@ -91,11 +108,38 @@ func (d *Detector) Parse(line string) *engine.Event {
 		Action:    parsed.Action,
 		Raw:       line,
 		RuleName:  matchedRule.Name,
+		Count:     parsed.Count,
 	}
 }
 
 // Check 检查是否触发告警
 func (d *Detector) Check(event *engine.Event) *engine.Alert {
+	// 成功登录事件：检查是否在暴力破解窗口内
+	if event.Action == "success" {
+		d.bfMu.Lock()
+		bfTime, exists := d.bruteForceIPs[event.SourceIP]
+		d.bfMu.Unlock()
+
+		if !exists || time.Since(bfTime) > successWindow {
+			return nil
+		}
+
+		return &engine.Alert{
+			AlertType:   "brute_force",
+			Service:     "ssh",
+			RuleName:    "brute_force_success",
+			Description: fmt.Sprintf("暴力破解成功: 来自 %s 的攻击者在暴力破解后成功登录用户 %s", event.SourceIP, event.Username),
+			SourceIP:    event.SourceIP,
+			TargetUser:  event.Username,
+			Count:       0,
+			Timeframe:   int(successWindow.Seconds()),
+			FirstSeen:   bfTime.Unix(),
+			LastSeen:    event.Timestamp.Unix(),
+			Level:       10,
+			Result:      "success",
+		}
+	}
+
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
@@ -123,6 +167,11 @@ func (d *Detector) Check(event *engine.Event) *engine.Alert {
 		return nil
 	}
 
+	// 记录触发暴力破解告警的 IP
+	d.bfMu.Lock()
+	d.bruteForceIPs[event.SourceIP] = time.Now()
+	d.bfMu.Unlock()
+
 	// 构造告警
 	return &engine.Alert{
 		AlertType:   "brute_force",
@@ -137,6 +186,7 @@ func (d *Detector) Check(event *engine.Event) *engine.Alert {
 		FirstSeen:  result.FirstSeen.Unix(),
 		LastSeen:   result.LastSeen.Unix(),
 		Level:      rule.Level,
+		Result:     "failed",
 	}
 }
 
@@ -172,4 +222,22 @@ func (d *Detector) UpdateConfig(data string) error {
 		len(newCfg.Rules), len(newCfg.Whitelist))
 
 	return nil
+}
+
+// CleanupBruteForceIPs 清理超过 2×successWindow 的旧记录
+func (d *Detector) CleanupBruteForceIPs() {
+	d.bfMu.Lock()
+	defer d.bfMu.Unlock()
+
+	cutoff := time.Now().Add(-2 * successWindow)
+	for ip, t := range d.bruteForceIPs {
+		if t.Before(cutoff) {
+			delete(d.bruteForceIPs, ip)
+		}
+	}
+}
+
+// Cleanup 实现 engine.Cleaner 接口
+func (d *Detector) Cleanup() {
+	d.CleanupBruteForceIPs()
 }

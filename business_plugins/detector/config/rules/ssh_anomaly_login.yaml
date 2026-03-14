@@ -16,6 +16,10 @@ ssh_anomaly_login:
   #       - 192.168.1.100
   #       - 192.168.1.101
   #       - 10.0.0.1
+  #     users:           # 允许的用户列表，为空���不配置表示不限制用户
+  #       - root
+  #       - admin
+  #       - deploy
   #
   #   - name: ops_ips
   #     description: "运维IP"
@@ -23,3 +27,6 @@ ssh_anomaly_login:
   #     ips:
   #       - 10.10.10.50
   #       - 10.10.10.51
+  #     users:
+  #       - ops
+  #       - root

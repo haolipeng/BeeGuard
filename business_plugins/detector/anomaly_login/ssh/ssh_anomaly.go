@@ -14,29 +14,32 @@ import (
 
 // Detector SSH异常登录检测器
 type Detector struct {
-	mu          sync.RWMutex
-	config      config.SSHAnomalyConfig
-	ipRuleIndex map[string][]*config.AnomalyRule // IP -> 包含该IP的规则列表
-	alertCache  map[string]time.Time             // IP -> 上次告警时间（告警抑制）
+	mu            sync.RWMutex
+	config        config.SSHAnomalyConfig
+	ipRuleIndex   map[string][]*config.AnomalyRule // IP -> 包含该IP的规则列表
+	userRuleIndex map[string][]*config.AnomalyRule // 用户名 -> 包含该用户的规则列表
+	alertCache    map[string]time.Time             // IP -> 上次告警时间（告警抑制）
 }
 
 // New 创建SSH异常登录检测器
 func New(cfg config.SSHAnomalyConfig) (*Detector, error) {
 	d := &Detector{
-		config:      cfg,
-		ipRuleIndex: make(map[string][]*config.AnomalyRule),
-		alertCache:  make(map[string]time.Time),
+		config:        cfg,
+		ipRuleIndex:   make(map[string][]*config.AnomalyRule),
+		userRuleIndex: make(map[string][]*config.AnomalyRule),
+		alertCache:    make(map[string]time.Time),
 	}
 
-	// 编译IP到规则的索引
-	d.compileIPRuleIndex()
+	// 编译规则索引
+	d.compileRuleIndexes()
 
 	return d, nil
 }
 
-// compileIPRuleIndex 构建IP到规则的索引映射
-func (d *Detector) compileIPRuleIndex() {
+// compileRuleIndexes 构建IP和用户名到规则的索引映射
+func (d *Detector) compileRuleIndexes() {
 	d.ipRuleIndex = make(map[string][]*config.AnomalyRule)
+	d.userRuleIndex = make(map[string][]*config.AnomalyRule)
 
 	for i := range d.config.AnomalyRules {
 		rule := &d.config.AnomalyRules[i]
@@ -46,10 +49,13 @@ func (d *Detector) compileIPRuleIndex() {
 		for _, ip := range rule.IPs {
 			d.ipRuleIndex[ip] = append(d.ipRuleIndex[ip], rule)
 		}
+		for _, user := range rule.Users {
+			d.userRuleIndex[user] = append(d.userRuleIndex[user], rule)
+		}
 	}
 
-	zap.S().Infof("SSH anomaly detector: compiled %d IPs from %d rules",
-		len(d.ipRuleIndex), len(d.config.AnomalyRules))
+	zap.S().Infof("SSH anomaly detector: compiled %d IPs, %d users from %d rules",
+		len(d.ipRuleIndex), len(d.userRuleIndex), len(d.config.AnomalyRules))
 }
 
 // parseTimeString 解析 "HH:MM" 格式的时间字符串
@@ -152,6 +158,21 @@ func (d *Detector) Parse(line string) *engine.Event {
 	}
 }
 
+// isUserAllowed 检查用户是否在规则的允许用户列表中
+func isUserAllowed(username string, rule *config.AnomalyRule) bool {
+	// 没有配置用户列表，默认允许所有用户
+	if len(rule.Users) == 0 {
+		return true
+	}
+
+	for _, u := range rule.Users {
+		if u == username {
+			return true
+		}
+	}
+	return false
+}
+
 // Check 检查是否触发告警
 func (d *Detector) Check(event *engine.Event) *engine.Alert {
 	d.mu.RLock()
@@ -162,16 +183,10 @@ func (d *Detector) Check(event *engine.Event) *engine.Alert {
 		return nil
 	}
 
-	// 检查IP是否在白名单中，并验证时间段
+	// 检查IP是否在白名单中
 	rules, found := d.ipRuleIndex[event.SourceIP]
-	if found {
-		for _, rule := range rules {
-			if isTimeAllowed(event.Timestamp, rule) {
-				// IP匹配且时间允许，正常登录
-				return nil
-			}
-		}
-		// IP在白名单但时间不允许 -> 生成时间异常告警
+	if !found {
+		// IP不在白名单 -> unknown_ip 告警
 		if d.shouldSuppressAlert(event.SourceIP) {
 			zap.S().Debugf("SSH anomaly alert suppressed for IP %s", event.SourceIP)
 			return nil
@@ -181,41 +196,61 @@ func (d *Detector) Check(event *engine.Event) *engine.Alert {
 			AlertType:   "anomaly_login",
 			Service:     "ssh",
 			RuleName:    "ssh_anomaly_login",
-			Description: fmt.Sprintf("检测到SSH异常登录: 用户 %s 从 %s 在 %s 登录，该时间不在允许的时间段内",
-				event.Username, event.SourceIP, event.Timestamp.Format("15:04")),
-			SourceIP:   event.SourceIP,
-			TargetUser: event.Username,
-			Count:      1,
-			Timeframe:  0,
-			FirstSeen:  event.Timestamp.Unix(),
-			LastSeen:   event.Timestamp.Unix(),
-			Level:      d.config.AlertLevel,
+			Description: fmt.Sprintf("检测到SSH异常登录: 用户 %s 从 %s 登录，该IP不在允许的白名单中",
+				event.Username, event.SourceIP),
+			SourceIP:     event.SourceIP,
+			TargetUser:   event.Username,
+			Count:        1,
+			Timeframe:    0,
+			FirstSeen:    event.Timestamp.Unix(),
+			LastSeen:     event.Timestamp.Unix(),
+			Level:        d.config.AlertLevel,
+			AbnormalType: "unknown_ip",
 		}
 	}
 
-	// IP不在白名单，检查告警抑制
+	// IP在白名单中，检查是否有规则同时满足时间和用户条件
+	for _, rule := range rules {
+		if isTimeAllowed(event.Timestamp, rule) && isUserAllowed(event.Username, rule) {
+			// 匹配到规则：IP允许、时间允许、用户允许 -> 正常登录
+			return nil
+		}
+	}
+
+	// 没有任何规则同时满足，需要确定具体的异常类型
+	// 检查是否存在时间允许的规则（区分 abnormal_time 和 abnormal_user）
+	abnormalType := "abnormal_time"
+	description := fmt.Sprintf("检测到SSH异常登录: 用户 %s 从 %s 在 %s 登录，该时间不在允许的时间段内",
+		event.Username, event.SourceIP, event.Timestamp.Format("15:04"))
+
+	for _, rule := range rules {
+		if isTimeAllowed(event.Timestamp, rule) {
+			// 时间允许但用户不允许 -> abnormal_user
+			abnormalType = "abnormal_user"
+			description = fmt.Sprintf("检测到SSH异常登录: 用户 %s 从 %s 登录，该用户不在允许的用户列表中",
+				event.Username, event.SourceIP)
+			break
+		}
+	}
+
 	if d.shouldSuppressAlert(event.SourceIP) {
 		zap.S().Debugf("SSH anomaly alert suppressed for IP %s", event.SourceIP)
 		return nil
 	}
-
-	// 更新告警缓存
 	d.alertCache[event.SourceIP] = time.Now()
-
-	// IP异常登录，生成告警
 	return &engine.Alert{
-		AlertType:   "anomaly_login",
-		Service:     "ssh",
-		RuleName:    "ssh_anomaly_login",
-		Description: fmt.Sprintf("检测到SSH异常登录: 用户 %s 从 %s 登录，该IP不在允许的白名单中",
-			event.Username, event.SourceIP),
-		SourceIP:   event.SourceIP,
-		TargetUser: event.Username,
-		Count:      1,
-		Timeframe:  0,
-		FirstSeen:  event.Timestamp.Unix(),
-		LastSeen:   event.Timestamp.Unix(),
-		Level:      d.config.AlertLevel,
+		AlertType:    "anomaly_login",
+		Service:      "ssh",
+		RuleName:     "ssh_anomaly_login",
+		Description:  description,
+		SourceIP:     event.SourceIP,
+		TargetUser:   event.Username,
+		Count:        1,
+		Timeframe:    0,
+		FirstSeen:    event.Timestamp.Unix(),
+		LastSeen:     event.Timestamp.Unix(),
+		Level:        d.config.AlertLevel,
+		AbnormalType: abnormalType,
 	}
 }
 
@@ -242,8 +277,8 @@ func (d *Detector) UpdateConfig(data string) error {
 
 	d.config = *newCfg
 
-	// 重新编译IP到规则的索引
-	d.compileIPRuleIndex()
+	// 重新编译规则索引
+	d.compileRuleIndexes()
 
 	// 清空告警缓存
 	d.alertCache = make(map[string]time.Time)

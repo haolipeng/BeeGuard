@@ -54,6 +54,7 @@ type AnomalyRule struct {
 	Enabled     bool        `yaml:"enabled" json:"enabled"`
 	IPs         []string    `yaml:"ips" json:"ips"`                   // IP白名单（单IP列表）
 	TimeRanges  []TimeRange `yaml:"time_ranges" json:"time_ranges"`   // 允许的时间段列表，为空表示全天允许
+	Users       []string    `yaml:"users" json:"users"`               // 允许的用户列表，为空表示不限制用户
 }
 
 // Rule 检测规则

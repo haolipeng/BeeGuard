@@ -80,14 +80,22 @@ func (e *Engine) processLine(d Detector, line string) {
 		return // 不匹配任何规则
 	}
 
-	// 检查是否触发告警
-	alert := d.Check(event)
-	if alert == nil {
-		return // 未达到告警阈值
+	// syslog "message repeated N times" 格式需要循环 N 次进入滑动窗口
+	count := event.Count
+	if count <= 0 {
+		count = 1
 	}
 
-	// 发送告警
-	e.sendAlert(d, alert)
+	for i := 0; i < count; i++ {
+		// 检查是否触发告警
+		alert := d.Check(event)
+		if alert == nil {
+			continue
+		}
+
+		// 发送告警
+		e.sendAlert(d, alert)
+	}
 }
 
 // sendAlert 发送告警记录
@@ -111,6 +119,8 @@ func (e *Engine) sendAlert(d Detector, alert *Alert) {
 				"first_seen":  fmt.Sprintf("%d", alert.FirstSeen),
 				"last_seen":   fmt.Sprintf("%d", alert.LastSeen),
 				"level":       fmt.Sprintf("%d", alert.Level),
+				"result":      alert.Result,
+				"abnormal_type": alert.AbnormalType,
 			},
 		},
 	}
@@ -132,7 +142,11 @@ func (e *Engine) cleanupLoop() {
 		case <-e.done:
 			return
 		case <-ticker.C:
-			// 这里可以添加清理逻辑，如清理滑动窗口中的过期数据
+			for _, d := range e.detectors {
+				if cleaner, ok := d.(Cleaner); ok {
+					cleaner.Cleanup()
+				}
+			}
 			zap.S().Debug("cleanup tick")
 		}
 	}

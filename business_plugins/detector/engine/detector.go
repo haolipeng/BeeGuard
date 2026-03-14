@@ -9,9 +9,10 @@ type Event struct {
 	Timestamp time.Time // 事件时间
 	SourceIP  string    // 源IP地址
 	Username  string    // 用户名(可选)
-	Action    string    // 动作类型: "failed", "invalid_user"
+	Action    string    // 动作类型: "failed", "invalid_user", "success"
 	Raw       string    // 原始日志行
 	RuleName  string    // 匹配的规则名称
+	Count     int       // 事件重复次数（syslog "message repeated N times" 时 > 1）
 }
 
 // Alert 告警信息
@@ -27,6 +28,8 @@ type Alert struct {
 	FirstSeen   int64  `mapstructure:"first_seen"`   // 首次事件时间
 	LastSeen    int64  `mapstructure:"last_seen"`    // 最后事件时间
 	Level       int    `mapstructure:"level"`        // 告警级别
+	Result       string `mapstructure:"result"`        // 攻击结果: "failed" 或 "success"
+	AbnormalType string `mapstructure:"abnormal_type"` // 异常类型: unknown_ip, abnormal_time, abnormal_user
 }
 
 // Detector 检测器接口(可扩展框架核心)
@@ -52,4 +55,10 @@ type ConfigUpdater interface {
 	// UpdateConfig 更新检测器配置
 	// data 为 JSON 格式的配置数据
 	UpdateConfig(data string) error
+}
+
+// Cleaner 支持定期清理内部状态的检测器接口
+type Cleaner interface {
+	// Cleanup 清理内部过期数据（由 engine cleanupLoop 定期调用）
+	Cleanup()
 }
