@@ -14,6 +14,7 @@ const (
 	defaultFileMonitorWhitelistPath            = "config/file_monitor_whitelist.yaml"
 	defaultContainerDangerousCommandConfigPath = "config/container_dangerous_commands.yaml"
 	defaultContainerSensitiveFileConfigPath    = "config/container_sensitive_file_rules.yaml"
+	defaultBTFDir                              = "/opt/cloudsec/agent/btf"
 )
 
 func getConfigPath() string {
@@ -98,4 +99,21 @@ func getContainerSensitiveFileConfigPath() string {
 		}
 	}
 	return defaultContainerSensitiveFileConfigPath
+}
+
+func getBTFDir() string {
+	// 1. 优先检查环境变量 BTF_DIR
+	if dir := os.Getenv("BTF_DIR"); dir != "" {
+		return dir
+	}
+	// 2. 检查可执行文件同级的 btf/ 目录（build 目录测试场景）
+	execPath, err := os.Executable()
+	if err == nil {
+		dir := filepath.Join(filepath.Dir(execPath), "btf")
+		if info, err := os.Stat(dir); err == nil && info.IsDir() {
+			return dir
+		}
+	}
+	// 3. 默认部署路径
+	return defaultBTFDir
 }

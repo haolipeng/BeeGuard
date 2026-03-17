@@ -123,6 +123,22 @@ struct {
     __uint(max_entries, 1);
 } percpu_file_path_buf SEC(".maps");
 
+// root_mntns_id 存储（由 eBPF 自动初始化或 Go 层写入）
+struct {
+    __uint(type, BPF_MAP_TYPE_ARRAY);
+    __type(key, u32);
+    __type(value, __u64);
+    __uint(max_entries, 1);
+} root_mntns SEC(".maps");
+
+// Per-CPU buffer for mount_event
+struct {
+    __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
+    __type(key, u32);
+    __type(value, struct mount_event);
+    __uint(max_entries, 1);
+} percpu_mount_buf SEC(".maps");
+
 // ========== 路径构建函数 ==========
 // 向路径缓冲区追加路径分量 (缓冲区末尾反向写入，正向计数长度)
 // data: 路径缓冲区, len: 已累积长度(含末尾\0), entry: 路径分量, num: 分量字节数
@@ -190,7 +206,7 @@ static __noinline char *build_d_path(char *data, char *swap,
         if (dentry == root || dentry == parent) {
             if (dentry != root)
                 break;
-            //~ 到达 mount 根但不是全局根: 跨越��上层挂载点
+            //~ 到达 mount 根但不是全局根: 跨越到上层挂载点
             if (mount != mnt_parent) {
                 dentry = BPF_CORE_READ(mount, mnt_mountpoint);
                 mount = BPF_CORE_READ(mount, mnt_parent);
@@ -291,6 +307,18 @@ static __always_inline int read_args(struct task_struct *task, char *buf, int bu
     if (ret < 0)
         return 0;
 
+    //~ 在实际 args 数据之后写入 4 个 NULL 字节作为终止标记。
+    //~ per-CPU buffer 不会在每次事件之间自动清零，如果上一个进程的 args
+    //~ 较长而当前进程的 args 较短，残留数据会污染当前事件。
+    //~ 用户态 argsString() 用连续 4 个 NULL 判断数据结束，这里确保终止。
+    if (args_len < buf_size) {
+        unsigned int end = args_len & 511;
+        buf[end] = 0;
+        if (end + 1 < 512) buf[end + 1] = 0;
+        if (end + 2 < 512) buf[end + 2] = 0;
+        if (end + 3 < 512) buf[end + 3] = 0;
+    }
+
     return (int)args_len;
 }
 
@@ -341,7 +369,7 @@ static __noinline int file_exe_is_trusted(const char *exe_path, int path_len)
 }
 
 // query_s_id_by_dentry: 从 dentry 获取文件系统 ID（如 ext4/xfs/tmpfs）
-// 通过 dentry->d_sb->s_id 读取超级块的文���系统标识符
+// 通过 dentry->d_sb->s_id 读取超级块的文件系统标识符
 static __noinline int query_s_id_by_dentry(char *s_id, struct dentry *de)
 {
     char *id = (char *)BPF_CORE_READ(de, d_sb, s_id);
@@ -535,6 +563,53 @@ static __noinline struct sock *process_socket(struct task_struct *task, __u32 *o
     return NULL;
 }
 
+// ========== mount 命名空间辅助函数 ==========
+
+// 计算 mntns_id：(~superblock_addr) << 16 | ns.inum
+// 组合 superblock 地址和 inode 号，生成唯一标识
+static __noinline __u64 query_mntns_id(struct task_struct *task)
+{
+    unsigned int inum = BPF_CORE_READ(task, nsproxy, mnt_ns, ns.inum);
+    struct vfsmount *mnt = (struct vfsmount *)BPF_CORE_READ(task, fs, root.mnt);
+    struct super_block *sb = NULL;
+    if (mnt)
+        sb = BPF_CORE_READ(mnt, mnt_sb);
+
+    __u64 mntns_id = sb ? (unsigned long)sb : (__u64)-1;
+    mntns_id = (~mntns_id) << 16;
+    mntns_id = (mntns_id & 0xFFFFFFFF00000000ULL) | inum;
+    return mntns_id;
+}
+
+// 从 BPF map 读取 root_mntns_id
+static __always_inline __u64 get_root_mntns_id(void)
+{
+    u32 key = 0;
+    __u64 *val = bpf_map_lookup_elem(&root_mntns, &key);
+    return val ? *val : 0;
+}
+
+// 确保 root_mntns_id 已初始化
+// 在首次 execve 事件时自动遍历 real_parent 到 PID 1，计算并缓存
+static __noinline void ensure_root_mntns(struct task_struct *task)
+{
+    u32 key = 0;
+    __u64 *existing = bpf_map_lookup_elem(&root_mntns, &key);
+    if (existing && *existing != 0)
+        return;
+
+    //~ 遍历 real_parent 到最顶层进程
+    struct task_struct *t = task;
+    for (int i = 0; i < 32; i++) {
+        struct task_struct *parent = BPF_CORE_READ(t, real_parent);
+        if (!parent || parent == t)
+            break;
+        t = parent;
+    }
+    __u64 root_id = query_mntns_id(t);
+    bpf_map_update_elem(&root_mntns, &key, &root_id, BPF_ANY);
+}
+
 // ========== eBPF 程序入口 ==========
 
 // handle_execve_event: 采集并输出 execve 事件（包含 socket 信息 enrich）
@@ -566,7 +641,8 @@ static __noinline int handle_execve_event(
     //~ 获取当前task_struct
     task = (struct task_struct *)bpf_get_current_task();
 
-    //~ 获取当前进程的PID和TGID
+    //~ 确保 root_mntns_id 已���始化（首次事件时自动计算）
+    ensure_root_mntns(task);
     u64 id = bpf_get_current_pid_tgid();
     evt->pid = id;           //~ 低32位：线程ID
     evt->tgid = id >> 32;    //~ 高32位：进程ID（线程组ID）
@@ -590,7 +666,7 @@ static __noinline int handle_execve_event(
     //~ 读取完整可执行文件路径
     read_full_exe_path(task, evt->exe_path, sizeof(evt->exe_path));
 
-    //~ 读取命令行参数
+    //~ 读取命令行参数（read_args 内部在实际数据之后写入 null sentinel，避免 per-CPU 残留污染）
     read_args(task, evt->args, sizeof(evt->args));
 
     //~ 读取 stdin/stdout 路径
@@ -669,6 +745,10 @@ static __noinline int handle_execve_event(
         evt->local_ip = BPF_CORE_READ(sk, __sk_common.skc_rcv_saddr);
         evt->local_port = BPF_CORE_READ(sk, __sk_common.skc_num);
     }
+
+    //~ 容器标识字段
+    evt->mntns_id = query_mntns_id(task);
+    evt->root_mntns_id = get_root_mntns_id();
 
     //~ 通过Perf Event Array输出事件到用户态
     bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU,
@@ -951,10 +1031,11 @@ int tp_sys_exit(struct bpf_raw_tracepoint_args *ctx)
     unsigned long syscall_nr = 0;
     bpf_probe_read_kernel(&syscall_nr, sizeof(syscall_nr), &regs->orig_ax);
 
-    //~ 仅处理网络相关系统调用
-    //~ x86_64: connect=42, bind=49, accept=43, accept4=288, recvfrom=45, recvmsg=47
+    //~ 仅处理网络相关系统调用和 mount
+    //~ x86_64: connect=42, bind=49, accept=43, accept4=288, recvfrom=45, recvmsg=47, mount=165
     if (syscall_nr != 42 && syscall_nr != 49 && syscall_nr != 43 &&
-        syscall_nr != 288 && syscall_nr != 45 && syscall_nr != 47)
+        syscall_nr != 288 && syscall_nr != 45 && syscall_nr != 47 &&
+        syscall_nr != 165)
         return 0;
 
     struct task_struct *task = (struct task_struct *)bpf_get_current_task();
@@ -1204,6 +1285,50 @@ int tp_sys_exit(struct bpf_raw_tracepoint_args *ctx)
         return 0;
     }
 
+    //~ ========== mount (syscall 165) ==========
+    if (syscall_nr == 165) {
+        //~ retval != 0 表示 mount 失败，跳过
+        if (retval != 0)
+            return 0;
+
+        u32 mkey = 0;
+        struct mount_event *mevt = bpf_map_lookup_elem(&percpu_mount_buf, &mkey);
+        if (!mevt)
+            return 0;
+
+        __builtin_memset(mevt, 0, sizeof(*mevt));
+        mevt->event_type = EVENT_TYPE_MOUNT;
+        mevt->retval = (__s32)retval;
+
+        FILL_PROCESS_INFO(task, mevt);
+
+        //~ mount 命名空间信息
+        mevt->mntns_id = query_mntns_id(task);
+        mevt->root_mntns_id = get_root_mntns_id();
+
+        //~ 读取用户态字符串参数
+        //~ x86_64: rdi=dev_name, rsi=dir_name, rdx=type, r10=flags
+        void *u_dev = (void *)parm1;
+        void *u_dir = (void *)parm2;
+        __u64 parm3 = 0;
+        bpf_probe_read_kernel(&parm3, sizeof(parm3), &regs->dx);
+        void *u_type = (void *)parm3;
+
+        //~ 读取 flags（第4个参数, r10）
+        __u64 raw_flags = 0;
+        bpf_probe_read_kernel(&raw_flags, sizeof(raw_flags), &regs->r10);
+        mevt->flags = (__u32)raw_flags;
+
+        bpf_probe_read_user_str(mevt->dev_name, sizeof(mevt->dev_name), u_dev);
+        bpf_probe_read_user_str(mevt->dir_name, sizeof(mevt->dir_name), u_dir);
+        bpf_probe_read_user_str(mevt->fs_type, sizeof(mevt->fs_type), u_type);
+
+        read_full_exe_path(task, mevt->exe_path, sizeof(mevt->exe_path));
+
+        bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, mevt, sizeof(*mevt));
+        return 0;
+    }
+
     return 0;
 }
 
@@ -1238,6 +1363,8 @@ static __noinline int handle_inode_create(struct pt_regs *ctx)
     evt->new_path[0] = 0;
     evt->old_path[0] = 0;
     evt->s_id[0] = 0;
+    evt->mntns_id = 0;
+    evt->root_mntns_id = 0;
 
     task = (struct task_struct *)bpf_get_current_task();
 
@@ -1286,6 +1413,10 @@ static __noinline int handle_inode_create(struct pt_regs *ctx)
         evt->local_port = BPF_CORE_READ(sk, __sk_common.skc_num);
     }
 
+    //~ 容器标识字段
+    evt->mntns_id = query_mntns_id(task);
+    evt->root_mntns_id = get_root_mntns_id();
+
     bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, evt, sizeof(*evt));
 
     return 0;
@@ -1328,6 +1459,8 @@ static __noinline int handle_inode_rename(struct pt_regs *ctx)
     evt->new_path[0] = 0;
     evt->old_path[0] = 0;
     evt->s_id[0] = 0;
+    evt->mntns_id = 0;
+    evt->root_mntns_id = 0;
 
     task = (struct task_struct *)bpf_get_current_task();
 
@@ -1380,6 +1513,10 @@ static __noinline int handle_inode_rename(struct pt_regs *ctx)
     if (new_path_len > 1 && new_path_len <= PATH_BUF_SIZE)
         bpf_probe_read_kernel(evt->new_path, new_path_len & PATH_BUF_MASK, new_path_start);
 
+    //~ 容器标识字段
+    evt->mntns_id = query_mntns_id(task);
+    evt->root_mntns_id = get_root_mntns_id();
+
     bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, evt, sizeof(*evt));
 
     return 0;
@@ -1392,6 +1529,104 @@ SEC("kprobe/security_inode_rename")
 int kp_inode_rename(struct pt_regs *ctx)
 {
     return handle_inode_rename(ctx);
+}
+
+// handle_inode_unlink: 处理文件删除事件
+// 独立 __noinline subprogram，有独立 1M 指令预算
+// security_inode_unlink 签名与 security_inode_create 相同：
+//   security_inode_unlink(struct inode *dir, struct dentry *dentry)
+static __noinline int handle_inode_unlink(struct pt_regs *ctx)
+{
+    u32 key = 0;
+    struct task_struct *task;
+    struct task_struct *parent;
+
+    struct file_event *evt = bpf_map_lookup_elem(&percpu_file_buf, &key);
+    if (!evt)
+        return 0;
+
+    //~ 逐字段初始化（file_event 太大不能用 __builtin_memset）
+    evt->event_type = EVENT_TYPE_FILE;
+    evt->action = FILE_ACTION_DELETE;
+    evt->padding1[0] = 0;
+    evt->padding1[1] = 0;
+    evt->pid = 0;
+    evt->tgid = 0;
+    evt->ppid = 0;
+    evt->uid = 0;
+    evt->socket_pid = 0;
+    evt->remote_ip = 0;
+    evt->remote_port = 0;
+    evt->local_port = 0;
+    evt->local_ip = 0;
+    evt->new_path[0] = 0;
+    evt->old_path[0] = 0;
+    evt->s_id[0] = 0;
+    evt->mntns_id = 0;
+    evt->root_mntns_id = 0;
+
+    task = (struct task_struct *)bpf_get_current_task();
+
+    //~ 读取可执行文件路径并检查文件监控白名单
+    int path_len = read_full_exe_path(task, evt->exe_path, sizeof(evt->exe_path));
+    if (path_len > 0 && file_exe_is_trusted(evt->exe_path, path_len))
+        return 0;
+
+    //~ 填充进程信息
+    u64 id = bpf_get_current_pid_tgid();
+    evt->pid = id;
+    evt->tgid = id >> 32;
+    evt->uid = bpf_get_current_uid_gid();
+    parent = BPF_CORE_READ(task, real_parent);
+    if (parent)
+        evt->ppid = BPF_CORE_READ(parent, tgid);
+    bpf_get_current_comm(&evt->comm, sizeof(evt->comm));
+
+    //~ 提取 dentry（security_inode_unlink 的第 2 个参数）
+    struct dentry *de = (struct dentry *)PT_REGS_PARM2_CORE(ctx);
+    if (!de)
+        return 0;
+
+    //~ 获取文件系统 ID
+    query_s_id_by_dentry(evt->s_id, de);
+
+    //~ 使用 percpu_file_path_buf 构建文件路径
+    struct path_buf *pbuf = bpf_map_lookup_elem(&percpu_file_path_buf, &key);
+    if (!pbuf)
+        return 0;
+
+    __u32 fpath_len = 0;
+    char *fpath_start = dentry_path(pbuf->data, pbuf->swap, de, &fpath_len);
+
+    if (fpath_len > 1 && fpath_len <= PATH_BUF_SIZE)
+        bpf_probe_read_kernel(evt->new_path, fpath_len & PATH_BUF_MASK, fpath_start);
+
+    //~ 查找关联 socket（遍历当前进程及父进程链）
+    __u32 sock_pid = 0;
+    struct sock *sk = process_socket(task, &sock_pid);
+    if (sk) {
+        evt->socket_pid = sock_pid;
+        evt->remote_ip = BPF_CORE_READ(sk, __sk_common.skc_daddr);
+        evt->remote_port = BPF_CORE_READ(sk, __sk_common.skc_dport);
+        evt->local_ip = BPF_CORE_READ(sk, __sk_common.skc_rcv_saddr);
+        evt->local_port = BPF_CORE_READ(sk, __sk_common.skc_num);
+    }
+
+    //~ 容器标识字段
+    evt->mntns_id = query_mntns_id(task);
+    evt->root_mntns_id = get_root_mntns_id();
+
+    bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, evt, sizeof(*evt));
+
+    return 0;
+}
+
+// 监听文件删除事件
+// Hook点: security_inode_unlink(struct inode *dir, struct dentry *dentry)
+SEC("kprobe/security_inode_unlink")
+int kp_inode_unlink(struct pt_regs *ctx)
+{
+    return handle_inode_unlink(ctx);
 }
 
 char LICENSE[] SEC("license") = "GPL";

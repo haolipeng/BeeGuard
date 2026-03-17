@@ -120,7 +120,7 @@ func main() {
 	containerMeta := NewContainerMetaCache(5 * time.Minute)
 	logger.Info("Container metadata cache initialized")
 
-	loader, err := ebpf.NewLoader()
+	loader, err := ebpf.NewLoader(getBTFDir(), logger)
 	if err != nil {
 		logger.Fatal("Failed to load eBPF program", "error", err)
 		os.Exit(1)
