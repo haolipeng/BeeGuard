@@ -17,6 +17,15 @@ DRIVER_SRC=$(PLUGINS_SRC_DIR)/ebpf_base_detector
 NIDS_SRC=$(PLUGINS_SRC_DIR)/nids
 SCANNER_SRC=$(PLUGINS_SRC_DIR)/scanner
 
+# BTF文件目录
+BTF_SRC_DIR=$(DRIVER_SRC)/btf
+BTF_BUILD_DIR=$(BUILD_DIR)/btf
+
+# 静态 libpcap（nids 插件依赖）
+LIBPCAP_STATIC_DIR=$(BUILD_DIR)/libpcap-static
+NIDS_CGO_CFLAGS=-I$(CURDIR)/$(LIBPCAP_STATIC_DIR)/include
+NIDS_CGO_LDFLAGS=-L$(CURDIR)/$(LIBPCAP_STATIC_DIR)/lib -Wl,-Bstatic -lpcap -Wl,-Bdynamic
+
 # 部署目录
 DEPLOY_DIR=/opt/cloudsec/agent
 
@@ -41,12 +50,12 @@ all: build
 build-agent:
 	@echo "Building $(BINARY_NAME)..."
 	@mkdir -p $(BUILD_DIR)
-	$(GO) build $(GOFLAGS) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) $(MAIN_FILE)
+	CGO_ENABLED=0 $(GO) build $(GOFLAGS) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) $(MAIN_FILE)
 	@echo "Build complete: $(BUILD_DIR)/$(BINARY_NAME)"
 
 # 编译所有插件
 .PHONY: build-plugins
-build-plugins: generate-ebpf
+build-plugins: generate-ebpf build-libpcap-static
 	@echo "Building all plugins..."
 	@mkdir -p $(PLUGINS_DIR)/collector
 	@mkdir -p $(PLUGINS_DIR)/baseline/config
@@ -55,24 +64,27 @@ build-plugins: generate-ebpf
 	@mkdir -p $(PLUGINS_DIR)/nids/config
 	@mkdir -p $(PLUGINS_DIR)/scanner/config
 	@echo "  Building collector plugin..."
-	@cd $(COLLECTOR_SRC) && $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/collector/collector .
+	@cd $(COLLECTOR_SRC) && CGO_ENABLED=0 $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/collector/collector .
 	@echo "  Building baseline plugin..."
-	@cd $(BASELINE_SRC) && $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/baseline/baseline .
+	@cd $(BASELINE_SRC) && CGO_ENABLED=0 $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/baseline/baseline .
 	@cp -r $(BASELINE_SRC)/config/linux $(PLUGINS_DIR)/baseline/config/
 	@cp -r $(BASELINE_SRC)/config/container $(PLUGINS_DIR)/baseline/config/ 2>/dev/null || true
 	@echo "  Building detector plugin..."
-	@cd $(DETECTOR_SRC) && $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/detector/detector .
+	@cd $(DETECTOR_SRC) && CGO_ENABLED=0 $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/detector/detector .
 	@cp $(DETECTOR_SRC)/config/rules/*.yaml $(PLUGINS_DIR)/detector/config/rules/
 	@echo "  Building ebpf_base_detector plugin..."
-	@cd $(DRIVER_SRC) && $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/ebpf_base_detector/ebpf_base_detector .
+	@cd $(DRIVER_SRC) && CGO_ENABLED=0 $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/ebpf_base_detector/ebpf_base_detector .
 	@cp $(DRIVER_SRC)/config/dangerous_commands.yaml $(PLUGINS_DIR)/ebpf_base_detector/config/
 	@cp $(DRIVER_SRC)/config/container_dangerous_commands.yaml $(PLUGINS_DIR)/ebpf_base_detector/config/
 	@cp $(DRIVER_SRC)/config/privilege_escalation_whitelist.yaml $(PLUGINS_DIR)/ebpf_base_detector/config/
 	@cp $(DRIVER_SRC)/config/malicious_request_rules.yaml $(PLUGINS_DIR)/ebpf_base_detector/config/
 	@cp $(DRIVER_SRC)/config/sensitive_file_rules.yaml $(PLUGINS_DIR)/ebpf_base_detector/config/
 	@cp $(DRIVER_SRC)/config/file_monitor_whitelist.yaml $(PLUGINS_DIR)/ebpf_base_detector/config/
+	@cp $(DRIVER_SRC)/config/container_sensitive_file_rules.yaml $(PLUGINS_DIR)/ebpf_base_detector/config/
+	@mkdir -p $(BTF_BUILD_DIR)
+	@cp $(BTF_SRC_DIR)/*.btf $(BTF_BUILD_DIR)/ 2>/dev/null || true
 	@echo "  Building nids plugin..."
-	@cd $(NIDS_SRC) && $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/nids/nids .
+	@cd $(NIDS_SRC) && CGO_ENABLED=1 CGO_CFLAGS="$(NIDS_CGO_CFLAGS)" CGO_LDFLAGS="$(NIDS_CGO_LDFLAGS)" $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/nids/nids .
 	@cp $(NIDS_SRC)/config/nids.yaml $(PLUGINS_DIR)/nids/config/
 	@cp $(NIDS_SRC)/config/nids.rules $(PLUGINS_DIR)/nids/config/
 	@echo "  Building scanner plugin..."
@@ -93,26 +105,34 @@ generate-ebpf:
 	@cd $(DRIVER_SRC)/ebpf && $(GO) generate ./...
 	@echo "eBPF code generation complete"
 
+# 构建静态 libpcap（nids 插件依赖，无 D-Bus/DPDK 依赖）
+.PHONY: build-libpcap-static
+build-libpcap-static:
+	@./scripts/build-static-libpcap.sh $(LIBPCAP_STATIC_DIR)
+
 # 编译 ebpf_base_detector 插件
 .PHONY: build-driver
 build-driver: generate-ebpf
 	@echo "Building ebpf_base_detector plugin..."
 	@mkdir -p $(PLUGINS_DIR)/ebpf_base_detector/config
-	@cd $(DRIVER_SRC) && $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/ebpf_base_detector/ebpf_base_detector .
+	@cd $(DRIVER_SRC) && CGO_ENABLED=0 $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/ebpf_base_detector/ebpf_base_detector .
 	@cp $(DRIVER_SRC)/config/dangerous_commands.yaml $(PLUGINS_DIR)/ebpf_base_detector/config/
 	@cp $(DRIVER_SRC)/config/container_dangerous_commands.yaml $(PLUGINS_DIR)/ebpf_base_detector/config/
 	@cp $(DRIVER_SRC)/config/privilege_escalation_whitelist.yaml $(PLUGINS_DIR)/ebpf_base_detector/config/
 	@cp $(DRIVER_SRC)/config/malicious_request_rules.yaml $(PLUGINS_DIR)/ebpf_base_detector/config/
 	@cp $(DRIVER_SRC)/config/sensitive_file_rules.yaml $(PLUGINS_DIR)/ebpf_base_detector/config/
 	@cp $(DRIVER_SRC)/config/file_monitor_whitelist.yaml $(PLUGINS_DIR)/ebpf_base_detector/config/
+	@cp $(DRIVER_SRC)/config/container_sensitive_file_rules.yaml $(PLUGINS_DIR)/ebpf_base_detector/config/
+	@mkdir -p $(BTF_BUILD_DIR)
+	@cp $(BTF_SRC_DIR)/*.btf $(BTF_BUILD_DIR)/ 2>/dev/null || true
 	@echo "Build complete: $(PLUGINS_DIR)/ebpf_base_detector/"
 
 # 编译 nids 插件
 .PHONY: build-nids
-build-nids:
+build-nids: build-libpcap-static
 	@echo "Building nids plugin..."
 	@mkdir -p $(PLUGINS_DIR)/nids/config
-	@cd $(NIDS_SRC) && $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/nids/nids .
+	@cd $(NIDS_SRC) && CGO_ENABLED=1 CGO_CFLAGS="$(NIDS_CGO_CFLAGS)" CGO_LDFLAGS="$(NIDS_CGO_LDFLAGS)" $(GO) build $(GOFLAGS) -o ../../$(PLUGINS_DIR)/nids/nids .
 	@cp $(NIDS_SRC)/config/nids.yaml $(PLUGINS_DIR)/nids/config/
 	@cp $(NIDS_SRC)/config/nids.rules $(PLUGINS_DIR)/nids/config/
 	@echo "Build complete: $(PLUGINS_DIR)/nids/"
@@ -138,7 +158,7 @@ build: build-agent build-plugins
 build-ctl:
 	@echo "Building cloudsecctl..."
 	@mkdir -p $(BUILD_DIR)
-	@cd deploy/control && $(GO) build $(GOFLAGS) -o ../../$(BUILD_DIR)/cloudsecctl .
+	@cd deploy/control && CGO_ENABLED=0 $(GO) build $(GOFLAGS) -o ../../$(BUILD_DIR)/cloudsecctl .
 	@echo "Build complete: $(BUILD_DIR)/cloudsecctl"
 
 # 编译所有组件 (agent + plugins + cloudsecctl)
@@ -220,6 +240,8 @@ deploy: build
 	@sudo cp -r $(PLUGINS_DIR)/ebpf_base_detector/ $(DEPLOY_DIR)/plugins/
 	@sudo cp -r $(PLUGINS_DIR)/nids/ $(DEPLOY_DIR)/plugins/
 	@sudo cp -r $(PLUGINS_DIR)/scanner/ $(DEPLOY_DIR)/plugins/
+	@sudo mkdir -p $(DEPLOY_DIR)/btf
+	@sudo cp $(BTF_BUILD_DIR)/*.btf $(DEPLOY_DIR)/btf/ 2>/dev/null || true
 	@sudo chmod 755 $(DEPLOY_DIR)/bin/$(BINARY_NAME)
 	@sudo chmod 755 $(DEPLOY_DIR)/plugins/collector/collector
 	@sudo chmod 755 $(DEPLOY_DIR)/plugins/baseline/baseline
@@ -240,7 +262,9 @@ deploy: build
 	@echo "  Config:  $(DEPLOY_DIR)/plugins/ebpf_base_detector/config/container_dangerous_commands.yaml"
 	@echo "  Config:  $(DEPLOY_DIR)/plugins/ebpf_base_detector/config/privilege_escalation_whitelist.yaml"
 	@echo "  Config:  $(DEPLOY_DIR)/plugins/ebpf_base_detector/config/malicious_request_rules.yaml"
+	@echo "  Config:  $(DEPLOY_DIR)/plugins/ebpf_base_detector/config/sensitive_file_rules.yaml"
 	@echo "  Config:  $(DEPLOY_DIR)/plugins/ebpf_base_detector/config/file_monitor_whitelist.yaml"
+	@echo "  Config:  $(DEPLOY_DIR)/plugins/ebpf_base_detector/config/container_sensitive_file_rules.yaml"
 
 # 仅部署 agent（不含插件）
 .PHONY: deploy-agent
@@ -277,6 +301,8 @@ deploy-driver: build-driver
 	@sudo mkdir -p $(DEPLOY_DIR)/plugins
 	@sudo cp -r $(PLUGINS_DIR)/ebpf_base_detector/ $(DEPLOY_DIR)/plugins/
 	@sudo chmod 755 $(DEPLOY_DIR)/plugins/ebpf_base_detector/ebpf_base_detector
+	@sudo mkdir -p $(DEPLOY_DIR)/btf
+	@sudo cp $(BTF_BUILD_DIR)/*.btf $(DEPLOY_DIR)/btf/ 2>/dev/null || true
 	@echo "Deploy complete: $(DEPLOY_DIR)/plugins/ebpf_base_detector/"
 
 # 仅部署 nids 插件

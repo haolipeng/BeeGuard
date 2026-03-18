@@ -46,42 +46,42 @@ contents:
       group: root
 
   # --- Plugin binaries ---
-  - src: ../build/plugins/collector
+  - src: ../build/plugins/collector/collector
     dst: /opt/cloudsec/agent/plugins/collector/collector
     file_info:
       mode: 0755
       owner: root
       group: root
 
-  - src: ../build/plugins/baseline
+  - src: ../build/plugins/baseline/baseline
     dst: /opt/cloudsec/agent/plugins/baseline/baseline
     file_info:
       mode: 0755
       owner: root
       group: root
 
-  - src: ../build/plugins/detector
+  - src: ../build/plugins/detector/detector
     dst: /opt/cloudsec/agent/plugins/detector/detector
     file_info:
       mode: 0755
       owner: root
       group: root
 
-  - src: ../build/plugins/ebpf_base_detector
+  - src: ../build/plugins/ebpf_base_detector/ebpf_base_detector
     dst: /opt/cloudsec/agent/plugins/ebpf_base_detector/ebpf_base_detector
     file_info:
       mode: 0755
       owner: root
       group: root
 
-  - src: ../build/plugins/nids
+  - src: ../build/plugins/nids/nids
     dst: /opt/cloudsec/agent/plugins/nids/nids
     file_info:
       mode: 0755
       owner: root
       group: root
 
-  - src: ../build/plugins/scanner
+  - src: ../build/plugins/scanner/scanner
     dst: /opt/cloudsec/agent/plugins/scanner/scanner
     file_info:
       mode: 0755
@@ -154,17 +154,34 @@ contents:
       owner: root
       group: root
 
-  # --- baseline config ---
-  - src: ../business_plugins/baseline/config/linux/1200.yaml
-    dst: /opt/cloudsec/agent/plugins/baseline/config/linux/1200.yaml
+  - src: ../business_plugins/ebpf_base_detector/config/container_dangerous_commands.yaml
+    dst: /opt/cloudsec/agent/plugins/ebpf_base_detector/config/container_dangerous_commands.yaml
     type: config|noreplace
     file_info:
       mode: 0644
       owner: root
       group: root
 
-  - src: ../business_plugins/baseline/config/linux/1200_simple.yaml
-    dst: /opt/cloudsec/agent/plugins/baseline/config/linux/1200_simple.yaml
+  - src: ../business_plugins/ebpf_base_detector/config/container_sensitive_file_rules.yaml
+    dst: /opt/cloudsec/agent/plugins/ebpf_base_detector/config/container_sensitive_file_rules.yaml
+    type: config|noreplace
+    file_info:
+      mode: 0644
+      owner: root
+      group: root
+
+  # --- BTF files for kernel compatibility ---
+  - src: ../build/btf/
+    dst: /opt/cloudsec/agent/btf/
+    type: tree
+    file_info:
+      mode: 0644
+      owner: root
+      group: root
+
+  # --- baseline config ---
+  - src: ../business_plugins/baseline/config/linux/1200.yaml
+    dst: /opt/cloudsec/agent/plugins/baseline/config/linux/1200.yaml
     type: config|noreplace
     file_info:
       mode: 0644

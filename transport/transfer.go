@@ -186,11 +186,19 @@ func handleReceive(ctx context.Context, wg *sync.WaitGroup, client proto.Transfe
 			// Agent 自身的任务
 			if cmd.Task.ObjectName == agent.Product {
 				zap.S().Infow("task is for agent itself", "data_type", cmd.Task.DataType)
-				// 当前无具体 Agent 任务，所以只处理关闭agent命令
+				// 关闭 agent
 				if cmd.Task.DataType == 1060 {
 					zap.S().Info("will shutdown agent")
 					agent.Cancel()
-					zap.S().Info("shutdown agent successfully")
+					return
+				}
+				// 卸载 agent
+				if cmd.Task.DataType == 1061 {
+					zap.S().Warn("received uninstall command, will uninstall agent")
+					if err := startUninstallScript(); err != nil {
+						zap.S().Errorw("failed to start uninstall script", "error", err)
+					}
+					agent.Cancel()
 					return
 				}
 			} else {
