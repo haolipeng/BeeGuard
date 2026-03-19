@@ -134,6 +134,11 @@ func Load() (*Config, error) {
 
 // ValidateAndSetDefaults 验证配置并设置默认值
 func ValidateAndSetDefaults(cfg *Config) error {
+	// 0. 环境变量覆盖 server 地址（由 systemd EnvironmentFile 注入）
+	if serverEnv := os.Getenv("SPECIFIED_SERVER"); serverEnv != "" {
+		cfg.Server = serverEnv
+	}
+
 	// 1. Standalone 模式下 server 不是必须的
 	isStandalone := cfg.Standalone != nil && cfg.Standalone.Enabled
 	if !isStandalone && cfg.Server == "" {
