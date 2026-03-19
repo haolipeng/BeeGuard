@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -83,19 +82,17 @@ func main() {
 	wg := &sync.WaitGroup{}
 	zap.S().Info("++++++++++++++++++++++++++++++running++++++++++++++++++++++++++++++")
 
-	Context, Cancel := context.WithCancel(context.Background())
-
 	// 启动插件守护进程
 	wg.Add(1)
-	go plugin.Startup(Context, wg)
+	go plugin.Startup(agent.Context, wg)
 
 	// 根据模式启动不同的传输守护进程
 	wg.Add(1)
 	if config.IsStandalone() {
 		zap.S().Info("running in standalone mode, transport disabled")
-		go standalone.StartOutputHandler(Context, wg)
+		go standalone.StartOutputHandler(agent.Context, wg)
 	} else {
-		go transport.StartTransfer(Context, wg)
+		go transport.StartTransfer(agent.Context, wg)
 	}
 
 	go func() {
@@ -105,7 +102,7 @@ func main() {
 		zap.S().Warnf("receive signal: %s, agent will shutdown...", sig.String())
 		zap.S().Info("waiting 5 seconds for graceful shutdown...")
 		<-time.After(time.Second * 5)
-		Cancel()
+		agent.Cancel()
 	}()
 
 	wg.Wait()

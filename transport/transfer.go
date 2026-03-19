@@ -194,9 +194,13 @@ func handleReceive(ctx context.Context, wg *sync.WaitGroup, client proto.Transfe
 				}
 				// 卸载 agent
 				if cmd.Task.DataType == 1061 {
-					zap.S().Warn("received uninstall command, will uninstall agent")
+					zap.S().Warnw("received uninstall command, will uninstall agent",
+						"data_type", cmd.Task.DataType,
+						"object_name", cmd.Task.ObjectName)
 					if err := startUninstallScript(); err != nil {
 						zap.S().Errorw("failed to start uninstall script", "error", err)
+					} else {
+						zap.S().Info("uninstall script launched successfully, agent will exit")
 					}
 					agent.Cancel()
 					return

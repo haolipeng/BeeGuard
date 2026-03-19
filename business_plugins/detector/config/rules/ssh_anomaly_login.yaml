@@ -1,5 +1,5 @@
 ssh_anomaly_login:
-  enabled: false
+  enabled: true
   log_paths:
     - /var/log/auth.log
     - /var/log/secure
