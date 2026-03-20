@@ -37,6 +37,7 @@ vendor/
 *.tmp
 *.temp
 .claude/*
+docs
 
 # JSON 输出文件（测试生成）
 *.json
@@ -52,7 +53,6 @@ develop/
 scripts/
 
 # 文档目录
-docs/
 
 # Machine ID 文件
 machine-id

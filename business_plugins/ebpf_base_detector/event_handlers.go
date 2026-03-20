@@ -13,14 +13,14 @@ type eventHandlerCtx struct {
 	client        *businessplugins.Client
 	logger        *log.Logger
 	dcDetector    *DangerousCommandDetector
-	cdcDetector   *DangerousCommandDetector  // 容器高危命令（复用同类型，加载独立规则）
+	cdcDetector   *DangerousCommandDetector // 容器高危命令（复用同类型，加载独立规则）
 	rsDetector    *ReverseShellDetector
 	mrDetector    *MaliciousRequestDetector
 	sfDetector    *SensitiveFileDetector
-	csfDetector   *SensitiveFileDetector      // 容器敏感文件（复用同类型，加载独立规则）
-	ceDetector    *ContainerEscapeDetector   // 容器逃逸
+	csfDetector   *SensitiveFileDetector         // 容器敏感文件（复用同类型，加载独立规则）
+	ceDetector    *ContainerEscapeDetector       // 容器逃逸
 	crsDetector   *ContainerReverseShellDetector // 容器反弹 Shell
-	containerMeta *ContainerMetaCache        // 容器元数据缓存
+	containerMeta *ContainerMetaCache            // 容器元数据缓存
 }
 
 func handleExecve(ctx *eventHandlerCtx, raw []byte) error {
@@ -215,11 +215,11 @@ func handleConnect(ctx *eventHandlerCtx, raw []byte) error {
 	if err := evt.UnmarshalBinary(raw); err != nil {
 		return fmt.Errorf("unmarshal connect event: %w", err)
 	}
-	record := evt.ToRecord()
-	ctx.logger.Info("Connect event",
-		"pid", evt.PID, "comm", cstring(evt.Comm[:]),
-		"remote_ip", record.Data.Fields["remote_ip"], "remote_port", record.Data.Fields["remote_port"],
-		"protocol", record.Data.Fields["protocol"], "retval", evt.RetVal)
+	//record := evt.ToRecord()
+	//ctx.logger.Info("Connect event",
+	//	"pid", evt.PID, "comm", cstring(evt.Comm[:]),
+	//	"remote_ip", record.Data.Fields["remote_ip"], "remote_port", record.Data.Fields["remote_port"],
+	//	"protocol", record.Data.Fields["protocol"], "retval", evt.RetVal)
 	if ctx.mrDetector != nil {
 		if mrResult := ctx.mrDetector.MatchConnect(&evt); mrResult != nil {
 			mrRecord := BuildMaliciousRequestConnectRecord(&evt, mrResult)
@@ -253,11 +253,12 @@ func handleAccept(ctx *eventHandlerCtx, raw []byte) error {
 	if err := evt.UnmarshalBinary(raw); err != nil {
 		return fmt.Errorf("unmarshal accept event: %w", err)
 	}
-	record := evt.ToRecord()
-	ctx.logger.Info("Accept event",
-		"pid", evt.PID, "comm", cstring(evt.Comm[:]),
-		"remote_ip", record.Data.Fields["remote_ip"], "remote_port", record.Data.Fields["remote_port"],
-		"local_port", record.Data.Fields["local_port"], "protocol", record.Data.Fields["protocol"])
+	evt.ToRecord()
+	// record := evt.ToRecord()
+	// ctx.logger.Info("Accept event",
+	//	"pid", evt.PID, "comm", cstring(evt.Comm[:]),
+	//	"remote_ip", record.Data.Fields["remote_ip"], "remote_port", record.Data.Fields["remote_port"],
+	//	"local_port", record.Data.Fields["local_port"], "protocol", record.Data.Fields["protocol"])
 	return nil
 }
 
@@ -266,11 +267,11 @@ func handleDNS(ctx *eventHandlerCtx, raw []byte) error {
 	if err := evt.UnmarshalBinary(raw); err != nil {
 		return fmt.Errorf("unmarshal DNS event: %w", err)
 	}
-	record := evt.ToRecord()
-	ctx.logger.Info("DNS query event",
-		"pid", evt.PID, "comm", cstring(evt.Comm[:]),
-		"domain", record.Data.Fields["domain"], "query_type", record.Data.Fields["query_type"],
-		"dns_server", record.Data.Fields["dns_server_ip"])
+	//record := evt.ToRecord()
+	//ctx.logger.Info("DNS query event",
+	//	"pid", evt.PID, "comm", cstring(evt.Comm[:]),
+	//	"domain", record.Data.Fields["domain"], "query_type", record.Data.Fields["query_type"],
+	//	"dns_server", record.Data.Fields["dns_server_ip"])
 	if ctx.mrDetector != nil {
 		if mrResult := ctx.mrDetector.MatchDNS(&evt); mrResult != nil {
 			mrRecord := BuildMaliciousRequestDNSRecord(&evt, mrResult)
@@ -302,7 +303,7 @@ func handleFile(ctx *eventHandlerCtx, raw []byte) error {
 	case events.FileActionDelete:
 		actionStr = "delete"
 	}
-    //频繁输出，影响问题排查
+	//频繁输出，影响问题排查
 	//ctx.logger.Info("File event",
 	//	"pid", evt.PID, "comm", cstring(evt.Comm[:]), "action", actionStr,
 	//	"new_path", newPath, "old_path", cstring(evt.OldPath[:]), "s_id", cstring(evt.SID[:]))
