@@ -302,9 +302,10 @@ func handleFile(ctx *eventHandlerCtx, raw []byte) error {
 	case events.FileActionDelete:
 		actionStr = "delete"
 	}
-	ctx.logger.Info("File event",
-		"pid", evt.PID, "comm", cstring(evt.Comm[:]), "action", actionStr,
-		"new_path", newPath, "old_path", cstring(evt.OldPath[:]), "s_id", cstring(evt.SID[:]))
+    //频繁输出，影响问题排查
+	//ctx.logger.Info("File event",
+	//	"pid", evt.PID, "comm", cstring(evt.Comm[:]), "action", actionStr,
+	//	"new_path", newPath, "old_path", cstring(evt.OldPath[:]), "s_id", cstring(evt.SID[:]))
 	if ctx.sfDetector != nil {
 		result := ctx.sfDetector.Detect(newPath)
 		if result != nil {

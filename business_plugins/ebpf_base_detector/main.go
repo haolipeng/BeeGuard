@@ -24,20 +24,20 @@ func main() {
 	logger := log.New(logDir)
 	logger.Info("Starting eBPF driver plugin...")
 
-	var dcDetector *DangerousCommandDetector
+	var hdcDetector *DangerousCommandDetector
 	configPath := getConfigPath()
 	config, err := LoadRules(configPath)
 	if err != nil {
 		logger.Warn("Failed to load detection rules, detection disabled", "error", err, "path", configPath)
 	} else {
-		dcDetector, err = NewDangerousCommandDetector(config)
+		hdcDetector, err = NewDangerousCommandDetector(config)
 		if err != nil {
 			logger.Warn("Failed to create detector, detection disabled", "error", err)
-			dcDetector = nil
+			hdcDetector = nil
 		} else {
 			logger.Info("Detection rules loaded successfully",
 				"version", config.Version,
-				"rules", dcDetector.GetEnabledRuleCount())
+				"rules", hdcDetector.GetEnabledRuleCount())
 		}
 	}
 
@@ -197,8 +197,8 @@ func main() {
 			evtCtx := &eventHandlerCtx{
 				client:        client,
 				logger:        logger,
-				dcDetector:    dcDetector,
-				cdcDetector:   cdcDetector,
+				dcDetector:    hdcDetector, // 主机高危命令检测器
+				cdcDetector:   cdcDetector, // 容器高危命令检测器
 				rsDetector:    rsDetector,
 				mrDetector:    mrDetector,
 				sfDetector:    sfDetector,
