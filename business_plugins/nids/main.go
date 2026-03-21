@@ -46,7 +46,7 @@ func main() {
 	logger.Info("Suricata rules loaded", "count", len(rules), "path", rulesPath)
 
 	// 5. 创建攻击追踪器
-	tracker := NewAttackTracker()
+	tracker := NewAttackTracker(logger)
 
 	// 6. 创建检测引擎
 	detector := NewDetector(rules, tracker, client, logger)
@@ -66,6 +66,9 @@ func main() {
 	// 8. 启动抓包循环
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	// 启动攻击追踪器过期清理
+	tracker.StartCleanup(ctx)
 
 	var wg sync.WaitGroup
 	wg.Add(1)
