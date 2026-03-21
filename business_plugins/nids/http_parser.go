@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/google/gopacket"
@@ -123,9 +124,11 @@ func parseHTTPRequests(reader io.Reader, netFlow, tcpFlow gopacket.Flow,
 
 // parsePort 将端口字符串转为 uint16
 func parsePort(s string) uint16 {
-	var port uint16
-	fmt.Sscanf(s, "%d", &port)
-	return port
+	p, err := strconv.ParseUint(s, 10, 16)
+	if err != nil {
+		return 0
+	}
+	return uint16(p)
 }
 
 // urlDecode 对 URI 进行 URL 解码

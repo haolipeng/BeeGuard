@@ -141,8 +141,8 @@ func (f *httpStreamFactory) New(netFlow, tcpFlow gopacket.Flow) tcpassembly.Stre
 	}
 
 	// 判断目标端口是否在监控范围内
-	dstPort, _ := strconv.Atoi(tcpFlow.Dst().String())
-	if !f.monitorPorts[uint16(dstPort)] {
+	dstPort, err := strconv.Atoi(tcpFlow.Dst().String())
+	if err != nil || !f.monitorPorts[uint16(dstPort)] {
 		return &discardStream{}
 	}
 

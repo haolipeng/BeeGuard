@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 	"sync"
@@ -70,7 +71,11 @@ func (m *MaliciousRequestDetector) buildIndex(config *MaliciousRequestRuleConfig
 			}
 		case MaliciousRequestTypePort:
 			for _, portStr := range rule.Indicators {
-				port, _ := strconv.Atoi(portStr)
+				port, err := strconv.Atoi(portStr)
+				if err != nil || port < 1 || port > 65535 {
+					log.Printf("WARN: buildIndex: invalid port indicator %q in rule %s, skipped", portStr, rule.ID)
+					continue
+				}
 				m.portIndex[uint16(port)] = rule
 			}
 		case MaliciousRequestTypeIPPort:

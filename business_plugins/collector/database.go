@@ -245,7 +245,10 @@ func (h *DatabaseHandler) buildPortMap() map[string]int {
 
 	for _, p := range ports {
 		if p.Pid != "" {
-			portNum, _ := strconv.Atoi(p.Sport)
+			portNum, err := strconv.Atoi(p.Sport)
+			if err != nil {
+				continue
+			}
 			// 只记录第一个端口（主端口）
 			if _, exists := portMap[p.Pid]; !exists {
 				portMap[p.Pid] = portNum
