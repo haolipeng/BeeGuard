@@ -80,7 +80,7 @@ dialOptions = []grpc.DialOption{
 | 属性 | 值 |
 |------|-----|
 | **严重级别** | 严重 (Critical) |
-| **文件路径** | `hcids/internal/grpc/handler/transfer.go` |
+| **文件路径** | `server/internal/grpc/handler/transfer.go` |
 | **行号** | 390-410 |
 | **影响** | 任意客户端只需提供一个 agentID 字符串即可接入服务端，无需任何身份验证 |
 
@@ -126,7 +126,7 @@ func (s *TransferServer) Transfer(stream proto.Transfer_TransferServer) error {
 | 属性 | 值 |
 |------|-----|
 | **严重级别** | 高 (High) |
-| **文件路径** | `hcids/internal/config/config.go` |
+| **文件路径** | `server/internal/config/config.go` |
 | **行号** | 145-148 |
 | **影响** | HTTP API 的 JWT 认证可被绕过 |
 
@@ -134,7 +134,7 @@ func (s *TransferServer) Transfer(stream proto.Transfer_TransferServer) error {
 
 ```go
 JWT: JWTConfig{
-    Secret:      "hcids-default-jwt-secret",
+    Secret:      "server-default-jwt-secret",
     ExpireHours: 24,
 },
 ```
@@ -158,7 +158,7 @@ JWT: JWTConfig{
 | 属性 | 值 |
 |------|-----|
 | **严重级别** | 高 (High) |
-| **文件路径** | `hcids/internal/config/config.go` |
+| **文件路径** | `server/internal/config/config.go` |
 | **行号** | 139-144 |
 | **影响** | 允许任意域的跨域请求携带凭证，可导致 CSRF 和数据泄露 |
 
@@ -192,7 +192,7 @@ CORS: CORSConfig{
 | 属性 | 值 |
 |------|-----|
 | **严重级别** | 中 (Medium) |
-| **文件路径** | `hcids/internal/config/config.go` |
+| **文件路径** | `server/internal/config/config.go` |
 | **行号** | 150-158 |
 | **影响** | 默认配置下数据库无密码保护 |
 
@@ -204,7 +204,7 @@ Database: DatabaseConfig{
     Port:         5432,
     User:         "postgres",
     Password:     "",
-    Database:     "hcids",
+    Database:     "server",
     PoolSize:     10,
     GormLogLevel: "error",
 },
@@ -214,7 +214,7 @@ Database: DatabaseConfig{
 
 1. **数据库未授权访问**: 若用户未修改默认配置且 PostgreSQL 允许空密码连接，则任何可访问数据库端口的用户均可直接操作数据库
 2. **数据篡改/删除**: 直接访问数据库可修改或删除所有安全告警记录
-3. **生产环境遗忘**: 实际部署配置中密码设为 `"root"`（见 `/opt/cloudsec/hcids/conf/server.yaml:38`），虽非空但仍为弱密码
+3. **生产环境遗忘**: 实际部署配置中密码设为 `"root"`（见 `/opt/cloudsec/server/conf/server.yaml:38`），虽非空但仍为弱密码
 
 **建议修复:**
 
@@ -393,7 +393,7 @@ m.portIndex[uint16(port)] = rule
 
 **相关代码位置:**
 
-- **服务端**: `hcids/internal/grpc/handler/transfer.go:32-88` 定义了完整的 DataType 常量
+- **服务端**: `server/internal/grpc/handler/transfer.go:32-88` 定义了完整的 DataType 常量
 - **Agent 各插件**: 各自硬编码 DataType 值
   - `agent/business_plugins/detector/main.go:23-32` 使用 `6010`、`6011`
   - `agent/business_plugins/ebpf_base_detector/event_handlers.go` 使用各种 DataType 值
@@ -500,7 +500,7 @@ func handleConnect(ctx *eventHandlerCtx, raw []byte) error {
 
 **问题分析:**
 
-1. **缺少行为基线**: 服务端 `connect` 表（`hcids/internal/grpc/handler/transfer.go:657`）有处理函数 `processConnect`，但 Agent 只在检测到恶意连接时才上报，正常连接不会入库
+1. **缺少行为基线**: 服务端 `connect` 表（`server/internal/grpc/handler/transfer.go:657`）有处理函数 `processConnect`，但 Agent 只在检测到恶意连接时才上报，正常连接不会入库
 2. **无法做行为分析**: 缺少正常���接数据，无法建立网络行为基线，也无法做回溯分析（如事后发现某 IP 为恶意时，无法查询历史连接记录）
 3. **与 execve 处理不一致**: execve 事件同时上报原始事件和告警，但 connect 只上报告警
 
@@ -824,7 +824,7 @@ type HTTPRequest struct {
 | 属性 | 值 |
 |------|-----|
 | **严重级别** | 高 (High) |
-| **文件路径** | `hcids/internal/grpc/handler/transfer.go` |
+| **文件路径** | `server/internal/grpc/handler/transfer.go` |
 | **行号** | 641-717（processPayload switch 语句） |
 | **影响** | Agent 检测到的容器逃逸告警无法被 Server 处理和入库 |
 
@@ -877,7 +877,7 @@ DataType 常量在以下位置分别定义（未引用共同的源）：
 
 | 位置 | 定义方式 | 示例 |
 |------|---------|------|
-| `hcids/internal/grpc/handler/transfer.go:32-88` | `const` 块 | `dataTypeDangerousCommand int32 = 6003` |
+| `server/internal/grpc/handler/transfer.go:32-88` | `const` 块 | `dataTypeDangerousCommand int32 = 6003` |
 | `agent/business_plugins/ebpf_base_detector/event_handlers.go` | 分散在代码中 | 硬编码数字 |
 | `agent/business_plugins/detector/main.go:23-32` | `const` 块 | `DetectorConfigUpdateDataType = int32(6010)` |
 | `agent/business_plugins/nids/` | 分散在代码中 | 硬编码数字 |
@@ -908,7 +908,7 @@ enum DataType {
 | 属性 | 值 |
 |------|-----|
 | **严重级别** | 中 (Medium) |
-| **文件路径** | `hcids/cmd/main.go` |
+| **文件路径** | `server/cmd/main.go` |
 | **行号** | 146-179 |
 | **影响** | 优雅关闭时可能丢失正在处理的数据或触发 panic |
 

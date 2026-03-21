@@ -4,7 +4,7 @@
 # 用于触发 scanner 插件的恶意软件检测告警（DataType 6061/6062）
 #
 # 原理：scanner 插件使用 ClamAV 引擎扫描指定目录，检测木马、Webshell、挖矿程序等。
-#       Agent 连接 hcids 后，服务端自动下发目录扫描任务（默认扫描 /root、/etc、/var/www）。
+#       Agent 连接 server 后，服务端自动下发目录扫描任务（默认扫描 /root、/etc、/var/www）。
 #       本脚本在扫描目录中创建 EICAR 标准测试文件，等待 scanner 自动检出。
 #
 # 前置条件：
@@ -14,7 +14,7 @@
 #
 # 使用方式（集成测试）：
 #   1. 先执行本脚本创建测试文件
-#   2. 再启动 Agent（Agent 连接后 hcids 自动下发扫描任务）
+#   2. 再启动 Agent（Agent 连接后 server 自动下发扫描任务）
 #   3. 等待扫描完成后查看告警
 #
 #   sudo bash scripts/test-scanner.sh prepare   # 创建测试文件
@@ -29,7 +29,7 @@ NC='\033[0m'
 EICAR_STRING='X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*'
 EICAR_MD5="44d88612fea8a8f36de82e1278abb02f"
 
-# 测试文件列表（放在 hcids 默认扫描目录 /root 下）
+# 测试文件列表（放在 server 默认扫描目录 /root 下）
 TEST_FILES=(
     "/root/eicar_test.com"
     "/root/eicar_1.exe"
@@ -90,7 +90,7 @@ do_prepare() {
     echo -e "${GREEN}测试文件已就绪${NC}"
     echo ""
     echo "后续步骤："
-    echo "  1. 启动 Agent 连接 hcids（scanner 插件会自动接收扫描任务）"
+    echo "  1. 启动 Agent 连接 server（scanner 插件会自动接收扫描任务）"
     echo "  2. 等待约 30 秒，scanner 扫描 /root 目录"
     echo "  3. 查询 alert_malware_scan 表验证检测结果"
     echo ""

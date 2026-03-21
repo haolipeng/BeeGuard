@@ -72,7 +72,7 @@ func (c *dockerClient) ListImages(ctx context.Context) ([]Image, error) {
 
 	for _, img := range resp {
 		name, version := parseImageRepoTag(img.RepoTags)
-		// 发送原始数值：字节数和 Unix 时间戳，由 hcids 端负责格式化
+		// 发送原始数值：字节数和 Unix 时间戳，由 server 端负责格式化
 		sizeBytes := img.Size
 		createdTs := img.Created
 		// 部分环境（如 containerd 或旧版本）List 返回的 Size/Created 为 0，用 ImageInspect 回填

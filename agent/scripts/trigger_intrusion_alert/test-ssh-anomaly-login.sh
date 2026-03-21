@@ -9,7 +9,7 @@
 # 前置条件（三项全部满足才能触发告警）：
 #   1. Agent 端：/opt/cloudsec/plugins/detector/config/rules/ssh_anomaly_login.yaml
 #      中 enabled=true 且 anomaly_rules 至少有一条含 IP 的规则
-#   2. 远程 hcids 模式：server.yaml 中 ssh_anomaly_login 的 enabled=true 且有规则
+#   2. 远程 server 模式：server.yaml 中 ssh_anomaly_login 的 enabled=true 且有规则
 #      （否则服务端配置会覆盖本地配置）
 #   3. 确认 detector 日志出现: "compiled N IPs from M rules"（N > 0, M > 0）
 #
@@ -113,4 +113,4 @@ echo ""
 echo "如果未触发告警，请检查："
 echo "  1. ssh_anomaly_login 检测器是否已启用（日志中搜索 ssh_anomaly）"
 echo "  2. ${LOCAL_IP} 是否不在白名单 anomaly_rules 的 ips 列表中"
-echo "  3. 远程 hcids 模式下服务端配置是否覆盖了本地 enabled=true"
+echo "  3. 远程 server 模式下服务端配置是否覆盖了本地 enabled=true"

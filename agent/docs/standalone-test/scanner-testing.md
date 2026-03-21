@@ -123,10 +123,10 @@ mkdir -p /tmp/scanner_test
 echo 'X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*' > /tmp/scanner_test/eicar_test.com
 ```
 
-等待自动扫描触发（插件的定时目录扫描周期为 24 小时，进程扫描为 1 小时）。如果不想等待，通过 hcids HTTP API 手动触发目录扫描（需启动 hcids Server）：
+等待自动扫描触发（插件的定时目录扫描周期为 24 小时，进程扫描为 1 小时）。如果不想等待，通过 server HTTP API 手动触发目录扫描（需启动 server Server）：
 
 ```bash
-# 手动触发扫描（需要 hcids Server 运行且 Agent 已连接）
+# 手动触发扫描（需要 server Server 运行且 Agent 已连接）
 curl -X POST http://localhost:8081/api/task \
   -H "Content-Type: application/json" \
   -d '{"agent_id":"123456","object_name":"scanner","data_type":6053,"data":"{\"path\":\"/tmp/scanner_test\"}","token":"test-scan-001"}'
@@ -224,7 +224,7 @@ rm -f /tmp/scanner_test.log
 | 编译报 `cannot find -lclamav` | ClamAV 开发库未安装 | `apt install libclamav-dev`（Debian/Ubuntu）或 `yum install clamav-devel`（CentOS） |
 | `Failed to init ClamAV engine` | libclamav 运行时库缺失 | `ldconfig -p \| grep clamav` 确认库文件存在；如缺失执行 `ldconfig` |
 | `Failed to load virus database` | 病毒库文件缺失 | 1) `ls /var/lib/clamav/` 确认有 `.cvd` 或 `.cld` 文件；2) 使用 `sudo freshclam` 下载最新病毒库 |
-| EICAR 文件未被检测 | 扫描尚未触发 | 1) 定时扫描默认 24 小时，首次需手动触发或等待；2) 通过 hcids API 发送 6053 任务触发目录扫描 |
+| EICAR 文件未被检测 | 扫描尚未触发 | 1) 定时扫描默认 24 小时，首次需手动触发或等待；2) 通过 server API 发送 6053 任务触发目录扫描 |
 | 白名单路径文件被检测到 | `scanner.yaml` 白名单配置错误 | 检查 `config/scanner.yaml` 中 `filter.path_whitelist` 是否包含 `/opt/cloudsec` |
 | 扫描导致系统卡顿 | cgroup 资源限制未生效 | 检查 `scanner.yaml` 中 `cgroup.enabled: true`；`cat /sys/fs/cgroup/*/scanner/` 确认 cgroup 已创建 |
 | 插件启动后立即退出 | 配置文件缺失 | `ls /opt/cloudsec/agent/plugins/scanner/config/scanner.yaml` 确认配置文件存在 |

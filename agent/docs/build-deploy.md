@@ -7,7 +7,7 @@
 ## 一、概述
 
 Agent 是安装在目标主机上的安全探针程序，负责：
-- 与 Server (hcids) 建立 gRPC 连接
+- 与 Server (server) 建立 gRPC 连接
 - 加载并管理插件（collector、baseline、detector、ebpf_base_detector、nids、scanner）
 - 采集主机资产信息、执行基线检查、检测安全威胁并上报 Server
 
@@ -349,7 +349,7 @@ retry_interval: 5
 
 ### 前提条件
 
-1. Server (hcids) 已启动并监听 50051 端口
+1. Server (server) 已启动并监听 50051 端口
 2. 配置文件中 `server` 地址正确
 3. 使用 root 权限运行（采集系统信息、eBPF 需要）
 

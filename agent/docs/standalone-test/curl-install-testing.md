@@ -18,13 +18,13 @@ curl -fsSL http://127.0.0.1:8081/install.sh | sudo bash
 | `-s` | 静默模式，不显示进度条和错误信息 |
 | `-S` | 与 `-s` 配合，发生错误时仍显示错误信息 |
 | `-L` | 跟随 HTTP 重定向（如 301/302） |
-| `http://127.0.0.1:8081/install.sh` | hcids Server 的一键安装脚本端点 |
+| `http://127.0.0.1:8081/install.sh` | server Server 的一键安装脚本端点 |
 | `\| sudo bash` | 将下载的脚本通过管道传给 bash 以 root 权限执行 |
 
 ### 工作原理
 
 ```
-                curl                           hcids Server (:8081)
+                curl                           server Server (:8081)
 ┌──────────────────────┐  GET /install.sh     ┌────────────────────────────┐
 │ 客户端               │────────────────────→ │ GetInstallScript()         │
 │                      │                      │  - 渲染 install.sh.tpl     │
@@ -42,7 +42,7 @@ curl -fsSL http://127.0.0.1:8081/install.sh | sudo bash
          │
          ▼ 安装完成后
 ┌──────────────────────┐  gRPC stream          ┌────────────────────────────┐
-│ cloudsec-agent       │────────────────────→  │ hcids Server (:50051)      │
+│ cloudsec-agent       │────────────────────→  │ server Server (:50051)      │
 │ (systemd service)    │ ←─────────────────── │  - 接收 Agent 数据         │
 │                      │  plugin configs      │  - 下发插件配置和任务      │
 └──────────────────────┘                       └────────────────────────────┘
@@ -64,7 +64,7 @@ curl -fsSL http://127.0.0.1:8081/install.sh | sudo bash
 2. **systemctl 检查** — 系统必须支持 systemd
 3. **检测包管理器** — 优先 dpkg (DEB)，其次 rpm (RPM)
 4. **检测系统架构** — x86_64 → amd64，aarch64 → arm64
-5. **下载安装包** — 从 hcids 下��� .deb 或 .rpm
+5. **下载安装包** — 从 server 下��� .deb 或 .rpm
 6. **安装包** — `dpkg -i` 或 `rpm -i`
 7. **设置 gRPC 地址** — 通过 `SPECIFIED_SERVER` 环境变量传递给 postinstall 脚本
 8. **验证服务状态** — 检查 cloudsec-agent 服务是否启动
@@ -75,8 +75,8 @@ curl -fsSL http://127.0.0.1:8081/install.sh | sudo bash
 
 | 条件 | 说明 | 检查命令 |
 |------|------|---------|
-| hcids 已部署 | `/opt/cloudsec/hcids/bin/hcids` 存在 | `ls /opt/cloudsec/hcids/bin/hcids` |
-| 安装包已就位 | `package_dir` 下有 .deb 或 .rpm 文件 | `ls /opt/cloudsec/hcids/packages/` |
+| server 已部署 | `/opt/cloudsec/server/bin/server` 存在 | `ls /opt/cloudsec/server/bin/server` |
+| 安装包已就位 | `package_dir` 下有 .deb 或 .rpm 文件 | `ls /opt/cloudsec/server/packages/` |
 | PostgreSQL 运行中 | 本地数据库可访问 | `systemctl is-active postgresql` |
 | root 权限 | 安装脚本需要 root | `id -u` 应为 0 |
 | curl 已安装 | 系统有 curl | `which curl` |
@@ -89,7 +89,7 @@ curl -fsSL http://127.0.0.1:8081/install.sh | sudo bash
 ### 3.1 确认安装包存在
 
 ```bash
-ls -la /opt/cloudsec/hcids/packages/
+ls -la /opt/cloudsec/server/packages/
 ```
 
 预期输出应包含 `.deb` 文件（Ubuntu/Debian 环境）：
@@ -103,19 +103,19 @@ ls -la /opt/cloudsec/hcids/packages/
 ```bash
 cd /home/work/goProject/src/company/agent
 make package-deb
-cp build/cloudsec-agent_*.deb /opt/cloudsec/hcids/packages/
+cp build/cloudsec-agent_*.deb /opt/cloudsec/server/packages/
 ```
 
-### 3.2 修改 hcids 配置（本地测试）
+### 3.2 修改 server 配置（本地测试）
 
-hcids 默认配置指向远程服务器，本地测试需修改为本地地址。
+server 默认配置指向远程服务器，本地测试需修改为本地地址。
 
 ```bash
 # 备份原始配置
-sudo cp /opt/cloudsec/hcids/conf/server.yaml /opt/cloudsec/hcids/conf/server.yaml.bak
+sudo cp /opt/cloudsec/server/conf/server.yaml /opt/cloudsec/server/conf/server.yaml.bak
 ```
 
-编辑 `/opt/cloudsec/hcids/conf/server.yaml`，修改以下两处：
+编辑 `/opt/cloudsec/server/conf/server.yaml`，修改以下两处：
 
 **修改 1 — 数据库指向本地 PostgreSQL：**
 
@@ -133,7 +133,7 @@ database:
 ```yaml
 install:
   enabled: true
-  package_dir: /opt/cloudsec/hcids/packages
+  package_dir: /opt/cloudsec/server/packages
   server_addr: "127.0.0.1:50051"
 ```
 
@@ -171,13 +171,13 @@ dpkg -l | grep cloudsec
 
 ## 四、测试步骤
 
-### 4.1 启动 hcids Server
+### 4.1 启动 server Server
 
 打开 **Terminal A**：
 
 ```bash
-cd /opt/cloudsec/hcids
-sudo ./bin/hcids -config conf/server.yaml
+cd /opt/cloudsec/server
+sudo ./bin/server -config conf/server.yaml
 ```
 
 **启动成功判定** — 必须看到以下两行日志：
@@ -223,7 +223,7 @@ curl -s http://127.0.0.1:8081/api1/agent/packages | python3 -m json.tool
 
 ```json
 {
-    "package_dir": "/opt/cloudsec/hcids/packages",
+    "package_dir": "/opt/cloudsec/server/packages",
     "packages": [
         {
             "name": "cloudsec-agent_914d33b-dirty-1_amd64.deb",
@@ -279,11 +279,11 @@ ls -la /opt/cloudsec/agent/plugins/
 # 检查进程
 ps aux | grep cloudsec-agent
 
-# 检查 gRPC 连接（在 hcids Terminal A 中应看到 Agent 连接日志）
+# 检查 gRPC 连接（在 server Terminal A 中应看到 Agent 连接日志）
 # INFO  [Transfer] Agent 连接: agent_id=xxx hostname=xxx
 ```
 
-### 4.5 验证 Agent 与 hcids 通信
+### 4.5 验证 Agent 与 server 通信
 
 ```bash
 # 查询在线 Agent
@@ -302,9 +302,9 @@ PGPASSWORD=root psql -h 127.0.0.1 -p 5432 -U postgres -d soc -c \
 
 | 现象 | 原因 | 解决方案 |
 |------|------|---------|
-| `curl: (7) Failed to connect to 127.0.0.1 port 8081` | hcids 未启动 | 启动 hcids Server（步骤 4.1） |
-| `curl: (22) The requested URL returned error: 500` | 模板渲染失败 | 查看 hcids 日志排查 |
-| 输出 HTML 而非 shell 脚本 | 请求被其他服务拦截 | 确认 8081 端口是 hcids 在监听：`ss -tlnp \| grep 8081` |
+| `curl: (7) Failed to connect to 127.0.0.1 port 8081` | server 未启动 | 启动 server Server（步骤 4.1） |
+| `curl: (22) The requested URL returned error: 500` | 模板渲染失败 | 查看 server 日志排查 |
+| 输出 HTML 而非 shell 脚本 | 请求被其他服务拦截 | 确认 8081 端口是 server 在监听：`ss -tlnp \| grep 8081` |
 
 ### 5.2 安装脚本执行失败
 
@@ -345,7 +345,7 @@ cat /opt/cloudsec/agent/agent.yaml
 
 常见原因：
 - `agent.yaml` 中 `server` 地址不是 `127.0.0.1:50051` → 通过 `cloudsecctl set --server=127.0.0.1:50051` 修改
-- hcids 未启动或 gRPC 端口不可达 → 先启动 hcids
+- server 未启动或 gRPC 端口不可达 → 先启动 server
 
 ---
 
@@ -357,7 +357,7 @@ cat /opt/cloudsec/agent/agent.yaml
 # 停止 Agent
 sudo systemctl stop cloudsec-agent
 
-# 停止 hcids（Terminal A 中 Ctrl+C）
+# 停止 server（Terminal A 中 Ctrl+C）
 ```
 
 ### 6.2 卸载 Agent（可选）
@@ -370,11 +370,11 @@ sudo dpkg --purge cloudsec-agent
 sudo rm -rf /opt/cloudsec/agent
 ```
 
-### 6.3 恢复 hcids 配置
+### 6.3 恢复 server 配置
 
 ```bash
 # 恢复原始配置
-sudo cp /opt/cloudsec/hcids/conf/server.yaml.bak /opt/cloudsec/hcids/conf/server.yaml
+sudo cp /opt/cloudsec/server/conf/server.yaml.bak /opt/cloudsec/server/conf/server.yaml
 ```
 
 ---
@@ -383,10 +383,10 @@ sudo cp /opt/cloudsec/hcids/conf/server.yaml.bak /opt/cloudsec/hcids/conf/server
 
 | 文件 | 说明 |
 |------|------|
-| `hcids/internal/controller/install/install.go` | 安装控制器，实现三个 HTTP 端点 |
-| `hcids/internal/controller/install/install.sh.tpl` | 安装脚本模板，使用 Go template 渲染 |
-| `hcids/internal/router/router.go` | 路由注册，`install.enabled=true` 时注册安装路由 |
-| `hcids/conf/server.yaml` | 服务端配置，包含 `install` 段 |
+| `server/internal/controller/install/install.go` | 安装控制器，实现三个 HTTP 端点 |
+| `server/internal/controller/install/install.sh.tpl` | 安装脚本模板，使用 Go template 渲染 |
+| `server/internal/router/router.go` | 路由注册，`install.enabled=true` 时注册安装路由 |
+| `server/conf/server.yaml` | 服务端配置，包含 `install` 段 |
 | `agent/deploy/scripts/postinstall.sh` | DEB/RPM 安装后脚本，创建目录、启用服务、设置环境变量 |
 | `agent/deploy/nfpm.yaml` | NFPM 打包配置，定义包内容和安装脚本 |
 
@@ -396,10 +396,10 @@ sudo cp /opt/cloudsec/hcids/conf/server.yaml.bak /opt/cloudsec/hcids/conf/server
 # server.yaml
 install:
   enabled: true                                  # 启用一键安装功能
-  package_dir: /opt/cloudsec/hcids/packages      # 安装包存放目录
+  package_dir: /opt/cloudsec/server/packages      # 安装包存放目录
   server_addr: "127.0.0.1:50051"                 # Agent gRPC 连接地址
 ```
 
 - `enabled`：控制是否注册 `/install.sh` 等路由，`false` 时访问返回 404
-- `package_dir`：hcids 从此目录查找 .deb/.rpm 文件，需手动放入编译产物
+- `package_dir`：server 从此目录查找 .deb/.rpm 文件，需手动放入编译产物
 - `server_addr`：写入安装脚本的 `GRPC_ADDR` 变量；留空时从 HTTP 请求的 Host 头自动提取 IP，拼接 gRPC 端口

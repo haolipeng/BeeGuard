@@ -13,7 +13,7 @@
 | 单元测试 | 模块级功能验证 | `make test` |
 | E2E 测试 | 端到端插件流程测试 | `make test-e2e` |
 | 手动验证 | 功能完整性验证（Standalone 模式） | 手动执行 |
-| 集成测试 | Agent + hcids Server 联合验证，数据库端到端 | [手动执行](integration-test/local-integration-testing.md) |
+| 集成测试 | Agent + server Server 联合验证，数据库端到端 | [手动执行](integration-test/local-integration-testing.md) |
 
 ### 测试覆盖范围
 

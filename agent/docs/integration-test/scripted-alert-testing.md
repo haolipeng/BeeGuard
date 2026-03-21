@@ -1,6 +1,6 @@
 # 脚本化告警触发集成测试
 
-本文档描述如何使用 `scripts/trigger_intrusion_alert/` 目录下的自动化脚本触发告警，验证 Agent → gRPC → hcids → PostgreSQL 的完整数据写入链路。
+本文档描述如何使用 `scripts/trigger_intrusion_alert/` 目录下的自动化脚本触发告警，验证 Agent → gRPC → server → PostgreSQL 的完整数据写入链路。
 
 ---
 
@@ -41,7 +41,7 @@ scripts/trigger_intrusion_alert/
 ### 数据流
 
 ```
-Agent                          hcids Server                    PostgreSQL
+Agent                          server Server                    PostgreSQL
 ┌──────────────┐  gRPC stream  ┌──────────────┐  GORM          ┌──────────────┐
 │ ebpf_base_   │──────────────→│ transfer.go  │──────────────→ │ alert_*      │
 │   detector   │  PackagedData │   mapper/    │  INSERT        │              │
@@ -106,15 +106,15 @@ sudo freshclam
 psql -h 127.0.0.1 -p 5432 -U postgres -c "CREATE DATABASE soc;"
 ```
 
-> hcids 启动时会自动执行 AutoMigrate 创建所有表，无需手动建表。
+> server 启动时会自动执行 AutoMigrate 创建所有表，无需手动建表。
 
-### 2.4 修改 hcids 数据库配置
+### 2.4 修改 server 数据库配置
 
-`/opt/cloudsec/hcids/conf/server.yaml` 默认的数据库配置指向远程服务器，本地集成测试需修改为本地 PostgreSQL：
+`/opt/cloudsec/server/conf/server.yaml` 默认的数据库配置指向远程服务器，本地集成测试需修改为本地 PostgreSQL：
 
 ```bash
 # 备份原始配置
-cp /opt/cloudsec/hcids/conf/server.yaml /opt/cloudsec/hcids/conf/server.yaml.bak
+cp /opt/cloudsec/server/conf/server.yaml /opt/cloudsec/server/conf/server.yaml.bak
 ```
 
 将 `database` 配置改为：
@@ -157,7 +157,7 @@ DB_HOST=192.168.1.100 DB_PASS=mypass bash scripts/clean-test-db.sh
 
 SSH/FTP 暴力破解检测和 SSH 异常登录检测受白名单影响，**默认配置中 `127.0.0.1` 在白名单内**，本地测试需移除。
 
-**集成测试模式（远程 hcids）**：编辑 `/opt/cloudsec/hcids/conf/server.yaml`，找到 `object_name: ssh` 和 `object_name: ftp` 对应的 task，将 `data` 字段中的 `"whitelist":["127.0.0.1","::1"]` 改为 `"whitelist":[]`，然后重启 hcids 和 Agent。
+**集成测试模式（远程 server）**：编辑 `/opt/cloudsec/server/conf/server.yaml`，找到 `object_name: ssh` 和 `object_name: ftp` 对应的 task，将 `data` 字段中的 `"whitelist":["127.0.0.1","::1"]` 改为 `"whitelist":[]`，然后重启 server 和 Agent。
 
 **Standalone 模式**：编辑 Agent 本地配置文件中 detector 插件的 `ssh_brute_force.yaml` 和 `ftp_brute_force.yaml`，将 `whitelist` 改为空数组 `[]`。
 
@@ -179,12 +179,12 @@ curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1/
 # 应返回 200 或 304
 ```
 
-### 3.2 启动 hcids Server
+### 3.2 启动 server Server
 
 打开 **Terminal A**：
 
 ```bash
-sudo /opt/cloudsec/hcids/bin/hcids -config /opt/cloudsec/hcids/conf/server.yaml
+sudo /opt/cloudsec/server/bin/server -config /opt/cloudsec/server/conf/server.yaml
 ```
 
 **启动成功判定**：
@@ -651,7 +651,7 @@ ORDER BY created_at DESC LIMIT 5;
 
 **前置条件**（三项全部满足）：
 1. `ssh_anomaly_login.yaml` 中 `enabled=true` 且 `anomaly_rules` 至少有一条含 IP 的规则
-2. 远程 hcids 模式下 server.yaml 中 `ssh_anomaly_login` 的 `enabled=true` 且有规则
+2. 远程 server 模式下 server.yaml 中 `ssh_anomaly_login` 的 `enabled=true` 且有规则
 3. detector 日志出现 `compiled N IPs from M rules`（N > 0, M > 0）
 
 **脚本说明**：使用本机非回环 IP 通过 SSH 密钥登录，触发异常登录告警（该 IP 不在可信白名单中）。脚本会自动生成 SSH 密钥对（如不存在）并配置 authorized_keys。
@@ -772,7 +772,7 @@ ORDER BY created_at DESC LIMIT 15;
 
 ### 8.1 恶意文件扫描（test-scanner.sh）
 
-**特殊流程**：Scanner 测试与其他测试不同，需要**先创建测试文件，再启动 Agent**。因为 Agent 连接 hcids 后会自动下发目录扫描任务，测试文件必须在扫描前就位。
+**特殊流程**：Scanner 测试与其他测试不同，需要**先创建测试文件，再启动 Agent**。因为 Agent 连接 server 后会自动下发目录扫描任务，测试文件必须在扫描前就位。
 
 > **重要**：默认扫描路径为 `/root`（由 server.yaml 中 scanner task 的 `data: '{"exe":"/root"}'` 控制）。如果 `/root` 目录较大（如包含 IDE 缓存、大型项目等），扫描可能耗时数十分钟才能遍历到 EICAR 测试文件。**建议将扫描路径改为专用小目录**：
 >
@@ -783,7 +783,7 @@ ORDER BY created_at DESC LIMIT 15;
 >   data: '{"exe":"/tmp/scanner_test"}'
 > ```
 >
-> 然后将 EICAR 文件创建到 `/tmp/scanner_test/` 目录下。修改后需重启 hcids 和 Agent。
+> 然后将 EICAR 文件创建到 `/tmp/scanner_test/` 目录下。修改后需重启 server 和 Agent。
 
 **前置条件**：
 - ClamAV 已安装：`sudo apt install clamav libclamav-dev clamav-freshclam`
@@ -831,7 +831,7 @@ sudo bash scripts/trigger_intrusion_alert/test-scanner.sh cleanup
 测试文件已就绪
 
 后续步骤：
-  1. 启动 Agent 连接 hcids（scanner 插件会自动接收扫描任务）
+  1. 启动 Agent 连接 server（scanner 插件会自动接收扫描任务）
   2. 等待约 30 秒，scanner 扫描 /root 目录
   3. 查询 alert_malware_scan 表验证检测结果
 ```
@@ -894,7 +894,7 @@ SELECT
 
 ```bash
 # Terminal B：停止 Agent（Ctrl+C）
-# Terminal A：停止 hcids（Ctrl+C）
+# Terminal A：停止 server（Ctrl+C）
 ```
 
 ### 10.2 清理测试产物
@@ -938,8 +938,8 @@ TRUNCATE TABLE alert_brute_force, alert_dangerous_command, alert_privilege_escal
 ### 10.4 恢复配置
 
 ```bash
-# 恢复 hcids 数据库配置
-cp /opt/cloudsec/hcids/conf/server.yaml.bak /opt/cloudsec/hcids/conf/server.yaml
+# 恢复 server 数据库配置
+cp /opt/cloudsec/server/conf/server.yaml.bak /opt/cloudsec/server/conf/server.yaml
 
 # 如果修改过白名单，需恢复原始白名单配置（已包含在 .bak 中）
 
@@ -957,7 +957,7 @@ transport: Error while dialing: dial tcp 127.0.0.1:50051: connect: connection re
 ```
 
 **排查**：
-1. 确认 hcids 已启动且监听 50051 端口：`ss -tlnp | grep 50051`
+1. 确认 server 已启动且监听 50051 端口：`ss -tlnp | grep 50051`
 2. 确认 agent-local.yaml 中 `server` 地址正确
 3. 检查防火墙是否放行端口
 
@@ -967,7 +967,7 @@ transport: Error while dialing: dial tcp 127.0.0.1:50051: connect: connection re
 
 **排查**：
 1. 检查 server.yaml 中对应 task 的 `whitelist` 是否仍包含 `127.0.0.1`
-2. 修改白名单后需重启 hcids 和 Agent 使配置生效
+2. 修改白名单后需重启 server 和 Agent 使配置生效
 3. Standalone 模式下检查本地 detector 配置文件
 
 ### Detector 检测延迟
@@ -988,12 +988,12 @@ transport: Error while dialing: dial tcp 127.0.0.1:50051: connect: connection re
 
 **现象**：Agent 已运行，执行 `test-scanner.sh prepare` 后数据库中 `alert_malware_scan` 无记录。
 
-**原因**：hcids 在 Agent 连接时自动下发扫描任务，扫描时测试文件尚不存在。
+**原因**：server 在 Agent 连接时自动下发扫描任务，扫描时测试文件尚不存在。
 
 **处理**：
 1. 先执行 `test-scanner.sh prepare` 创建测试文件
 2. 重启 Agent（停止后重新启动）
-3. Agent 重连后 hcids 会重新下发扫描任务
+3. Agent 重连后 server 会重新下发扫描任务
 
 ### NIDS 日志文件不存在
 
@@ -1043,4 +1043,4 @@ sudo apt install netcat-traditional
 
 **原因**：默认扫描���径 `/root` 可能包含大量文件（如 IDE 缓存目录 `.cache/JetBrains/` 可达数 GB），Scanner 按字母序遍历，`.cache` 排在 `eicar_test_*` 之前。
 
-**处理**：修改 server.yaml 中 scanner task 的扫描路径为专用小目录（参见 §8.1 说明），重启 hcids 和 Agent。
+**处理**：修改 server.yaml 中 scanner task 的扫描路径为专用小目录（参见 §8.1 说明），重启 server 和 Agent。
