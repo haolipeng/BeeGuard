@@ -37,7 +37,6 @@ vendor/
 *.tmp
 *.temp
 .claude/*
-docs
 
 # JSON 输出文件（测试生成）
 *.json
@@ -50,7 +49,6 @@ docs
 
 # 开发临时文件夹
 develop/
-scripts/
 
 # 文档目录
 

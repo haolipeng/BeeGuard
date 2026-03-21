@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"os/signal"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -164,6 +166,7 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	var wg sync.WaitGroup
+	var totalLostSamples uint64
 
 	wg.Add(1)
 	go func() {
@@ -191,6 +194,7 @@ func main() {
 
 			if rec.LostSamples > 0 {
 				logger.Warn("Lost samples", "count", rec.LostSamples, "cpu", rec.CPU)
+				atomic.AddUint64(&totalLostSamples, rec.LostSamples)
 			}
 
 			eventType := events.GetEventType(rec.RawSample)
@@ -230,6 +234,38 @@ func main() {
 			}
 			if handlerErr != nil {
 				logger.Error("Event handler failed", "type", eventType, "error", handlerErr)
+			}
+		}
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				lost := atomic.SwapUint64(&totalLostSamples, 0)
+				if lost == 0 {
+					continue
+				}
+				logger.Warn("Reporting perf event loss to server", "lost_count", lost)
+				rec := &businessplugins.Record{
+					DataType:  events.DataTypePerfEventLoss,
+					Timestamp: time.Now().Unix(),
+					Data: &businessplugins.Payload{
+						Fields: map[string]string{
+							"lost_count":      fmt.Sprintf("%d", lost),
+							"report_interval": "30",
+						},
+					},
+				}
+				if err := client.SendRecord(rec); err != nil {
+					logger.Error("Failed to send perf event loss record", "error", err)
+				}
 			}
 		}
 	}()

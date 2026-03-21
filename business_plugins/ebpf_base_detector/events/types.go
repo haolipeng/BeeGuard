@@ -21,13 +21,14 @@ const (
 
 // 上报 DataType 常量（与平台约定一致，避免硬编码）
 const (
-	DataTypeExecve  int32 = 59
-	DataTypeConnect int32 = 60
-	DataTypeBind    int32 = 61
-	DataTypeAccept  int32 = 62
-	DataTypeDNS     int32 = 63
-	DataTypeFile    int32 = 64
-	DataTypeMount   int32 = 65
+	DataTypeExecve        int32 = 59
+	DataTypeConnect       int32 = 60
+	DataTypeBind          int32 = 61
+	DataTypeAccept        int32 = 62
+	DataTypeDNS           int32 = 63
+	DataTypeFile          int32 = 64
+	DataTypeMount         int32 = 65
+	DataTypePerfEventLoss int32 = 66
 )
 
 // 文件操作 action 常量

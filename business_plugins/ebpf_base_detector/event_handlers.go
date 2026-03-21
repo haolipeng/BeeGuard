@@ -240,11 +240,11 @@ func handleBind(ctx *eventHandlerCtx, raw []byte) error {
 	if err := evt.UnmarshalBinary(raw); err != nil {
 		return fmt.Errorf("unmarshal bind event: %w", err)
 	}
-	record := evt.ToRecord()
-	ctx.logger.Info("Bind event",
-		"pid", evt.PID, "comm", cstring(evt.Comm[:]),
-		"bind_ip", record.Data.Fields["bind_ip"], "bind_port", record.Data.Fields["bind_port"],
-		"protocol", record.Data.Fields["protocol"])
+	//record := evt.ToRecord()
+	//ctx.logger.Info("Bind event",
+	//	"pid", evt.PID, "comm", cstring(evt.Comm[:]),
+	//	"bind_ip", record.Data.Fields["bind_ip"], "bind_port", record.Data.Fields["bind_port"],
+	//	"protocol", record.Data.Fields["protocol"])
 	return nil
 }
 
