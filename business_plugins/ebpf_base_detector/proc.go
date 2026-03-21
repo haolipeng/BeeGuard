@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
+	"time"
 )
 
 // resolveExePath 补全可执行文件的完整路径
@@ -51,23 +53,68 @@ func resolveParentUID(ppid uint32) string {
 	return ""
 }
 
-// resolveUsername 将 UID 解析为用户名（通过 /etc/passwd）
+// uidCache 缓存 /etc/passwd 的 UID -> 用户名映射，避免每次事件都重新读取文件
+var uidCache struct {
+	sync.RWMutex
+	m       map[uint32]string
+	updated time.Time
+}
+
+const uidCacheTTL = 1 * time.Minute
+
+// resolveUsername 将 UID 解析为用户名（带缓存）
 func resolveUsername(uid uint32) string {
-	uidStr := fmt.Sprintf("%d", uid)
+	uidCache.RLock()
+	if time.Since(uidCache.updated) < uidCacheTTL && uidCache.m != nil {
+		if name, ok := uidCache.m[uid]; ok {
+			uidCache.RUnlock()
+			return name
+		}
+		uidCache.RUnlock()
+		return fmt.Sprintf("%d", uid)
+	}
+	uidCache.RUnlock()
+
+	uidCache.Lock()
+	defer uidCache.Unlock()
+
+	// double-check：另一个 goroutine 可能已刷新
+	if time.Since(uidCache.updated) < uidCacheTTL && uidCache.m != nil {
+		if name, ok := uidCache.m[uid]; ok {
+			return name
+		}
+		return fmt.Sprintf("%d", uid)
+	}
+
+	uidCache.m = loadPasswd()
+	uidCache.updated = time.Now()
+
+	if name, ok := uidCache.m[uid]; ok {
+		return name
+	}
+	return fmt.Sprintf("%d", uid)
+}
+
+// loadPasswd 读取 /etc/passwd 并返回 UID -> 用户名映射
+func loadPasswd() map[uint32]string {
 	f, err := os.Open("/etc/passwd")
 	if err != nil {
-		return uidStr
+		return map[uint32]string{}
 	}
 	defer f.Close()
+
+	m := make(map[uint32]string)
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
-		line := scanner.Text()
-		parts := strings.Split(line, ":")
-		if len(parts) >= 3 && parts[2] == uidStr {
-			return parts[0]
+		parts := strings.Split(scanner.Text(), ":")
+		if len(parts) >= 3 {
+			var uid uint32
+			if n, _ := fmt.Sscanf(parts[2], "%d", &uid); n == 1 {
+				m[uid] = parts[0]
+			}
 		}
 	}
-	return uidStr
+	return m
 }
 
 // buildPidTree 在用户态构建进程链字符串，格式: "PID<comm<PID<comm<..."，最多 8 层
