@@ -62,20 +62,6 @@ struct {
 struct {
     __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
     __type(key, u32);
-    __type(value, struct bind_event);
-    __uint(max_entries, 1);
-} percpu_bind_buf SEC(".maps");
-
-struct {
-    __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
-    __type(key, u32);
-    __type(value, struct accept_event);
-    __uint(max_entries, 1);
-} percpu_accept_buf SEC(".maps");
-
-struct {
-    __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
-    __type(key, u32);
     __type(value, struct dns_event);
     __uint(max_entries, 1);
 } percpu_dns_buf SEC(".maps");
@@ -861,8 +847,7 @@ int tp_sys_exit(struct bpf_raw_tracepoint_args *ctx)
     unsigned long syscall_nr = 0;
     bpf_probe_read_kernel(&syscall_nr, sizeof(syscall_nr), &regs->orig_ax);
 
-    if (syscall_nr != 42 && syscall_nr != 49 && syscall_nr != 43 &&
-        syscall_nr != 288 && syscall_nr != 45 && syscall_nr != 47 &&
+    if (syscall_nr != 42 && syscall_nr != 45 && syscall_nr != 47 &&
         syscall_nr != 165)
         return 0;
 
@@ -892,87 +877,6 @@ int tp_sys_exit(struct bpf_raw_tracepoint_args *ctx)
 
         __builtin_memset(evt, 0, sizeof(*evt));
         evt->event_type = EVENT_TYPE_CONNECT;
-
-        FILL_PROCESS_INFO(task, evt);
-
-        __u32 src_ip = 0, dst_ip = 0;
-        __u16 src_port = 0, dst_port = 0;
-        query_ipv4(sk, &src_ip, &src_port, &dst_ip, &dst_port);
-
-        evt->remote_ip = dst_ip;
-        evt->remote_port = dst_port;
-        evt->local_ip = src_ip;
-        evt->local_port = src_port;
-        evt->protocol = (__u8)sock_prot(sk);
-        evt->retval = (__s32)retval;
-
-        if (evt->remote_ip == 0)
-            return 0;
-
-        read_full_exe_path(task, evt->exe_path, sizeof(evt->exe_path));
-
-        bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, evt, sizeof(*evt));
-        return 0;
-    }
-
-    if (syscall_nr == 49) {
-        if (retval != 0)
-            return 0;
-
-        int fd = (int)parm1;
-
-        struct sock *sk = sockfd_lookup(task, fd);
-        if (!sk)
-            return 0;
-
-        if (sock_family(sk) != 2)
-            return 0;
-
-        u32 key = 0;
-        struct bind_event *evt = bpf_map_lookup_elem(&percpu_bind_buf, &key);
-        if (!evt)
-            return 0;
-
-        __builtin_memset(evt, 0, sizeof(*evt));
-        evt->event_type = EVENT_TYPE_BIND;
-
-        FILL_PROCESS_INFO(task, evt);
-
-        __u32 src_ip = 0, dst_ip = 0;
-        __u16 src_port = 0, dst_port = 0;
-        query_ipv4(sk, &src_ip, &src_port, &dst_ip, &dst_port);
-
-        evt->bind_ip = src_ip;
-        evt->bind_port = bpf_htons(src_port);
-        evt->protocol = (__u8)sock_prot(sk);
-        evt->retval = (__s32)retval;
-
-        read_full_exe_path(task, evt->exe_path, sizeof(evt->exe_path));
-
-        bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, evt, sizeof(*evt));
-        return 0;
-    }
-
-    if (syscall_nr == 43 || syscall_nr == 288) {
-        if (retval < 0)
-            return 0;
-
-        int new_fd = (int)retval;
-
-        struct sock *sk = sockfd_lookup(task, new_fd);
-        if (!sk)
-            return 0;
-
-        if (sock_family(sk) != 2)
-            return 0;
-
-        u32 key = 0;
-        struct accept_event *evt = bpf_map_lookup_elem(&percpu_accept_buf, &key);
-        if (!evt)
-            return 0;
-
-        __builtin_memset(evt, 0, sizeof(*evt));
-        evt->event_type = EVENT_TYPE_ACCEPT;
 
         FILL_PROCESS_INFO(task, evt);
 

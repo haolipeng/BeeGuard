@@ -67,22 +67,6 @@ struct {
     __uint(max_entries, 1);
 } percpu_connect_buf SEC(".maps");
 
-// Per-CPU Array Map for bind_event - 用于端口绑定监控
-struct {
-    __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
-    __type(key, u32);
-    __type(value, struct bind_event);
-    __uint(max_entries, 1);
-} percpu_bind_buf SEC(".maps");
-
-// Per-CPU Array Map for accept_event - 用于入站连接监控
-struct {
-    __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
-    __type(key, u32);
-    __type(value, struct accept_event);
-    __uint(max_entries, 1);
-} percpu_accept_buf SEC(".maps");
-
 // Per-CPU Array Map for dns_event - 用于DNS查询监控
 struct {
     __uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
@@ -1032,9 +1016,8 @@ int tp_sys_exit(struct bpf_raw_tracepoint_args *ctx)
     bpf_probe_read_kernel(&syscall_nr, sizeof(syscall_nr), &regs->orig_ax);
 
     //~ 仅处理网络相关系统调用和 mount
-    //~ x86_64: connect=42, bind=49, accept=43, accept4=288, recvfrom=45, recvmsg=47, mount=165
-    if (syscall_nr != 42 && syscall_nr != 49 && syscall_nr != 43 &&
-        syscall_nr != 288 && syscall_nr != 45 && syscall_nr != 47 &&
+    //~ x86_64: connect=42, recvfrom=45, recvmsg=47, mount=165
+    if (syscall_nr != 42 && syscall_nr != 45 && syscall_nr != 47 &&
         syscall_nr != 165)
         return 0;
 
@@ -1086,94 +1069,6 @@ int tp_sys_exit(struct bpf_raw_tracepoint_args *ctx)
         evt->retval = (__s32)retval;
 
         //~ 过滤全零目标地址
-        if (evt->remote_ip == 0)
-            return 0;
-
-        read_full_exe_path(task, evt->exe_path, sizeof(evt->exe_path));
-
-        bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, evt, sizeof(*evt));
-        return 0;
-    }
-
-    //~ ========== bind (syscall 49) ==========
-    if (syscall_nr == 49) {
-        //~ 仅处理成功的 bind (retval == 0)
-        if (retval != 0)
-            return 0;
-
-        int fd = (int)parm1;
-
-        struct sock *sk = sockfd_lookup(task, fd);
-        if (!sk)
-            return 0;
-
-        if (sock_family(sk) != 2)  //~ AF_INET
-            return 0;
-
-        u32 key = 0;
-        struct bind_event *evt = bpf_map_lookup_elem(&percpu_bind_buf, &key);
-        if (!evt)
-            return 0;
-
-        __builtin_memset(evt, 0, sizeof(*evt));
-        evt->event_type = EVENT_TYPE_BIND;
-
-        FILL_PROCESS_INFO(task, evt);
-
-        //~ 从 sock 读取绑定的 IP/端口
-        __u32 src_ip = 0, dst_ip = 0;
-        __u16 src_port = 0, dst_port = 0;
-        query_ipv4(sk, &src_ip, &src_port, &dst_ip, &dst_port);
-
-        evt->bind_ip = src_ip;
-        evt->bind_port = bpf_htons(src_port);  //~ 转换为网络字节序与原格式一致
-        evt->protocol = (__u8)sock_prot(sk);
-        evt->retval = (__s32)retval;
-
-        read_full_exe_path(task, evt->exe_path, sizeof(evt->exe_path));
-
-        bpf_perf_event_output(ctx, &events, BPF_F_CURRENT_CPU, evt, sizeof(*evt));
-        return 0;
-    }
-
-    //~ ========== accept/accept4 (syscall 43/288) ==========
-    if (syscall_nr == 43 || syscall_nr == 288) {
-        //~ retval 是新的 fd（accept 成功返回新 fd，失败返回负数）
-        if (retval < 0)
-            return 0;
-
-        int new_fd = (int)retval;
-
-        //~ 从新 fd 获取 socket 信息
-        struct sock *sk = sockfd_lookup(task, new_fd);
-        if (!sk)
-            return 0;
-
-        if (sock_family(sk) != 2)  // AF_INET
-            return 0;
-
-        u32 key = 0;
-        struct accept_event *evt = bpf_map_lookup_elem(&percpu_accept_buf, &key);
-        if (!evt)
-            return 0;
-
-        __builtin_memset(evt, 0, sizeof(*evt));
-        evt->event_type = EVENT_TYPE_ACCEPT;
-
-        FILL_PROCESS_INFO(task, evt);
-
-        __u32 src_ip = 0, dst_ip = 0;
-        __u16 src_port = 0, dst_port = 0;
-        query_ipv4(sk, &src_ip, &src_port, &dst_ip, &dst_port);
-
-        evt->remote_ip = dst_ip;
-        evt->remote_port = dst_port;
-        evt->local_ip = src_ip;
-        evt->local_port = src_port;
-        evt->protocol = (__u8)sock_prot(sk);
-        evt->retval = (__s32)retval;
-
-        //~ 过滤非 IPv4 连接（remote_ip 为 0 表示没有对端）
         if (evt->remote_ip == 0)
             return 0;
 

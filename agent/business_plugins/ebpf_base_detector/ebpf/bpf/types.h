@@ -6,8 +6,6 @@
 #define EVENT_TYPE_EXECVE        1
 #define EVENT_TYPE_COMMIT_CREDS  2
 #define EVENT_TYPE_CONNECT       4
-#define EVENT_TYPE_BIND          5
-#define EVENT_TYPE_ACCEPT        6
 #define EVENT_TYPE_DNS           7
 #define EVENT_TYPE_FILE          8   // 文件操作事件
 #define EVENT_TYPE_MOUNT         9   // mount 事件
@@ -106,41 +104,6 @@ struct connect_event {
     __u16 local_port;     // 本地端口
     __u32 local_ip;       // 本地 IP（网络字节序）
     __s32 retval;         // 系统调用返回值（0=成功，负数=失败）
-    char  comm[16];
-    char  exe_path[256];
-} __attribute__((packed));
-
-// bind 端口绑定事件结构体
-struct bind_event {
-    __u8  event_type;     // EVENT_TYPE_BIND = 5
-    __u8  protocol;
-    __u8  padding1[2];
-    __u32 pid;
-    __u32 tgid;
-    __u32 ppid;
-    __u32 uid;
-    __u32 bind_ip;        // 绑定 IP
-    __u16 bind_port;      // 绑定端口
-    __u16 padding2;
-    __s32 retval;
-    char  comm[16];
-    char  exe_path[256];
-} __attribute__((packed));
-
-// accept 入站连接事件结构体
-struct accept_event {
-    __u8  event_type;     // EVENT_TYPE_ACCEPT = 6
-    __u8  protocol;
-    __u8  padding1[2];
-    __u32 pid;
-    __u32 tgid;
-    __u32 ppid;
-    __u32 uid;
-    __u32 remote_ip;      // 连接来源 IP
-    __u16 remote_port;    // 连接来源端口
-    __u16 local_port;     // 本地监听端口
-    __u32 local_ip;
-    __s32 retval;
     char  comm[16];
     char  exe_path[256];
 } __attribute__((packed));

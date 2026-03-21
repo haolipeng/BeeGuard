@@ -31,8 +31,6 @@ const (
 const (
 	EventExecve   = 59
 	EventConnect  = 60
-	EventBind     = 61
-	EventAccept   = 62
 	EventDNS      = 63
 	EventFile     = 64
 	EventMount    = 65

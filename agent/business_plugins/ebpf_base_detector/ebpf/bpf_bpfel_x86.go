@@ -12,39 +12,6 @@ import (
 	"github.com/cilium/ebpf"
 )
 
-type bpfAcceptEvent struct {
-	EventType  uint8
-	Protocol   uint8
-	Padding1   [2]uint8
-	Pid        uint32
-	Tgid       uint32
-	Ppid       uint32
-	Uid        uint32
-	RemoteIp   uint32
-	RemotePort uint16
-	LocalPort  uint16
-	LocalIp    uint32
-	Retval     int32
-	Comm       [16]int8
-	ExePath    [256]int8
-}
-
-type bpfBindEvent struct {
-	EventType uint8
-	Protocol  uint8
-	Padding1  [2]uint8
-	Pid       uint32
-	Tgid      uint32
-	Ppid      uint32
-	Uid       uint32
-	BindIp    uint32
-	BindPort  uint16
-	Padding2  uint16
-	Retval    int32
-	Comm      [16]int8
-	ExePath   [256]int8
-}
-
 type bpfCommitCredsEvent struct {
 	EventType uint8
 	Padding1  [3]uint8
@@ -232,8 +199,6 @@ type bpfProgramSpecs struct {
 type bpfMapSpecs struct {
 	Events             *ebpf.MapSpec `ebpf:"events"`
 	FileTrustedExes    *ebpf.MapSpec `ebpf:"file_trusted_exes"`
-	PercpuAcceptBuf    *ebpf.MapSpec `ebpf:"percpu_accept_buf"`
-	PercpuBindBuf      *ebpf.MapSpec `ebpf:"percpu_bind_buf"`
 	PercpuBuf          *ebpf.MapSpec `ebpf:"percpu_buf"`
 	PercpuConnectBuf   *ebpf.MapSpec `ebpf:"percpu_connect_buf"`
 	PercpuCredsBuf     *ebpf.MapSpec `ebpf:"percpu_creds_buf"`
@@ -269,8 +234,6 @@ func (o *bpfObjects) Close() error {
 type bpfMaps struct {
 	Events             *ebpf.Map `ebpf:"events"`
 	FileTrustedExes    *ebpf.Map `ebpf:"file_trusted_exes"`
-	PercpuAcceptBuf    *ebpf.Map `ebpf:"percpu_accept_buf"`
-	PercpuBindBuf      *ebpf.Map `ebpf:"percpu_bind_buf"`
 	PercpuBuf          *ebpf.Map `ebpf:"percpu_buf"`
 	PercpuConnectBuf   *ebpf.Map `ebpf:"percpu_connect_buf"`
 	PercpuCredsBuf     *ebpf.Map `ebpf:"percpu_creds_buf"`
@@ -289,8 +252,6 @@ func (m *bpfMaps) Close() error {
 	return _BpfClose(
 		m.Events,
 		m.FileTrustedExes,
-		m.PercpuAcceptBuf,
-		m.PercpuBindBuf,
 		m.PercpuBuf,
 		m.PercpuConnectBuf,
 		m.PercpuCredsBuf,

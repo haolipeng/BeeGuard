@@ -14,8 +14,6 @@ const (
 	EventTypeExecve      uint8 = 1
 	EventTypeCommitCreds uint8 = 2
 	EventTypeConnect     uint8 = 4
-	EventTypeBind        uint8 = 5
-	EventTypeAccept      uint8 = 6
 	EventTypeDNS         uint8 = 7
 	EventTypeFile        uint8 = 8
 	EventTypeMount       uint8 = 9
@@ -25,8 +23,6 @@ const (
 const (
 	DataTypeExecve        int32 = datatype.EventExecve
 	DataTypeConnect       int32 = datatype.EventConnect
-	DataTypeBind          int32 = datatype.EventBind
-	DataTypeAccept        int32 = datatype.EventAccept
 	DataTypeDNS           int32 = datatype.EventDNS
 	DataTypeFile          int32 = datatype.EventFile
 	DataTypeMount         int32 = datatype.EventMount

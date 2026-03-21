@@ -219,10 +219,6 @@ func main() {
 				handlerErr = handleCommitCreds(evtCtx, rec.RawSample)
 			case events.EventTypeConnect: // 连接事件
 				handlerErr = handleConnect(evtCtx, rec.RawSample)
-			case events.EventTypeBind: // 绑定端口事件
-				handlerErr = handleBind(evtCtx, rec.RawSample)
-			case events.EventTypeAccept: // 接受连接事件
-				handlerErr = handleAccept(evtCtx, rec.RawSample)
 			case events.EventTypeDNS: // DNS事件
 				handlerErr = handleDNS(evtCtx, rec.RawSample)
 			case events.EventTypeFile: // 文件操作事件
