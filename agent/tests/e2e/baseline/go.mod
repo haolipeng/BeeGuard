@@ -4,7 +4,7 @@ go 1.25
 
 require (
 	business_plugins/lib v0.0.0
-	gitlab.myinterest.top/security/agent v0.0.0
+	github.com/haolipeng/BeeGuard/agent v0.0.0
 	go.uber.org/zap v1.21.0
 )
 
@@ -22,6 +22,6 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace gitlab.myinterest.top/security/agent => ../../..
+replace github.com/haolipeng/BeeGuard/agent => ../../..
 
 replace business_plugins/lib => ../../../business_plugins/lib

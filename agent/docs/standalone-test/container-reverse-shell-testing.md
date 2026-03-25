@@ -127,7 +127,7 @@ docker run -it --rm --name rs_container_test ubuntu:22.04 /bin/bash
 apt-get update && apt-get install -y netcat-traditional python3 2>/dev/null; true
 ```
 
-> 说明：`ubuntu:22.04` 基础��像未预装 `nc.traditional` 和 `python3`，需手动安装。`bash` 已内置。如无该镜像，可先 `docker pull ubuntu:22.04`。
+> 说明：`ubuntu:22.04` 基础镜像未预装 `nc.traditional` 和 `python3`，需手动安装。`bash` 已内置。如无该镜像，可先 `docker pull ubuntu:22.04`。
 
 ---
 

@@ -135,10 +135,9 @@ database:
 **清理测试文件残留**：
 
 ```bash
-rm -f /root/eicar_test.com /root/eicar_1.exe /root/eicar_2.sh /root/.aaa_eicar_test.com
+rm -rf /root/scanner_test
 rm -f /tmp/suid_test_id /tmp/suid_wrapper /tmp/suid_wrapper.c /tmp/dc003_test
 rm -f /etc/cron.d/ebpf_test_cron
-rm -rf /tmp/scanner_test
 ```
 
 **清理数据库**（推荐使用脚本）：
@@ -774,16 +773,7 @@ ORDER BY created_at DESC LIMIT 15;
 
 **特殊流程**：Scanner 测试与其他测试不同，需要**先创建测试文件，再启动 Agent**。因为 Agent 连接 server 后会自动下发目录扫描任务，测试文件必须在扫描前就位。
 
-> **重要**：默认扫描路径为 `/root`（由 server.yaml 中 scanner task 的 `data: '{"exe":"/root"}'` 控制）。如果 `/root` 目录较大（如包含 IDE 缓存、大型项目等），扫描可能耗时数十分钟才能遍历到 EICAR 测试文件。**建议将扫描路径改为专用小目录**：
->
-> ```yaml
-> # server.yaml 中修改 scanner task 的 data 字段
-> - object_name: scanner
->   data_type: 6053
->   data: '{"exe":"/tmp/scanner_test"}'
-> ```
->
-> 然后将 EICAR 文件创建到 `/tmp/scanner_test/` 目录下。修改后需重启 server 和 Agent。
+> **说明**：默认扫描路径为 `/root/scanner_test`（由 server.yaml 中 scanner task 的 `data: '{"exe":"/root/scanner_test"}'` 控制）。脚本会自动在该目录下创建 EICAR 测试文件。
 
 **前置条件**：
 - ClamAV 已安装：`sudo apt install clamav libclamav-dev clamav-freshclam`
@@ -791,16 +781,16 @@ ORDER BY created_at DESC LIMIT 15;
 - 病毒库文件位于 `/var/lib/clamav/`
 
 **脚本说明**：脚本支持两个子命令：
-- `prepare`：在 `/root` 目录创建 3 个 EICAR 标准测试文件
+- `prepare`：在 `/root/scanner_test` 目录创建 3 个 EICAR 标准测试文件
 - `cleanup`：清理测试文件
 
 **EICAR 测试文件**：
 
 | 文件路径 | MD5 |
 |---------|-----|
-| /root/eicar_test.com | 44d88612fea8a8f36de82e1278abb02f |
-| /root/eicar_1.exe | 44d88612fea8a8f36de82e1278abb02f |
-| /root/eicar_2.sh | 44d88612fea8a8f36de82e1278abb02f |
+| /root/scanner_test/eicar_test.com | 44d88612fea8a8f36de82e1278abb02f |
+| /root/scanner_test/eicar_1.exe | 44d88612fea8a8f36de82e1278abb02f |
+| /root/scanner_test/eicar_2.sh | 44d88612fea8a8f36de82e1278abb02f |
 
 **执行方法**：
 
@@ -824,15 +814,15 @@ sudo bash scripts/trigger_intrusion_alert/test-scanner.sh cleanup
 ```
 [准备] 创建 EICAR 标准测试文件
 
-  已创建: /root/eicar_test.com
-  已创建: /root/eicar_1.exe
-  已创建: /root/eicar_2.sh
+  已创建: /root/scanner_test/eicar_test.com
+  已创建: /root/scanner_test/eicar_1.exe
+  已创建: /root/scanner_test/eicar_2.sh
 
 测试文件已就绪
 
 后续步骤：
   1. 启动 Agent 连接 server（scanner 插件会自动接收扫描任务）
-  2. 等待约 30 秒，scanner 扫描 /root 目录
+  2. 等待约 30 秒，scanner 扫描 /root/scanner_test 目录
   3. 查询 alert_malware_scan 表验证检测结果
 ```
 
@@ -847,7 +837,7 @@ ORDER BY created_at DESC LIMIT 10;
 ```
 
 **判定规则**：
-- 至少 1 条记录（使用专用小目录时预期 3 条，使用 `/root` 扫描时视目录大小���能仅部分检出）
+- 至少 1 条记录（使用专用小目录时预期 3 条，使用 `/root` 扫描时视目录大小可能仅部分检出）
 - `file_md5` 为 `44d88612fea8a8f36de82e1278abb02f`（EICAR 标准 MD5）
 - `detection_engine` 为 `ClamAV`
 - `threat_type` 非空
@@ -908,10 +898,8 @@ rm -f /etc/cron.d/ebpf_test_cron
 
 # EICAR 测试文件
 sudo bash scripts/trigger_intrusion_alert/test-scanner.sh cleanup
-# 或手动清理（注意包含历史遗留的隐藏文件）
-rm -f /root/eicar_test.com /root/eicar_1.exe /root/eicar_2.sh /root/.aaa_eicar_test.com
-# 如果修改了扫描路径
-rm -rf /tmp/scanner_test
+# 或手动清理
+rm -rf /root/scanner_test
 
 # 反弹 Shell 残留进程
 killall nc 2>/dev/null
@@ -1037,10 +1025,10 @@ sudo apt install netcat-traditional
 
 **影响**：eBPF 在 exec 阶段已捕获事件，`insmod` 的告警记录仍会写入数据库。脚本后续步骤被跳过但不影响数据库验证结果。
 
-### Scanner 扫描耗时过长
+### Scanner 扫描无结果
 
-**现象**：Agent 启动后等待很久（数十分钟），`alert_malware_scan` 表仍无记录。
+**现象**：Agent 启动后等待较长时间，`alert_malware_scan` 表仍无记录。
 
-**原因**：默认扫描���径 `/root` 可能包含大量文件（如 IDE 缓存目录 `.cache/JetBrains/` 可达数 GB），Scanner 按字母序遍历，`.cache` 排在 `eicar_test_*` 之前。
+**原因**：默认扫描路径为 `/root/scanner_test` 专用小目录，正常情况下扫描很快。如仍无结果，请检查 ClamAV 是否正确安装、病毒库是否已更新（`sudo freshclam`）。
 
-**处理**：修改 server.yaml 中 scanner task 的扫描路径为专用小目录（参见 §8.1 说明），重启 server 和 Agent。
+**处理**：确认 server.yaml 中 scanner task 的扫描路径为 `/root/scanner_test`（参见 §8.1 说明），确认 EICAR 文件已创建在该目录下，重启 server 和 Agent。

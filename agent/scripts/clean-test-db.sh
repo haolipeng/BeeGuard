@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # 集成测试前数据库清理脚本
-# ���空本地 PostgreSQL soc 数据库中所有表的记录
+# 清空本地 PostgreSQL soc 数据库中所有表的记录
 #
 # 用法：
 #   bash scripts/clean-test-db.sh
@@ -48,7 +48,7 @@ fi
 echo -e "${GREEN}数据库连接成功${NC}"
 echo ""
 
-# 定义所有���要清理的表（按依赖顺序排列）
+# 定义所有需要清理的表（按依赖顺序排列）
 TABLES=(
     # Collector 资产表
     "asset_process"
@@ -78,6 +78,8 @@ TABLES=(
     "alert_malware_scan"
     "alert_network_attack"
     "alert_file_integrity"
+    "alert_container_dangerous_command"
+    "alert_container_reverse_shell"
     # Baseline 表
     "baseline_check_detail"
     "baseline_check_result"

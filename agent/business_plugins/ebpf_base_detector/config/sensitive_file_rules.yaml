@@ -50,7 +50,7 @@ rules:
 
   - id: 1005
     name: "内核模块文件创建"
-    description: "检测内核模���文件的创建"
+    description: "检测内核模块文件的创建"
     severity: "critical"
     enabled: true
     match:

@@ -11,7 +11,7 @@ import (
 	"github.com/docker/docker/api/types"
 	docker "github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
-	"gitlab.myinterest.top/security/agent/business_plugins/collector/process"
+	"github.com/haolipeng/BeeGuard/agent/business_plugins/collector/process"
 )
 
 func IsNotFound(err error) bool {

@@ -64,7 +64,7 @@ curl -fsSL http://127.0.0.1:8081/install.sh | sudo bash
 2. **systemctl 检查** — 系统必须支持 systemd
 3. **检测包管理器** — 优先 dpkg (DEB)，其次 rpm (RPM)
 4. **检测系统架构** — x86_64 → amd64，aarch64 → arm64
-5. **下载安装包** — 从 server 下��� .deb 或 .rpm
+5. **下载安装包** — 从 server 下载 .deb 或 .rpm
 6. **安装包** — `dpkg -i` 或 `rpm -i`
 7. **设置 gRPC 地址** — 通过 `SPECIFIED_SERVER` 环境变量传递给 postinstall 脚本
 8. **验证服务状态** — 检查 cloudsec-agent 服务是否启动

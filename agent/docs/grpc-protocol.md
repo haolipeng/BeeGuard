@@ -66,7 +66,7 @@ message PackagedData {
 | records | repeated EncodedRecord | 否 | 编码后的数据记录列表 |
 | agent_id | string | 是 | Agent 唯一标识符（UUID 格式） |
 | ipv4 | repeated string | 否 | IPv4 地址列表 |
-| hostname | string | 是 | 主���名 |
+| hostname | string | 是 | 主机名 |
 | version | string | 否 | Agent 版本号 |
 | product | string | 是 | 产品名称（cloudsec-agent） |
 | mac_addr | string | 否 | MAC 地址 |

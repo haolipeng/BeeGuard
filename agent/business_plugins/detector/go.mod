@@ -1,4 +1,4 @@
-module gitlab.myinterest.top/security/agent/business_plugins/detector
+module github.com/haolipeng/BeeGuard/agent/business_plugins/detector
 
 go 1.25
 

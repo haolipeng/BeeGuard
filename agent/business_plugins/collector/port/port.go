@@ -6,7 +6,7 @@ import (
 	"time"
 
 	mapset "github.com/deckarep/golang-set/v2"
-	"gitlab.myinterest.top/security/agent/business_plugins/collector/process"
+	"github.com/haolipeng/BeeGuard/agent/business_plugins/collector/process"
 	"golang.org/x/sys/unix"
 )
 

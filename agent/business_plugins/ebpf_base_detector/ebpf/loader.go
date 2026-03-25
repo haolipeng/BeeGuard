@@ -154,7 +154,7 @@ func NewLoader(btfDir string, logger Logger) (*Loader, error) {
 	}
 	l.links = append(l.links, fileCreateLink)
 
-	// 10. 附加kprobe到security_inode_rename（文件重���名监控）
+	// 10. 附加kprobe到security_inode_rename（文件重命名监控）
 	fileRenameLink, err := link.Kprobe("security_inode_rename", objs.KpInodeRename, nil)
 	if err != nil {
 		l.Close()

@@ -19,8 +19,8 @@ import (
 	_ "github.com/GehirnInc/crypt/sha256_crypt"
 	_ "github.com/GehirnInc/crypt/sha512_crypt"
 	"github.com/go-viper/mapstructure/v2"
-	"gitlab.myinterest.top/security/agent/business_plugins/collector/engine"
-	"gitlab.myinterest.top/security/agent/business_plugins/collector/utils"
+	"github.com/haolipeng/BeeGuard/agent/business_plugins/collector/engine"
+	"github.com/haolipeng/BeeGuard/agent/business_plugins/collector/utils"
 	"go.uber.org/zap"
 )
 

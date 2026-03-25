@@ -1,4 +1,4 @@
-module gitlab.myinterest.top/security/agent
+module github.com/haolipeng/BeeGuard/agent
 
 go 1.25
 

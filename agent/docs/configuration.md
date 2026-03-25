@@ -114,7 +114,7 @@ ssh:
       ignore: 60            # 告警抑制时间（秒）
       group_by: source_ip
     - name: invalid_user_brute_force
-      description: "SSH非法用户暴力破解���测"
+      description: "SSH非法用户暴力破解检测"
       pattern: '(Invalid|Illegal) user .* from (\S+)'
       action: invalid_user
       frequency: 6

@@ -15,9 +15,9 @@ import (
 	"shared/datatype"
 
 	"github.com/go-viper/mapstructure/v2"
-	"gitlab.myinterest.top/security/agent/business_plugins/collector/engine"
-	"gitlab.myinterest.top/security/agent/business_plugins/collector/rpm"
-	"gitlab.myinterest.top/security/agent/business_plugins/collector/zip"
+	"github.com/haolipeng/BeeGuard/agent/business_plugins/collector/engine"
+	"github.com/haolipeng/BeeGuard/agent/business_plugins/collector/rpm"
+	"github.com/haolipeng/BeeGuard/agent/business_plugins/collector/zip"
 )
 
 const (

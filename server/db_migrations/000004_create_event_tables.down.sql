@@ -1,0 +1,5 @@
+-- 000004 down: 删除事件采集表
+DROP TABLE IF EXISTS event_file CASCADE;
+DROP TABLE IF EXISTS event_dns CASCADE;
+DROP TABLE IF EXISTS event_connect CASCADE;
+DROP TABLE IF EXISTS event_execve CASCADE;

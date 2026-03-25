@@ -9,9 +9,9 @@ import (
 
 	businessplugins "business_plugins/lib"
 
-	"gitlab.myinterest.top/security/agent/buffer"
-	"gitlab.myinterest.top/security/agent/config"
-	"gitlab.myinterest.top/security/agent/proto"
+	"github.com/haolipeng/BeeGuard/agent/buffer"
+	"github.com/haolipeng/BeeGuard/agent/config"
+	"github.com/haolipeng/BeeGuard/agent/proto"
 	"go.uber.org/zap"
 )
 

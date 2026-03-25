@@ -5,8 +5,8 @@ import (
 	"net"
 	"testing"
 
-	"gitlab.myinterest.top/security/agent/config"
-	"gitlab.myinterest.top/security/agent/proto"
+	"github.com/haolipeng/BeeGuard/agent/config"
+	"github.com/haolipeng/BeeGuard/agent/proto"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"

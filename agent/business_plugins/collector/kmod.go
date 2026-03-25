@@ -9,7 +9,7 @@ import (
 	businessplugins "business_plugins/lib"
 	"shared/datatype"
 
-	"gitlab.myinterest.top/security/agent/business_plugins/collector/engine"
+	"github.com/haolipeng/BeeGuard/agent/business_plugins/collector/engine"
 	"go.uber.org/zap"
 )
 

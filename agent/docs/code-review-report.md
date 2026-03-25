@@ -288,7 +288,7 @@ func NewAttackTracker() *AttackTracker {
 1. **无清理机制**: `states` map 中的 `AttackState` 条目只增不减，永远不会被清理
 2. **key 无限增长**: key 格式为 `"srcIP:sid"`，遭受大量不同源 IP 攻击时条目数量线性增长
 3. **无 TTL**: 即使攻击停止数小时/数天，其状态仍占用内存
-4. **无���量限制**: 没有最大条目数限制
+4. **无数量限制**: 没有最大条目数限制
 
 **建议修复:**
 
@@ -501,7 +501,7 @@ func handleConnect(ctx *eventHandlerCtx, raw []byte) error {
 **问题分析:**
 
 1. **缺少行为基线**: 服务端 `connect` 表（`server/internal/grpc/handler/transfer.go:657`）有处理函数 `processConnect`，但 Agent 只在检测到恶意连接时才上报，正常连接不会入库
-2. **无法做行为分析**: 缺少正常���接数据，无法建立网络行为基线，也无法做回溯分析（如事后发现某 IP 为恶意时，无法查询历史连接记录）
+2. **无法做行为分析**: 缺少正常连接数据，无法建立网络行为基线，也无法做回溯分析（如事后发现某 IP 为恶意时，无法查询历史连接记录）
 3. **与 execve 处理不一致**: execve 事件同时上报原始事件和告警，但 connect 只上报告警
 
 **建议修复:**
@@ -672,7 +672,7 @@ struct file_event {
 
 **缺失的检测场景:**
 
-1. **Webshell 写入**: 攻击者将 webshell 内���写入 `.php`/`.jsp` 文件，仅靠路径无法判断
+1. **Webshell 写入**: 攻击者将 webshell 内容写入 `.php`/`.jsp` 文件，仅靠路径无法判断
 2. **SSH 后门**: 向 `~/.ssh/authorized_keys` 追加公钥
 3. **定时任务后门**: 向 crontab 文件写入恶意命令
 4. **配置篡改**: 修改 `/etc/sudoers`、`/etc/pam.d/` 等配置内容

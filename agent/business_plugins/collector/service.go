@@ -16,8 +16,8 @@ import (
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/karrick/godirwalk"
-	"gitlab.myinterest.top/security/agent/business_plugins/collector/engine"
-	"gitlab.myinterest.top/security/agent/business_plugins/collector/utils"
+	"github.com/haolipeng/BeeGuard/agent/business_plugins/collector/engine"
+	"github.com/haolipeng/BeeGuard/agent/business_plugins/collector/utils"
 	"go.uber.org/zap"
 )
 

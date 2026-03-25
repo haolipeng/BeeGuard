@@ -1,4 +1,4 @@
-module gitlab.myinterest.top/security/agent/test_detector
+module github.com/haolipeng/BeeGuard/agent/test_detector
 
 go 1.25
 
@@ -6,7 +6,7 @@ replace business_plugins/lib => ../../../business_plugins/lib
 
 require (
 	business_plugins/lib v0.0.0
-	gitlab.myinterest.top/security/agent v0.0.0
+	github.com/haolipeng/BeeGuard/agent v0.0.0
 	go.uber.org/zap v1.27.1
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -23,4 +23,4 @@ require (
 	google.golang.org/protobuf v1.36.10 // indirect
 )
 
-replace gitlab.myinterest.top/security/agent => ../../../
+replace github.com/haolipeng/BeeGuard/agent => ../../../

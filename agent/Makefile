@@ -6,7 +6,7 @@ GO=go
 BUILD_DIR=build
 PLUGINS_DIR=$(BUILD_DIR)/plugins
 MAIN_FILE=main.go
-MODULE=gitlab.myinterest.top/security/agent
+MODULE=github.com/haolipeng/BeeGuard/agent
 
 # 插件源码目录
 PLUGINS_SRC_DIR=business_plugins

@@ -35,7 +35,7 @@ Agent 发送给 Server 的数据包，包含批量采集的数据记录和 Agent
 | `product` | `string` | 产品名称（如 "cloudsec-agent"） |
 | `mac_addr` | `string` | MAC 地址 |
 | `os_type` | `string` | 操作系统类型 (linux/windows) |
-| `os_version` | `string` | 操���系统版本 |
+| `os_version` | `string` | 操作系统版本 |
 
 **使用场景：**
 - Agent 定期批量发送采集的数据

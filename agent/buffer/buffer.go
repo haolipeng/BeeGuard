@@ -4,7 +4,7 @@ import (
 	"errors"
 	"sync"
 
-	"gitlab.myinterest.top/security/agent/proto"
+	"github.com/haolipeng/BeeGuard/agent/proto"
 )
 
 var (

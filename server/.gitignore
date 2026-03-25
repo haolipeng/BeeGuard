@@ -1,0 +1,18 @@
+# Directories
+develop/
+build/
+
+# Binary
+server
+hcids
+docs/mock_data/*
+docs/soc_database_dump.sql
+docs/init_alert_db.sql
+migrations/*
+migrations/*.sql
+.idea/
+conf/server.yaml
+.vscode/settings.json
+main
+main
+/machine-id

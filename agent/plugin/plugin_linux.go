@@ -14,9 +14,9 @@ import (
 	"syscall"
 	"time"
 
-	"gitlab.myinterest.top/security/agent/agent"
-	"gitlab.myinterest.top/security/agent/buffer"
-	"gitlab.myinterest.top/security/agent/proto"
+	"github.com/haolipeng/BeeGuard/agent/agent"
+	"github.com/haolipeng/BeeGuard/agent/buffer"
+	"github.com/haolipeng/BeeGuard/agent/proto"
 	"go.uber.org/zap"
 )
 

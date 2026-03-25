@@ -339,7 +339,7 @@
 | severity | string | 严重级别 |
 | sid | string | 规则 SID |
 | reference | string | 参考链接 |
-| attack_count | string | 攻击��数 |
+| attack_count | string | 攻击计数 |
 | last_attack_time | string | 最后攻击时间 |
 | first_attack_time | string | 首次攻击时间 |
 | matched_payload | string | 匹配的载荷片段 |
@@ -418,7 +418,7 @@
 | uid | string | 用户 ID |
 | comm | string | 命令名（最多 16 字符） |
 | exe_path | string | 可执行文件完整路径 |
-| args | string | ���令行参数 |
+| args | string | 命令行参数 |
 | stdin_path | string | FD 0 的文件路径 |
 | stdout_path | string | FD 1 的文件路径 |
 | tty_name | string | 控制终端名称 |

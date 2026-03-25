@@ -60,7 +60,7 @@ m.portIndex[uint16(port)] = rule
 
 ---
 
-## 二、BTF 适配与内��兼容性
+## 二、BTF 适配与内核兼容性
 
 当前代码完全依赖宿主机自带 BTF（`/sys/kernel/btf/vmlinux`），没有任何兼容层。这在生产环境中是最大的部署风险。
 

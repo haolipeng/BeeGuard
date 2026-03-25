@@ -1224,7 +1224,7 @@ curl -s -o /dev/null 'http://127.0.0.1/api?cmd=%3bcat%20/etc/passwd'
 curl -s -o /dev/null -A 'sqlmap/1.0' http://127.0.0.1/
 ```
 
-> **重要：** NIDS 通过 gopacket 抓取**��地网卡**流量，curl 目标必须为本地地址（`127.0.0.1` 或本机 IP），不能使用远程服务器 IP。
+> **重要：** NIDS 通过 gopacket 抓取**本地网卡**流量，curl 目标必须为本地地址（`127.0.0.1` 或本机 IP），不能使用远程服务器 IP。
 
 ### 9.2 数据库验证
 
@@ -1447,7 +1447,7 @@ Collector Plugin                  远程 server Server                  远程 P
                                  │ vuln_info               │
                                  │ image_vuln_scan_task    │
                                  │ image_vuln_detail       │
-                                 └───────────────────��─────┘
+                                 └─────────────────────────┘
                                     远程服务器 <REMOTE_IP>
 ```
 

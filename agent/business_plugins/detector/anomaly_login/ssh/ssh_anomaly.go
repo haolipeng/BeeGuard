@@ -7,8 +7,8 @@ import (
 
 	businessplugins "business_plugins/lib"
 
-	"gitlab.myinterest.top/security/agent/business_plugins/detector/config"
-	"gitlab.myinterest.top/security/agent/business_plugins/detector/engine"
+	"github.com/haolipeng/BeeGuard/agent/business_plugins/detector/config"
+	"github.com/haolipeng/BeeGuard/agent/business_plugins/detector/engine"
 	"go.uber.org/zap"
 )
 

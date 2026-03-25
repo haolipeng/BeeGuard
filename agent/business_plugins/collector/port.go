@@ -7,8 +7,8 @@ import (
 	"shared/datatype"
 
 	"github.com/go-viper/mapstructure/v2"
-	"gitlab.myinterest.top/security/agent/business_plugins/collector/engine"
-	"gitlab.myinterest.top/security/agent/business_plugins/collector/port"
+	"github.com/haolipeng/BeeGuard/agent/business_plugins/collector/engine"
+	"github.com/haolipeng/BeeGuard/agent/business_plugins/collector/port"
 	"go.uber.org/zap"
 )
 

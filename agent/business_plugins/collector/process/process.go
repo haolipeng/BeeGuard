@@ -14,7 +14,7 @@ import (
 
 	"github.com/shirou/gopsutil/v3/host"
 	"github.com/tklauser/go-sysconf"
-	"gitlab.myinterest.top/security/agent/business_plugins/collector/utils"
+	"github.com/haolipeng/BeeGuard/agent/business_plugins/collector/utils"
 )
 
 const (

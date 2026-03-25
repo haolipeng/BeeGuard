@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"gitlab.myinterest.top/security/agent/business_plugins/collector/port"
+	"github.com/haolipeng/BeeGuard/agent/business_plugins/collector/port"
 )
 
 func main() {

@@ -84,7 +84,7 @@ func parseSingleLine(line string) *ParsedLog {
 		}
 	}
 
-	// 尝试匹���成功登录（密码认证）
+	// 尝试匹配成功登录（密码认证）
 	if matches := acceptedPasswordRegex.FindStringSubmatch(line); matches != nil {
 		return &ParsedLog{
 			Timestamp: parseTimestamp(line),

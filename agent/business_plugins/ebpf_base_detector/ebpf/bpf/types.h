@@ -185,7 +185,7 @@ struct mount_event {
     char  dir_name[MOUNT_PATH_LEN];   // 挂载目标路径
     char  fs_type[MOUNT_FSTYPE_LEN];  // 文件系统类型（ext4/tmpfs 等）
     __u32 flags;                      // mount 标志
-    __s32 retval;                     // 系统调用返��值
+    __s32 retval;                     // 系统调用返回值
 } __attribute__((packed));
 
 #endif // __TYPES_H

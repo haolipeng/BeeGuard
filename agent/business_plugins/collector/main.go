@@ -12,8 +12,8 @@ import (
 	businessplugins "business_plugins/lib"
 
 	"github.com/go-logr/zapr"
-	"gitlab.myinterest.top/security/agent/business_plugins/collector/engine"
-	"gitlab.myinterest.top/security/agent/business_plugins/collector/log"
+	"github.com/haolipeng/BeeGuard/agent/business_plugins/collector/engine"
+	"github.com/haolipeng/BeeGuard/agent/business_plugins/collector/log"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )

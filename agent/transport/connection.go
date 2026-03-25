@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"gitlab.myinterest.top/security/agent/config"
+	"github.com/haolipeng/BeeGuard/agent/config"
 
 	"go.uber.org/zap"
 	"google.golang.org/grpc"

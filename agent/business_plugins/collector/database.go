@@ -14,9 +14,9 @@ import (
 	businessplugins "business_plugins/lib"
 	"shared/datatype"
 
-	"gitlab.myinterest.top/security/agent/business_plugins/collector/engine"
-	"gitlab.myinterest.top/security/agent/business_plugins/collector/port"
-	"gitlab.myinterest.top/security/agent/business_plugins/collector/process"
+	"github.com/haolipeng/BeeGuard/agent/business_plugins/collector/engine"
+	"github.com/haolipeng/BeeGuard/agent/business_plugins/collector/port"
+	"github.com/haolipeng/BeeGuard/agent/business_plugins/collector/process"
 	"go.uber.org/zap"
 )
 

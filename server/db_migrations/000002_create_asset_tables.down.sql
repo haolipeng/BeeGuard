@@ -1,0 +1,14 @@
+-- 000002 down: 删除资产管理表（按依赖逆序）
+DROP TABLE IF EXISTS asset_image_package CASCADE;
+DROP TABLE IF EXISTS asset_image CASCADE;
+DROP TABLE IF EXISTS asset_kmod CASCADE;
+DROP TABLE IF EXISTS asset_env_suspicious CASCADE;
+DROP TABLE IF EXISTS asset_container CASCADE;
+DROP TABLE IF EXISTS asset_software CASCADE;
+DROP TABLE IF EXISTS asset_system_service CASCADE;
+DROP TABLE IF EXISTS asset_web_service CASCADE;
+DROP TABLE IF EXISTS asset_database CASCADE;
+DROP TABLE IF EXISTS asset_process CASCADE;
+DROP TABLE IF EXISTS asset_account CASCADE;
+DROP TABLE IF EXISTS asset_port CASCADE;
+DROP TABLE IF EXISTS asset_host CASCADE;

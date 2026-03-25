@@ -10,12 +10,12 @@ import (
 
 	businessplugins "business_plugins/lib"
 
-	"gitlab.myinterest.top/security/agent/business_plugins/detector/config"
-	bruteforceftp "gitlab.myinterest.top/security/agent/business_plugins/detector/brute_force/ftp"
-	bruteforcessh "gitlab.myinterest.top/security/agent/business_plugins/detector/brute_force/ssh"
-	anomalyloginssh "gitlab.myinterest.top/security/agent/business_plugins/detector/anomaly_login/ssh"
-	"gitlab.myinterest.top/security/agent/business_plugins/detector/engine"
-	"gitlab.myinterest.top/security/agent/business_plugins/detector/log"
+	"github.com/haolipeng/BeeGuard/agent/business_plugins/detector/config"
+	bruteforceftp "github.com/haolipeng/BeeGuard/agent/business_plugins/detector/brute_force/ftp"
+	bruteforcessh "github.com/haolipeng/BeeGuard/agent/business_plugins/detector/brute_force/ssh"
+	anomalyloginssh "github.com/haolipeng/BeeGuard/agent/business_plugins/detector/anomaly_login/ssh"
+	"github.com/haolipeng/BeeGuard/agent/business_plugins/detector/engine"
+	"github.com/haolipeng/BeeGuard/agent/business_plugins/detector/log"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )

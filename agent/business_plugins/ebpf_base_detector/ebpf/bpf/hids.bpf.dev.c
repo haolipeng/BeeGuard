@@ -625,7 +625,7 @@ static __noinline int handle_execve_event(
     //~ 获取当前task_struct
     task = (struct task_struct *)bpf_get_current_task();
 
-    //~ 确保 root_mntns_id 已���始化（首次事件时自动计算）
+    //~ 确保 root_mntns_id 已初始化（首次事件时自动计算）
     ensure_root_mntns(task);
     u64 id = bpf_get_current_pid_tgid();
     evt->pid = id;           //~ 低32位：线程ID

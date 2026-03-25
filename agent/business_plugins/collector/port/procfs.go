@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"strings"
 
-	"gitlab.myinterest.top/security/agent/business_plugins/collector/utils"
+	"github.com/haolipeng/BeeGuard/agent/business_plugins/collector/utils"
 	"golang.org/x/sys/unix"
 )
 

@@ -1,4 +1,4 @@
-module gitlab.myinterest.top/security/agent/business_plugins/collector
+module github.com/haolipeng/BeeGuard/agent/business_plugins/collector
 
 go 1.25
 
