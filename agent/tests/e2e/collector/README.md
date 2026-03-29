@@ -20,7 +20,7 @@
 测试程序从 `../../../build/plugins` 目录加载插件（即 agent 根目录下的 `build/plugins/`），因此需要先编译。
 
 ```bash
-cd /home/work/goProject/src/company/agent
+cd /home/work/goProject/src/BeeGuard/agent
 
 # 编译主程序 + 所有插件
 make build
@@ -49,7 +49,7 @@ os.Setenv("HANDLER", "web_service,user,port")
 进入到tests/e2e/collector目录下，先编译main.go为test_collector程序，然后运行test_collector程序
 
 ```bash
-cd /home/work/goProject/src/company/agent/tests/e2e/collector
+cd /home/work/goProject/src/BeeGuard/agent/tests/e2e/collector
 
 go build -o test_collector main.go
 

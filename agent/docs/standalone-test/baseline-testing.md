@@ -21,7 +21,7 @@
 ## Step 1：运行 E2E 测试程序
 
 ```bash
-cd /home/work/goProject/src/company/agent/tests/e2e/baseline
+cd /home/work/goProject/src/BeeGuard/agent/tests/e2e/baseline
 go run main.go 2>&1 | tee /tmp/baseline_test.log
 ```
 

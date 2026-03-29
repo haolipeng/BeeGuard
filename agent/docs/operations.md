@@ -222,7 +222,7 @@ sudo /opt/cloudsec/agent/bin/cloudsecctl stop
 sudo cp -r /opt/cloudsec /opt/cloudsec.bak
 
 # 3. 编译部署新版本
-cd /home/work/goProject/src/company/agent
+cd /home/work/goProject/src/BeeGuard/agent
 make build && make deploy
 
 # 4. 启动

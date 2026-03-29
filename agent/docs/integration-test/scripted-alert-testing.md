@@ -143,7 +143,7 @@ rm -f /etc/cron.d/ebpf_test_cron
 **清理数据库**（推荐使用脚本）：
 
 ```bash
-cd /home/work/goProject/src/company/agent
+cd /home/work/goProject/src/BeeGuard/agent
 
 # 直接执行（使用默认连接参数：127.0.0.1 / postgres / root）
 bash scripts/clean-test-db.sh
@@ -255,7 +255,7 @@ PGPASSWORD=root psql -h 127.0.0.1 -p 5432 -U postgres -d soc -c \
 每个脚本可独立运行：
 
 ```bash
-cd /home/work/goProject/src/company/agent
+cd /home/work/goProject/src/BeeGuard/agent
 
 # 示例：仅运行高危命令检测
 sudo bash scripts/trigger_intrusion_alert/test-dangerous-commands.sh

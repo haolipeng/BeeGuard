@@ -121,7 +121,7 @@ func (BaselineTemplateHostLink) TableName() string { return "baseline_template_h
 
 func main() {
 	configPath := flag.String("config", "config.yaml", "数据库配置文件路径")
-	yamlPath := flag.String("yaml", "/home/work/goProject/src/company/agent/business_plugins/baseline/config/linux/1400.yaml", "基线YAML文件路径")
+	yamlPath := flag.String("yaml", "/home/work/goProject/src/BeeGuard/agent/business_plugins/baseline/config/linux/1400.yaml", "基线YAML文件路径")
 	flag.Parse()
 
 	// 1. 加载数据库配置

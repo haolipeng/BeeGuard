@@ -83,7 +83,7 @@ grep "rule_id=2001" /tmp/ebpf_test.log
 打开 **Terminal B**，执行自动化测试脚本：
 
 ```bash
-cd /home/work/goProject/src/company/agent
+cd /home/work/goProject/src/BeeGuard/agent
 sudo bash tests/test-dangerous-commands.sh
 ```
 
@@ -256,7 +256,7 @@ rm -f /tmp/dc003_test /tmp/dc003_suid
 ## 测试脚本说明
 
 ### 脚本位置
-`/home/work/goProject/src/company/agent/tests/test-dangerous-commands.sh`
+`/home/work/goProject/src/BeeGuard/agent/tests/test-dangerous-commands.sh`
 
 ### 脚本功能
 - 自动执行4个测试用例，每个间隔2秒

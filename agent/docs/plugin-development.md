@@ -60,7 +60,7 @@ business_plugins/
 
 ```go
 import (
-    businessplugins "company/agent/business_plugins/lib"
+    businessplugins "github.com/haolipeng/BeeGuard/agent/business_plugins/lib"
 )
 ```
 
@@ -137,7 +137,7 @@ package main
 
 import (
     "time"
-    businessplugins "company/agent/business_plugins/lib"
+    businessplugins "github.com/haolipeng/BeeGuard/agent/business_plugins/lib"
 )
 
 const DataTypeProcess = 5050
@@ -186,7 +186,7 @@ package main
 
 import (
     "encoding/json"
-    businessplugins "company/agent/business_plugins/lib"
+    businessplugins "github.com/haolipeng/BeeGuard/agent/business_plugins/lib"
 )
 
 const (
@@ -248,7 +248,7 @@ package main
 import (
     "bufio"
     "os"
-    businessplugins "company/agent/business_plugins/lib"
+    businessplugins "github.com/haolipeng/BeeGuard/agent/business_plugins/lib"
 )
 
 const DataTypeSSHBruteForce = 6001

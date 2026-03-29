@@ -19,7 +19,7 @@
 使用测试脚本一键执行所有步骤：
 
 ```bash
-cd /home/work/goProject/src/company/agent/tests/e2e/baseline
+cd /home/work/goProject/src/BeeGuard/agent/tests/e2e/baseline
 chmod +x test.sh
 ./test.sh
 ```
@@ -36,7 +36,7 @@ chmod +x test.sh
 ### 步骤 1: 编译 baseline 插件
 
 ```bash
-cd /home/work/goProject/src/company/agent/business_plugins/baseline
+cd /home/work/goProject/src/BeeGuard/agent/business_plugins/baseline
 go mod tidy
 go build -o baseline main.go
 ```
@@ -52,7 +52,7 @@ Agent 会在 `/tmp/plugin/{插件名}/` 目录下查找插件可执行文件：
 mkdir -p /tmp/plugin/baseline
 
 # 复制编译好的插件
-cp /home/work/goProject/src/company/agent/business_plugins/baseline/baseline /tmp/plugin/baseline/baseline
+cp /home/work/goProject/src/BeeGuard/agent/business_plugins/baseline/baseline /tmp/plugin/baseline/baseline
 
 # 确保插件有执行权限
 chmod +x /tmp/plugin/baseline/baseline
@@ -61,7 +61,7 @@ chmod +x /tmp/plugin/baseline/baseline
 ### 步骤 3: 运行测试程序
 
 ```bash
-cd /home/work/goProject/src/company/agent/tests/e2e/baseline
+cd /home/work/goProject/src/BeeGuard/agent/tests/e2e/baseline
 go mod tidy
 go run main.go
 ```
@@ -69,7 +69,7 @@ go run main.go
 或者先编译再运行：
 
 ```bash
-cd /home/work/goProject/src/company/agent/tests/e2e/baseline
+cd /home/work/goProject/src/BeeGuard/agent/tests/e2e/baseline
 go build -o test_agent main.go
 ./test_agent
 ```

@@ -80,7 +80,7 @@ database:
 编译并部署最新代码到 `/opt/cloudsec/agent/`：
 
 ```bash
-cd /home/work/goProject/src/company/agent
+cd /home/work/goProject/src/BeeGuard/agent
 make build && make deploy
 ```
 

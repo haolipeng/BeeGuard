@@ -150,7 +150,7 @@ rm -f /etc/cron.d/ebpf_test_cron
 **方式一：使用清理脚本（推荐）**
 
 ```bash
-cd /home/work/goProject/src/company/agent
+cd /home/work/goProject/src/BeeGuard/agent
 
 # 通过环境变量指定远程数据库连接参数
 DB_HOST=<REMOTE_IP> DB_USER=<DB_USER> DB_PASS=<DB_PASS> bash scripts/clean-test-db.sh

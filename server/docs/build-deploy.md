@@ -16,14 +16,15 @@ Server (server) 是安全管理平台的服务端程序，负责：
 
 ## 二、数据库准备
 
-确保 PostgreSQL 已安装并创建数据库 `soc`，然后导入表结构：
+确保 PostgreSQL 已安装并创建数据库 `soc`，然后通过数据库迁移初始化表结构：
 
 ```bash
-# 导入表结构
-sudo -u postgres psql -d soc -f /home/work/goProject/src/company/init_asset_db.sql
+# 使用 migrate 工具执行数据库迁移
+cd /home/work/goProject/src/BeeGuard/server
+make migrate-up
 
 # 验证
-sudo -u postgres psql -d soc -c "\dt asset_*"
+sudo -u postgres psql -d soc -c "\dt"
 ```
 
 ---
@@ -31,7 +32,7 @@ sudo -u postgres psql -d soc -c "\dt asset_*"
 ## 三、编译部署
 
 ```bash
-cd /home/work/goProject/src/company/server
+cd /home/work/goProject/src/BeeGuard/server
 
 # 编译源代码
 make build
@@ -122,7 +123,7 @@ log:
 /opt/cloudsec/server/bin/server -config /opt/cloudsec/server/conf/server.yaml
 
 # 方式二：使用源码目录（开发调试）
-cd /home/work/goProject/src/company/server
+cd /home/work/goProject/src/BeeGuard/server
 make run
 
 # 方式三：后台运行

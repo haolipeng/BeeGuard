@@ -59,7 +59,7 @@ usage() {
     echo "  $0 -c           # 清理日志和数据"
     echo ""
     echo "注意: 请先手动编译和部署 Agent"
-    echo "  cd /home/work/goProject/src/company/agent && make deploy"
+    echo "  cd /home/work/goProject/src/BeeGuard/agent && make deploy"
 }
 
 # 启动 Agent

@@ -155,7 +155,7 @@ rm -f /etc/cron.d/ebpf_test_cron
 **方式一：使用清理脚本（推荐）**
 
 ```bash
-cd /home/work/goProject/src/company/agent
+cd /home/work/goProject/src/BeeGuard/agent
 
 # 直接执行（使用默认连接参数：127.0.0.1 / postgres / root）
 bash scripts/clean-test-db.sh

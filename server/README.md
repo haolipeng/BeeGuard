@@ -34,7 +34,7 @@ server/
 │   │   └── logger.go           # 日志模块
 │   ├── model/
 │   └── pool/
-├── migrations/                  # 数据库迁移文件
+├── db_migrations/              # 数据库迁移文件
 ├── proto/
 │   ├── grpc.proto              # gRPC 协议定义
 │   ├── grpc.pb.go              # 生成的 protobuf 代码

@@ -643,7 +643,7 @@ hids: commit_creds new_uid=0 new_euid=0
 ### 执行方式
 
 ```bash
-cd /home/work/goProject/src/company/agent
+cd /home/work/goProject/src/BeeGuard/agent
 
 # 运行所有单元测试
 make test

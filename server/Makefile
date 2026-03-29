@@ -5,7 +5,7 @@ BINARY_NAME=server
 GO=go
 BUILD_DIR=build
 MAIN_FILE=./cmd/main.go
-MODULE=company/server
+MODULE=github.com/haolipeng/BeeGuard/server
 
 # 部署目录
 DEPLOY_DIR=/opt/cloudsec/server

@@ -101,7 +101,7 @@ ls -la /opt/cloudsec/server/packages/
 如果目录为空或没有对应架构的包，需先编译打包：
 
 ```bash
-cd /home/work/goProject/src/company/agent
+cd /home/work/goProject/src/BeeGuard/agent
 make package-deb
 cp build/cloudsec-agent_*.deb /opt/cloudsec/server/packages/
 ```

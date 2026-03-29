@@ -13,7 +13,7 @@ sudo ./bin/agent -standalone -plugins=ebpf_base_detector,detector,nids -output=s
 sudo ./bin/agent -config agent.yaml -test                                                      # 集成测试
 
 # 终端 B：运行全部告警触发
-cd /home/work/goProject/src/company/agent
+cd /home/work/goProject/src/BeeGuard/agent
 sudo bash scripts/test-all-alerts.sh
 ```
 

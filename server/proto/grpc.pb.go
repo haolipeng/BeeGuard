@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.11
 // 	protoc        v3.19.5
-// source: proto/grpc.proto
+// source: grpc.proto
 
 package proto
 
@@ -39,7 +39,7 @@ type PackagedData struct {
 
 func (x *PackagedData) Reset() {
 	*x = PackagedData{}
-	mi := &file_proto_grpc_proto_msgTypes[0]
+	mi := &file_grpc_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -51,7 +51,7 @@ func (x *PackagedData) String() string {
 func (*PackagedData) ProtoMessage() {}
 
 func (x *PackagedData) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_grpc_proto_msgTypes[0]
+	mi := &file_grpc_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -64,7 +64,7 @@ func (x *PackagedData) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PackagedData.ProtoReflect.Descriptor instead.
 func (*PackagedData) Descriptor() ([]byte, []int) {
-	return file_proto_grpc_proto_rawDescGZIP(), []int{0}
+	return file_grpc_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *PackagedData) GetRecords() []*EncodedRecord {
@@ -142,7 +142,7 @@ type EncodedRecord struct {
 
 func (x *EncodedRecord) Reset() {
 	*x = EncodedRecord{}
-	mi := &file_proto_grpc_proto_msgTypes[1]
+	mi := &file_grpc_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -154,7 +154,7 @@ func (x *EncodedRecord) String() string {
 func (*EncodedRecord) ProtoMessage() {}
 
 func (x *EncodedRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_grpc_proto_msgTypes[1]
+	mi := &file_grpc_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -167,7 +167,7 @@ func (x *EncodedRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EncodedRecord.ProtoReflect.Descriptor instead.
 func (*EncodedRecord) Descriptor() ([]byte, []int) {
-	return file_proto_grpc_proto_rawDescGZIP(), []int{1}
+	return file_grpc_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *EncodedRecord) GetDataType() int32 {
@@ -203,7 +203,7 @@ type Record struct {
 
 func (x *Record) Reset() {
 	*x = Record{}
-	mi := &file_proto_grpc_proto_msgTypes[2]
+	mi := &file_grpc_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -215,7 +215,7 @@ func (x *Record) String() string {
 func (*Record) ProtoMessage() {}
 
 func (x *Record) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_grpc_proto_msgTypes[2]
+	mi := &file_grpc_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -228,7 +228,7 @@ func (x *Record) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Record.ProtoReflect.Descriptor instead.
 func (*Record) Descriptor() ([]byte, []int) {
-	return file_proto_grpc_proto_rawDescGZIP(), []int{2}
+	return file_grpc_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *Record) GetDataType() int32 {
@@ -262,7 +262,7 @@ type Payload struct {
 
 func (x *Payload) Reset() {
 	*x = Payload{}
-	mi := &file_proto_grpc_proto_msgTypes[3]
+	mi := &file_grpc_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -274,7 +274,7 @@ func (x *Payload) String() string {
 func (*Payload) ProtoMessage() {}
 
 func (x *Payload) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_grpc_proto_msgTypes[3]
+	mi := &file_grpc_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -287,7 +287,7 @@ func (x *Payload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Payload.ProtoReflect.Descriptor instead.
 func (*Payload) Descriptor() ([]byte, []int) {
-	return file_proto_grpc_proto_rawDescGZIP(), []int{3}
+	return file_grpc_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *Payload) GetFields() map[string]string {
@@ -309,7 +309,7 @@ type Command struct {
 
 func (x *Command) Reset() {
 	*x = Command{}
-	mi := &file_proto_grpc_proto_msgTypes[4]
+	mi := &file_grpc_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -321,7 +321,7 @@ func (x *Command) String() string {
 func (*Command) ProtoMessage() {}
 
 func (x *Command) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_grpc_proto_msgTypes[4]
+	mi := &file_grpc_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -334,7 +334,7 @@ func (x *Command) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Command.ProtoReflect.Descriptor instead.
 func (*Command) Descriptor() ([]byte, []int) {
-	return file_proto_grpc_proto_rawDescGZIP(), []int{4}
+	return file_grpc_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *Command) GetCtrl() int32 {
@@ -371,7 +371,7 @@ type Task struct {
 
 func (x *Task) Reset() {
 	*x = Task{}
-	mi := &file_proto_grpc_proto_msgTypes[5]
+	mi := &file_grpc_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -383,7 +383,7 @@ func (x *Task) String() string {
 func (*Task) ProtoMessage() {}
 
 func (x *Task) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_grpc_proto_msgTypes[5]
+	mi := &file_grpc_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -396,7 +396,7 @@ func (x *Task) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Task.ProtoReflect.Descriptor instead.
 func (*Task) Descriptor() ([]byte, []int) {
-	return file_proto_grpc_proto_rawDescGZIP(), []int{5}
+	return file_grpc_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *Task) GetDataType() int32 {
@@ -443,7 +443,7 @@ type Config struct {
 
 func (x *Config) Reset() {
 	*x = Config{}
-	mi := &file_proto_grpc_proto_msgTypes[6]
+	mi := &file_grpc_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -455,7 +455,7 @@ func (x *Config) String() string {
 func (*Config) ProtoMessage() {}
 
 func (x *Config) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_grpc_proto_msgTypes[6]
+	mi := &file_grpc_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -468,7 +468,7 @@ func (x *Config) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Config.ProtoReflect.Descriptor instead.
 func (*Config) Descriptor() ([]byte, []int) {
-	return file_proto_grpc_proto_rawDescGZIP(), []int{6}
+	return file_grpc_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *Config) GetName() string {
@@ -520,11 +520,12 @@ func (x *Config) GetDetail() string {
 	return ""
 }
 
-var File_proto_grpc_proto protoreflect.FileDescriptor
+var File_grpc_proto protoreflect.FileDescriptor
 
-const file_proto_grpc_proto_rawDesc = "" +
+const file_grpc_proto_rawDesc = "" +
 	"\n" +
-	"\x10proto/grpc.proto\x12\x04grpc\"\x8f\x02\n" +
+	"\n" +
+	"grpc.proto\x12\x04grpc\"\x8f\x02\n" +
 	"\fPackagedData\x12-\n" +
 	"\arecords\x18\x01 \x03(\v2\x13.grpc.EncodedRecordR\arecords\x12\x19\n" +
 	"\bagent_id\x18\x02 \x01(\tR\aagentId\x12\x12\n" +
@@ -569,22 +570,22 @@ const file_proto_grpc_proto_rawDesc = "" +
 	"\rdownload_urls\x18\x06 \x03(\tR\fdownloadUrls\x12\x16\n" +
 	"\x06detail\x18\a \x01(\tR\x06detail2?\n" +
 	"\bTransfer\x123\n" +
-	"\bTransfer\x12\x12.grpc.PackagedData\x1a\r.grpc.Command\"\x00(\x010\x01B\x16Z\x14company/server/protob\x06proto3"
+	"\bTransfer\x12\x12.grpc.PackagedData\x1a\r.grpc.Command\"\x00(\x010\x01B,Z*github.com/haolipeng/BeeGuard/server/protob\x06proto3"
 
 var (
-	file_proto_grpc_proto_rawDescOnce sync.Once
-	file_proto_grpc_proto_rawDescData []byte
+	file_grpc_proto_rawDescOnce sync.Once
+	file_grpc_proto_rawDescData []byte
 )
 
-func file_proto_grpc_proto_rawDescGZIP() []byte {
-	file_proto_grpc_proto_rawDescOnce.Do(func() {
-		file_proto_grpc_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_proto_grpc_proto_rawDesc), len(file_proto_grpc_proto_rawDesc)))
+func file_grpc_proto_rawDescGZIP() []byte {
+	file_grpc_proto_rawDescOnce.Do(func() {
+		file_grpc_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_grpc_proto_rawDesc), len(file_grpc_proto_rawDesc)))
 	})
-	return file_proto_grpc_proto_rawDescData
+	return file_grpc_proto_rawDescData
 }
 
-var file_proto_grpc_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
-var file_proto_grpc_proto_goTypes = []any{
+var file_grpc_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_grpc_proto_goTypes = []any{
 	(*PackagedData)(nil),  // 0: grpc.PackagedData
 	(*EncodedRecord)(nil), // 1: grpc.EncodedRecord
 	(*Record)(nil),        // 2: grpc.Record
@@ -594,7 +595,7 @@ var file_proto_grpc_proto_goTypes = []any{
 	(*Config)(nil),        // 6: grpc.Config
 	nil,                   // 7: grpc.Payload.FieldsEntry
 }
-var file_proto_grpc_proto_depIdxs = []int32{
+var file_grpc_proto_depIdxs = []int32{
 	1, // 0: grpc.PackagedData.records:type_name -> grpc.EncodedRecord
 	3, // 1: grpc.Record.data:type_name -> grpc.Payload
 	7, // 2: grpc.Payload.fields:type_name -> grpc.Payload.FieldsEntry
@@ -609,26 +610,26 @@ var file_proto_grpc_proto_depIdxs = []int32{
 	0, // [0:5] is the sub-list for field type_name
 }
 
-func init() { file_proto_grpc_proto_init() }
-func file_proto_grpc_proto_init() {
-	if File_proto_grpc_proto != nil {
+func init() { file_grpc_proto_init() }
+func file_grpc_proto_init() {
+	if File_grpc_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_grpc_proto_rawDesc), len(file_proto_grpc_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_grpc_proto_rawDesc), len(file_grpc_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
-		GoTypes:           file_proto_grpc_proto_goTypes,
-		DependencyIndexes: file_proto_grpc_proto_depIdxs,
-		MessageInfos:      file_proto_grpc_proto_msgTypes,
+		GoTypes:           file_grpc_proto_goTypes,
+		DependencyIndexes: file_grpc_proto_depIdxs,
+		MessageInfos:      file_grpc_proto_msgTypes,
 	}.Build()
-	File_proto_grpc_proto = out.File
-	file_proto_grpc_proto_goTypes = nil
-	file_proto_grpc_proto_depIdxs = nil
+	File_grpc_proto = out.File
+	file_grpc_proto_goTypes = nil
+	file_grpc_proto_depIdxs = nil
 }

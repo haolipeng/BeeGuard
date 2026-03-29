@@ -53,7 +53,7 @@ ls /sys/kernel/btf/vmlinux  # BTF 支持
 ### 3.1 编译部署 Agent + 所有插件
 
 ```bash
-cd /home/work/goProject/src/company/agent
+cd /home/work/goProject/src/BeeGuard/agent
 
 # 编译 Agent + 所有插件 (自动生成 eBPF 代码)
 make build
@@ -362,7 +362,7 @@ sudo ./bin/agent
 
 # 方式二：使用源码目录（开发调试）
 # 日志输出到当前目录下的 logs/agent.log
-cd /home/work/goProject/src/company/agent
+cd /home/work/goProject/src/BeeGuard/agent
 make build
 make deploy
 cd /opt/cloudsec/agent
@@ -400,7 +400,7 @@ sudo rm -rf /opt/cloudsec/agent/logs/plugins/*
 sudo rm -rf /opt/cloudsec/agent/data/*
 
 # 清理编译产物
-cd /home/work/goProject/src/company/agent
+cd /home/work/goProject/src/BeeGuard/agent
 make clean
 ```
 

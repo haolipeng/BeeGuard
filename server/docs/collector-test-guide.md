@@ -52,11 +52,11 @@
 
 ```bash
 # 编译并部署 Server
-cd /home/work/goProject/src/company/server
+cd /home/work/goProject/src/BeeGuard/server
 make build && make deploy
 
 # 编译并部署 Agent 和插件
-cd /home/work/goProject/src/company/agent
+cd /home/work/goProject/src/BeeGuard/agent
 make build && make deploy
 ```
 
@@ -102,7 +102,7 @@ retry_interval: 5
 
 ```bash
 # 初始化数据库（如需重建）
-cd /home/work/goProject/src/company/server
+cd /home/work/goProject/src/BeeGuard/server
 ./rebuild_asset_db.sh
 ```
 
@@ -193,7 +193,7 @@ curl --noproxy '*' -s -X POST http://127.0.0.1:8080/api/config \
 #### 方式一：使用脚本（推荐）
 
 ```bash
-cd /home/work/goProject/src/company/server/test_data
+cd /home/work/goProject/src/BeeGuard/server/test_data
 
 # 查看帮助
 ./send_task.sh help
@@ -213,7 +213,7 @@ cd /home/work/goProject/src/company/server/test_data
 #### 方式二：使用 curl + JSON 文件
 
 ```bash
-cd /home/work/goProject/src/company/server/test_data
+cd /home/work/goProject/src/BeeGuard/server/test_data
 
 # 发送进程采集任务
 curl --noproxy '*' -s -X POST http://127.0.0.1:8080/api/task \
@@ -271,7 +271,7 @@ PGPASSWORD=happy psql -h localhost -U postgres -d soc -c \
 
 ## 测试数据文件
 
-位置：`/home/work/goProject/src/company/server/test_data/`
+位置：`/home/work/goProject/src/BeeGuard/server/test_data/`
 
 | 文件 | DataType | 用途 |
 |------|----------|------|

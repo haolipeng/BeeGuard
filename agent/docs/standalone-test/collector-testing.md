@@ -32,7 +32,7 @@ Standalone 模式无需连接 gRPC Server，插件启动后自动执行所有 Ha
 ### 2.1 启动 agent（所有 Handler）
 
 ```bash
-cd /home/work/goProject/src/company/agent
+cd /home/work/goProject/src/BeeGuard/agent
 
 # 使用 build 目录测试（推荐日常开发）
 sudo ./build/agent -standalone -plugins=collector -output=stderr -test
@@ -276,7 +276,7 @@ E2E 测试通过测试程序模拟 Server 下发任务，验证 collector 插件
 ### 4.1 执行 E2E 测试
 
 ```bash
-cd /home/work/goProject/src/company/agent
+cd /home/work/goProject/src/BeeGuard/agent
 
 # 方式一：使用 Makefile（推荐）
 make test-e2e-collector
