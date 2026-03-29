@@ -303,7 +303,7 @@ if f, err := os.Open(filePath); err != nil {
 
 ### C-01: 所有 REST API 端点缺少认证和授权机制
 
-- **文件**: `hcids/internal/router/router.go:28-160`
+- **文件**: `server/internal/router/router.go:28-160`
 - **描述**: 整个 HTTP API 没有任何认证中间件（无 JWT、无 API Key、无 Session），任何人可以直接访问所有端点，包括：向 Agent 下发任意命令（POST /api/task）、关闭 Agent（DataType 1060）、创建/删除系统用户、删除告警规则、发送基线检测任务等。这是一个安全平台本身最致命的安全漏洞。
 - **修复建议**: 在路由组上添加认证中间件，至少使用 JWT Token 或 API Key 鉴权：
 
@@ -314,7 +314,7 @@ api := r.Group("/api1", authMiddleware)
 
 ### C-02: 密码明文存储
 
-- **文件**: `hcids/internal/controller/system/user.go:35-44`, `hcids/internal/models/system/user.go:11`
+- **文件**: `server/internal/controller/system/user.go:35-44`, `server/internal/models/system/user.go:11`
 - **描述**: 创建用户时密码直接明文写入数据库（`Passwd: user.Passwd`），没有任何哈希处理。User 模型的 `Passwd` 字段直接以 JSON 形式返回给客户端（`json:"passwd"`），在 GetUser 和 ListUsers 接口中会泄露所有用户密码。
 - **修复建议**: 使用 bcrypt 哈希密码，并在 JSON 序列化时忽略密码字段：
 
@@ -329,7 +329,7 @@ newUser.Passwd = string(hashedPwd)
 
 ### C-03: CORS 配置允许所有来源 + 携带凭证
 
-- **文件**: `hcids/internal/middleware/cors.go:11-60`, `hcids/conf/server.yaml:14-31`
+- **文件**: `server/internal/middleware/cors.go:11-60`, `server/conf/server.yaml:14-31`
 - **描述**: 默认配置 `AllowedOrigins: ["*"]` 且 `AllowCredentials: true`。根据 CORS 规范，`Access-Control-Allow-Origin` 设为请求方的 Origin 加上 `Access-Control-Allow-Credentials: true` 等同于完全信任任何来源。攻击者可以从任意恶意网站通过浏览器访问该安全平台的所有 API。
 - **修复建议**: 明确配置允许的域名列表，不使用通配符：
 
@@ -342,7 +342,7 @@ cors:
 
 ### C-04: 数据库密码硬编码在配置文件中
 
-- **文件**: `hcids/conf/server.yaml:38`
+- **文件**: `server/conf/server.yaml:38`
 - **描述**: 数据库密码 `password: "root"` 硬编码在版本控制的配置文件中。如果代码仓库泄露，数据库凭据直接暴露。
 - **修复建议**: 使用环境变量注入敏感配置：
 
@@ -352,7 +352,7 @@ password := os.Getenv("DB_PASSWORD")
 
 ### C-05: gRPC 通道无 TLS、无认证
 
-- **文件**: `hcids/cmd/main.go:108-111`
+- **文件**: `server/cmd/main.go:108-111`
 - **描述**: gRPC Server 创建时没有配置 TLS 证书，也没有任何 interceptor 进行 Agent 身份验证。任何人可以伪造 Agent 向服务端发送虚假安全事件数据，也可以冒充已有 Agent 接管其命令通道。攻击者可以：(1) 注入虚假安全告警制造混乱；(2) 冒充 Agent 获取下发的安全检测命令；(3) 污染资产数据和漏洞扫描结果。
 - **修复建议**: 添加 mTLS 或 Token 认证 interceptor：
 
@@ -370,7 +370,7 @@ grpcServer := grpc.NewServer(
 
 ### H-01: 分页参数 limit 未设上限，可导致 OOM
 
-- **文件**: 所有 controller 的 List 方法，例如 `hcids/internal/controller/alert/command.go:23`, `hcids/internal/controller/assets/host/host.go:23`, `hcids/internal/controller/system/user.go:84`
+- **文件**: 所有 controller 的 List 方法，例如 `server/internal/controller/alert/command.go:23`, `server/internal/controller/assets/host/host.go:23`, `server/internal/controller/system/user.go:84`
 - **描述**: `limit` 参数直接从用户请求获取，无上限检查。攻击者可传入 `limit=999999999`，导致一次性加载全量数据到内存，造成 OOM 或极大的 DB 压力。
 - **修复建议**:
 
@@ -382,31 +382,31 @@ if limit <= 0 || limit > 100 {
 
 ### H-02: HTTP 服务未优雅关闭
 
-- **文件**: `hcids/cmd/main.go:122-127`
+- **文件**: `server/cmd/main.go:122-127`
 - **描述**: HTTP 服务通过 `go func() { httpRouter.Run(httpAddr) }()` 启动后，在收到关闭信号时只调用了 `grpcServer.GracefulStop()`，没有关闭 HTTP 服务。HTTP 请求可能在进程退出时被强制中断。
 - **修复建议**: 使用 `http.Server` 并在关闭信号处理中调用 `httpServer.Shutdown(ctx)`。
 
 ### H-03: 无请求速率限制
 
-- **文件**: `hcids/internal/router/router.go`（全文）
+- **文件**: `server/internal/router/router.go`（全文）
 - **描述**: 所有 API 端点没有速率限制。配合 C-01（无认证），攻击者可以对系统发起大量请求，导致数据库过载。
 - **修复建议**: 添加速率限制中间件。
 
 ### H-04: Agent 连接被冒充后的指令劫持风险
 
-- **文件**: `hcids/internal/grpc/handler/transfer.go:273-319`
+- **文件**: `server/internal/grpc/handler/transfer.go:273-319`
 - **描述**: `registerAgent` 方法中，如果一个新连接使用已有的 `agent_id`，会直接覆盖 `s.agents[pkg.AgentId]`，旧的命令通道被丢弃，但旧的 Transfer goroutine 仍在运行中，造成 goroutine 泄漏。攻击者可通过伪造 agent_id 劫持合法 Agent 的命令通道。
 - **修复建议**: 在注册新 Agent 时，检查是否已有同 ID 连接，先关闭旧连接再注册新连接。
 
 ### H-05: NormalizeOSVersion 函数存在 panic 风险
 
-- **文件**: `hcids/internal/db/repository/vuln_repository.go:429, 443, 458, 470, 482, 497`
+- **文件**: `server/internal/db/repository/vuln_repository.go:429, 443, 458, 470, 482, 497`
 - **描述**: 在解析 OS 版本字符串时，代码直接访问 `p[0]` 而没有检查数组边界。
 - **修复建议**: 在访问 `p[0]` 前添加 `len(p) > 0` 检查。
 
 ### H-06: 删除操作缺少权限控制和确认机制
 
-- **文件**: `hcids/internal/controller/system/user.go:193-207`, `hcids/internal/controller/code/repos.go:205-219`, `hcids/internal/controller/back/alert.go:203-217`
+- **文件**: `server/internal/controller/system/user.go:193-207`, `server/internal/controller/code/repos.go:205-219`, `server/internal/controller/back/alert.go:203-217`
 - **描述**: 所有删除接口只接收 ID 即可删除，无任何权限验证。结合 C-01 无认证问题，任何人可以删除任何数据。
 - **修复建议**: 添加权限验证中间件和操作日志记录。
 
@@ -416,19 +416,19 @@ if limit <= 0 || limit > 100 {
 
 ### M-01: DSN 中的 sslmode=disable
 
-- **文件**: `hcids/internal/db/postgres.go:18`, `hcids/internal/mysql/db.go:25-26`
+- **文件**: `server/internal/db/postgres.go:18`, `server/internal/mysql/db.go:25-26`
 - **描述**: PostgreSQL 连接字符串中硬编码 `sslmode=disable`，数据库通信以明文传输。
 - **修复建议**: 在配置中添加 `sslmode` 配置项，生产环境使用 `sslmode=verify-full`。
 
 ### M-02: 全局变量 db 无线程安全保护
 
-- **文件**: `hcids/internal/db/postgres.go:14`, `hcids/internal/mysql/db.go:14`
+- **文件**: `server/internal/db/postgres.go:14`, `server/internal/mysql/db.go:14`
 - **描述**: 全局变量 `db` 在 `Init` 和 `GetDB` 中无 `sync.Once` 或 mutex 保护。
 - **修复建议**: 使用 `sync.Once` 初始化，或通过依赖注入传递 db 连接。
 
 ### M-03: 数据库连接池配置不完整
 
-- **文件**: `hcids/internal/db/postgres.go:34-35`
+- **文件**: `server/internal/db/postgres.go:34-35`
 - **描述**: 缺少 `ConnMaxLifetime` 和 `ConnMaxIdleTime` 配置，可能导致连接长时间不回收，被数据库端超时关闭后客户端复用失效连接。
 - **修复建议**:
 
@@ -439,19 +439,19 @@ sqlDB.SetConnMaxIdleTime(5 * time.Minute)
 
 ### M-04: eBPF 事件表缺少数据过期清理
 
-- **文件**: `hcids/internal/db/repository/execve_repository.go`, `hcids/internal/db/repository/connect_repository.go`, `hcids/internal/db/repository/dns_repository.go`
+- **文件**: `server/internal/db/repository/execve_repository.go`, `server/internal/db/repository/connect_repository.go`, `server/internal/db/repository/dns_repository.go`
 - **描述**: `event_execve`、`event_connect`、`event_dns` 三张表只插入不删除。虽然 `ExecveRepository` 有 `DeleteOldRecords` 方法，但从未被调用。长期运行后磁盘爆满。
 - **修复建议**: 定时调用清理方法，或使用 PostgreSQL 分区表。
 
 ### M-05: User 模型表名拼写错误
 
-- **文件**: `hcids/internal/models/system/user.go:21`
+- **文件**: `server/internal/models/system/user.go:21`
 - **描述**: `TableName()` 返回 `"systen_user"`（应为 `"system_user"`）。
 - **修复建议**: 确认数据库实际表名并修正拼写。
 
 ### M-06: 多处 fmt.Println 调试输出残留
 
-- **文件**: `hcids/internal/controller/system/user.go:32`, `hcids/internal/controller/code/repos.go:45`, `hcids/internal/controller/back/baseline.go:32`
+- **文件**: `server/internal/controller/system/user.go:32`, `server/internal/controller/code/repos.go:45`, `server/internal/controller/back/baseline.go:32`
 - **描述**: 多处使用 `fmt.Println` 打印用户提交的数据，生产环境中敏感数据会被输出到标准输出。
 - **修复建议**: 移除所有 `fmt.Println`，改用结构化日志。
 
@@ -468,7 +468,7 @@ query = query.Where("agent_id LIKE ?", "%"+escaped+"%")
 
 ### M-08: DateTime UnmarshalJSON 缺少边界检查
 
-- **文件**: `hcids/internal/models/common/time.go:24`
+- **文件**: `server/internal/models/common/time.go:24`
 - **描述**: 直接使用 `data[1:len(data)-1]` 去除引号，没有检查 `data` 长度。空字符串或单字符输入会导致 panic。
 - **修复建议**:
 
@@ -483,13 +483,13 @@ func (dt *DateTime) UnmarshalJSON(data []byte) error {
 
 ### M-09: 错误信息泄露内部细节
 
-- **文件**: `hcids/internal/http/handler.go:55`, `hcids/internal/controller/back/alert.go:43, 49`
+- **文件**: `server/internal/http/handler.go:55`, `server/internal/controller/back/alert.go:43, 49`
 - **描述**: 多处将 `err.Error()` 直接返回给客户端，可能暴露内部实现细节。
 - **修复建议**: 返回通用错误消息，将详细错误记录到日志。
 
 ### M-10: gRPC 数据处理缺少 context 超时控制
 
-- **文件**: `hcids/internal/grpc/handler/transfer.go:392`
+- **文件**: `server/internal/grpc/handler/transfer.go:392`
 - **描述**: `handlePackagedData` 中使用 `context.Background()` 创建 context，没有设置超时。如果数据库操作阻塞，处理 goroutine 会永久挂起。
 - **修复建议**:
 
@@ -500,7 +500,7 @@ defer cancel()
 
 ### M-11: 漏洞调度器 vulnCount 始终返回 0
 
-- **文件**: `hcids/internal/vuln/scheduler.go:112-143, 147-203`
+- **文件**: `server/internal/vuln/scheduler.go:112-143, 147-203`
 - **描述**: `matchAllHosts` 和 `matchAllImages` 方法的返回值 `vulnCount` 从未被赋值，始终为 0。日志中漏洞数量统计功能失效。
 - **修复建议**: 在匹配成功后累加 vulnCount。
 
@@ -510,49 +510,49 @@ defer cancel()
 
 ### L-01: 包命名不当：mysql 包实际使用 PostgreSQL
 
-- **文件**: `hcids/internal/mysql/db.go`
+- **文件**: `server/internal/mysql/db.go`
 - **描述**: 包名为 `mysql`，但实际使用的是 `gorm.io/driver/postgres` PostgreSQL 驱动，造成认知混淆。
 - **修复建议**: 将包名重命名为 `database` 或合并到 `db` 包。
 
 ### L-02: 路由组织混乱，存在重复注册
 
-- **文件**: `hcids/internal/router/router.go:72-81` vs `hcids/internal/router/back_router.go:14-23`
+- **文件**: `server/internal/router/router.go:72-81` vs `server/internal/router/back_router.go:14-23`
 - **描述**: 规则集路由在 `/api1/rules` 和 `/api1/back/rules` 下各注册了一次，完全重复。
 - **修复建议**: 统一路由组织，去除重复注册。
 
 ### L-03: UpdateUser 路由使用 GET 方法
 
-- **文件**: `hcids/internal/router/system_router.go:24`
+- **文件**: `server/internal/router/system_router.go:24`
 - **描述**: `r.GET("/users/edit/:id", userHandler.UpdateUser)` 使用 GET 方法处理更新操作，但 UpdateUser 内部调用 `c.ShouldBindJSON` 解析 request body。GET 请求通常不包含 body。
 - **修复建议**: 改为 `r.PUT` 或 `r.POST`。
 
 ### L-04: 无数据库迁移版本管理
 
-- **文件**: `hcids/internal/models/init_menu.go:10-41`
+- **文件**: `server/internal/models/init_menu.go:10-41`
 - **描述**: `AutoMigrate` 函数已被完全注释掉。SQL 迁移文件使用编号命名但没有版本管理工具，依赖手动执行。
 - **修复建议**: 集成 golang-migrate 或 goose 进行自动化迁移管理。
 
 ### L-05: GetAgents 返回内部指针
 
-- **文件**: `hcids/internal/grpc/handler/transfer.go:860-869`
+- **文件**: `server/internal/grpc/handler/transfer.go:860-869`
 - **描述**: `GetAgents()` 在持有 RLock 时将 `*AgentInfo` 指针放入返回的 slice，释放锁后调用方仍持有这些指针。其他 goroutine 可能同时修改 AgentInfo 字段，造成数据竞争。
 - **修复建议**: 返回 AgentInfo 的值拷贝而非指针。
 
 ### L-06: cron 表达式解析过于简陋
 
-- **文件**: `hcids/internal/vuln/scheduler.go:218-247`
+- **文件**: `server/internal/vuln/scheduler.go:218-247`
 - **描述**: `parseCronToInterval` 只处理最简单的 cron 格式，大部分有效表达式退化为默认 24 小时。
 - **修复建议**: 使用 `robfig/cron` 库进行标准 cron 解析。
 
 ### L-07: tar 解压缺少大小限制（decompression bomb）
 
-- **文件**: `hcids/internal/vuln/dbmanager.go:265-270`
+- **文件**: `server/internal/vuln/dbmanager.go:265-270`
 - **描述**: 虽然使用 `filepath.Base(header.Name)` 防止了路径穿越，但 `io.Copy(f, tr)` 没有限制解压大小。
 - **修复建议**: 使用 `io.LimitReader` 限制单文件解压大小。
 
 ### L-08: DSN 中遗留 MySQL 配置项
 
-- **文件**: `hcids/internal/config/config.go:27-29`, `hcids/conf/server.yaml:41`
+- **文件**: `server/internal/config/config.go:27-29`, `server/conf/server.yaml:41`
 - **描述**: `DatabaseConfig` 结构体包含 `Charset: "utf8mb4"`、`ParseTime`、`Loc` 等 MySQL 专用字段，但实际使用 PostgreSQL。
 - **修复建议**: 移除 MySQL 专用配置项，添加 PostgreSQL 相关配置。
 

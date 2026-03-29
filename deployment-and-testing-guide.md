@@ -10,7 +10,7 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                         Server (hcids)                          │
+│                         Server (server)                          │
 │  ┌──────────────────┐  ┌──────────────────┐  ┌───────────────┐ │
 │  │   gRPC Service   │  │   HTTP API       │  │  PostgreSQL   │ │
 │  │   (port 50051)   │  │   (port 8080)    │  │   Database    │ │
@@ -34,7 +34,7 @@
 
 | 组件 | 说明 | 端口 |
 |------|------|------|
-| Server (hcids) | 服务端，接收数据、下发任务 | gRPC: 50051, HTTP: 8080 |
+| Server (server) | 服务端，接收数据、下发任务 | gRPC: 50051, HTTP: 8080 |
 | Agent | 部署在目标主机的采集代理 | - |
 | Collector | 资产采集插件（进程、端口、用户等） | - |
 | Baseline | 基线安全检查插件 | - |
@@ -63,7 +63,7 @@ sudo -u postgres createdb soc
 sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'happy';"
 
 # 4. 导入表结构
-sudo -u postgres psql -d soc -f /home/work/goProject/src/company/init_asset_db.sql
+sudo -u postgres psql -d soc -f /home/work/goProject/src/BeeGuard/init_asset_db.sql
 
 # 5. 验证
 sudo -u postgres psql -d soc -c "\dt"
@@ -78,23 +78,23 @@ sudo -u postgres psql -d soc -c "\dt"
 
 ---
 
-## 三、Server (hcids) 部署
+## 三、Server (server) 部署
 
 ### 3.1 编译部署
 
 ```bash
-cd /home/work/goProject/src/company/hcids
+cd /home/work/goProject/src/BeeGuard/server
 
 # 编译
 make build
 
-# 部署到 /opt/cloudsec/hcids/
+# 部署到 /opt/cloudsec/server/
 make deploy
 ```
 
 ### 3.2 配置文件
 
-配置文件位置：`/opt/cloudsec/hcids/conf/server.yaml`
+配置文件位置：`/opt/cloudsec/server/conf/server.yaml`
 
 ```yaml
 server:
@@ -119,11 +119,11 @@ log:
 
 ```bash
 # 前台运行（调试）
-/opt/cloudsec/hcids/bin/hcids -config /opt/cloudsec/hcids/conf/server.yaml
+/opt/cloudsec/server/bin/server -config /opt/cloudsec/server/conf/server.yaml
 
 # 后台运行（生产）
-nohup /opt/cloudsec/hcids/bin/hcids -config /opt/cloudsec/hcids/conf/server.yaml \
-    > /opt/cloudsec/hcids/logs/server/server.log 2>&1 &
+nohup /opt/cloudsec/server/bin/server -config /opt/cloudsec/server/conf/server.yaml \
+    > /opt/cloudsec/server/logs/server/server.log 2>&1 &
 ```
 
 ### 3.4 验证服务
@@ -146,7 +146,7 @@ curl http://localhost:8080/api/agents
 ### 4.1 编译部署
 
 ```bash
-cd /home/work/goProject/src/company/agent
+cd /home/work/goProject/src/BeeGuard/agent
 
 # 编译 Agent + 所有插件
 make build
@@ -287,7 +287,7 @@ curl -X POST http://localhost:8080/api/task \
 
 ```bash
 # 查看 Server 日志
-tail -f /opt/cloudsec/hcids/logs/server/server.log
+tail -f /opt/cloudsec/server/logs/server/server.log
 
 # 查询数据库
 sudo -u postgres psql -d soc -c "SELECT count(*) FROM asset_process;"
@@ -529,7 +529,7 @@ curl -X POST http://localhost:8080/api/detector/config \
 sudo pkill -f "/opt/cloudsec/agent/bin/agent"
 
 # 停止 Server
-pkill -f "/opt/cloudsec/hcids/bin/hcids"
+pkill -f "/opt/cloudsec/server/bin/server"
 ```
 
 ### 8.2 清理日志
@@ -538,7 +538,7 @@ pkill -f "/opt/cloudsec/hcids/bin/hcids"
 # 清理所有日志
 sudo rm -rf /opt/cloudsec/agent/logs/agent/*
 sudo rm -rf /opt/cloudsec/agent/logs/plugins/*
-sudo rm -rf /opt/cloudsec/hcids/logs/server/*
+sudo rm -rf /opt/cloudsec/server/logs/server/*
 ```
 
 ### 8.3 清理运行时数据
@@ -550,8 +550,8 @@ sudo rm -rf /opt/cloudsec/agent/data/*
 ### 8.4 清理编译产物
 
 ```bash
-cd /home/work/goProject/src/company/agent && make clean
-cd /home/work/goProject/src/company/hcids && make clean
+cd /home/work/goProject/src/BeeGuard/agent && make clean
+cd /home/work/goProject/src/BeeGuard/server && make clean
 ```
 
 ### 8.5 完全卸载
