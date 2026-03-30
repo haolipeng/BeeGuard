@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/haolipeng/BeeGuard/server/internal/config"
+	"github.com/haolipeng/BeeGuard/server/internal/db"
 	"github.com/haolipeng/BeeGuard/server/internal/db/repository"
 	"github.com/haolipeng/BeeGuard/server/internal/geoip"
 	"github.com/haolipeng/BeeGuard/server/internal/log"
@@ -18,6 +19,7 @@ import (
 	"github.com/haolipeng/BeeGuard/server/internal/models/assets/host"
 	"github.com/haolipeng/BeeGuard/server/internal/models/common"
 	"github.com/haolipeng/BeeGuard/server/internal/models/system"
+	"github.com/haolipeng/BeeGuard/server/internal/whitelist"
 	"github.com/haolipeng/BeeGuard/server/proto"
 	"shared/datatype"
 
@@ -216,6 +218,7 @@ type TransferServer struct {
 	baselineRepo  *repository.BaselineRepository
 	agentInfoRepo *repository.AgentInfoRepository
 	geoIPService  *geoip.Service
+	WlChecker     *whitelist.Checker // 白名单同步检查器
 	// 数据统计相关
 	dataStatsMu   sync.RWMutex               // 保护统计数据
 	dataStats     map[string]*AgentDataStats // key: agentID
@@ -237,6 +240,7 @@ func NewTransferServer(geoIPService *geoip.Service) *TransferServer {
 		baselineRepo:  repository.NewBaselineRepository(),
 		agentInfoRepo: repository.NewAgentInfoRepository(),
 		geoIPService:  geoIPService,
+		WlChecker:     whitelist.NewChecker(db.GetDB()),
 		dataStats:     make(map[string]*AgentDataStats),
 		statsStopChan: make(chan bool),
 	}
@@ -925,6 +929,10 @@ func (s *TransferServer) processBruteForce(ctx context.Context, fields map[strin
 
 	alert := mapper.MapBruteForceAlert(fields, agentCtx, s.geoIPService)
 	if alert.SourceIP != "" && alert.Username != "" {
+		if hit, ruleID := s.WlChecker.Check("brute_force", fields, agentCtx.AgentID); hit {
+			alert.WhitelistHit = true
+			alert.WhitelistRuleID = &ruleID
+		}
 		if err := s.alertRepo.CreateBruteForceAlert(ctx, alert); err != nil {
 			log.Errorf("[Transfer]      暴力破解告警写入失败: %v", err)
 		}
@@ -937,6 +945,11 @@ func (s *TransferServer) processDangerousCommand(ctx context.Context, fields map
 
 	alert := mapper.MapDangerousCommandAlert(fields, agentCtx)
 	if alert.Command != "" {
+		// 白名单同步检查
+		if hit, ruleID := s.WlChecker.Check("dangerous_command", fields, agentCtx.AgentID); hit {
+			alert.WhitelistHit = true
+			alert.WhitelistRuleID = &ruleID
+		}
 		if err := s.alertRepo.CreateDangerousCommandAlert(ctx, alert); err != nil {
 			log.Errorf("[Transfer]      高危命令告警写入失败: %v", err)
 		}
@@ -949,6 +962,10 @@ func (s *TransferServer) processAnomalyLogin(ctx context.Context, fields map[str
 
 	alert := mapper.MapAbnormalLoginAlert(fields, agentCtx, s.geoIPService)
 	if alert.SourceIP != "" && alert.LoginUser != "" {
+		if hit, ruleID := s.WlChecker.Check("abnormal_login", fields, agentCtx.AgentID); hit {
+			alert.WhitelistHit = true
+			alert.WhitelistRuleID = &ruleID
+		}
 		if err := s.alertRepo.CreateAbnormalLoginAlert(ctx, alert); err != nil {
 			log.Errorf("[Transfer]      异常登录告警写入失败: %v", err)
 		}
@@ -961,6 +978,10 @@ func (s *TransferServer) processPrivilegeEscalation(ctx context.Context, fields 
 
 	alert := mapper.MapPrivilegeEscalationAlert(fields, agentCtx)
 	if alert.EscalatedUser != "" {
+		if hit, ruleID := s.WlChecker.Check("privilege_escalation", fields, agentCtx.AgentID); hit {
+			alert.WhitelistHit = true
+			alert.WhitelistRuleID = &ruleID
+		}
 		if err := s.alertRepo.CreatePrivilegeEscalationAlert(ctx, alert); err != nil {
 			log.Errorf("[Transfer]      本地提权告警写入失败: %v", err)
 		}
@@ -974,6 +995,10 @@ func (s *TransferServer) processSensitiveFile(ctx context.Context, fields map[st
 
 	alert := mapper.MapFileIntegrityAlert(fields, agentCtx)
 	if alert.FilePath != "" {
+		if hit, ruleID := s.WlChecker.Check("fileguard", fields, agentCtx.AgentID); hit {
+			alert.WhitelistHit = true
+			alert.WhitelistRuleID = &ruleID
+		}
 		if err := s.alertRepo.CreateFileIntegrityAlert(ctx, alert); err != nil {
 			log.Errorf("[Transfer]      敏感文件告警写入失败: %v", err)
 		}
@@ -986,6 +1011,10 @@ func (s *TransferServer) processReverseShell(ctx context.Context, fields map[str
 
 	alert := mapper.MapReverseShellAlert(fields, agentCtx, timestamp)
 	if alert.CommandLine != "" {
+		if hit, ruleID := s.WlChecker.Check("reverse_shell", fields, agentCtx.AgentID); hit {
+			alert.WhitelistHit = true
+			alert.WhitelistRuleID = &ruleID
+		}
 		if err := s.alertRepo.CreateReverseShellAlert(ctx, alert); err != nil {
 			log.Errorf("[Transfer]      反弹Shell告警写入失败: %v", err)
 		}
@@ -999,6 +1028,10 @@ func (s *TransferServer) processMaliciousRequest(ctx context.Context, fields map
 
 	alert := mapper.MapMaliciousRequestAlert(fields, agentCtx, timestamp)
 	if alert.MaliciousDomain != "" || alert.MaliciousIP != nil {
+		if hit, ruleID := s.WlChecker.Check("malicious_request", fields, agentCtx.AgentID); hit {
+			alert.WhitelistHit = true
+			alert.WhitelistRuleID = &ruleID
+		}
 		if err := s.alertRepo.CreateOrUpdateMaliciousRequestAlert(ctx, alert); err != nil {
 			log.Errorf("[Transfer]      恶意请求告警写入失败: %v", err)
 		}
@@ -1014,6 +1047,10 @@ func (s *TransferServer) processNIDS(ctx context.Context, fields map[string]stri
 
 	alert := mapper.MapNetworkAttackAlert(fields, agentCtx, timestamp, s.geoIPService)
 	if alert.AttackerIP != "" && alert.VulnerabilityName != "" {
+		if hit, ruleID := s.WlChecker.Check("network_attack", fields, agentCtx.AgentID); hit {
+			alert.WhitelistHit = true
+			alert.WhitelistRuleID = &ruleID
+		}
 		if err := s.alertRepo.CreateNetworkAttackAlert(ctx, alert); err != nil {
 			log.Errorf("[Transfer]      NIDS告警写入失败: %v", err)
 		}
@@ -1030,6 +1067,10 @@ func (s *TransferServer) processContainerDangerousCommand(ctx context.Context, f
 
 	alert := mapper.MapContainerDangerousCommandAlert(fields, agentCtx)
 	if alert.ContainerID != "" && alert.Command != "" {
+		if hit, ruleID := s.WlChecker.Check("container_alert", fields, agentCtx.AgentID); hit {
+			alert.WhitelistHit = true
+			alert.WhitelistRuleID = &ruleID
+		}
 		if err := s.alertRepo.CreateContainerDangerousCommandAlert(ctx, alert); err != nil {
 			log.Errorf("[Transfer]      容器高危命令告警写入失败: %v", err)
 		}
@@ -1043,6 +1084,10 @@ func (s *TransferServer) processContainerReverseShell(ctx context.Context, field
 
 	alert := mapper.MapContainerReverseShellAlert(fields, agentCtx, timestamp)
 	if alert.ContainerID != "" && alert.Comm != "" {
+		if hit, ruleID := s.WlChecker.Check("container_alert", fields, agentCtx.AgentID); hit {
+			alert.WhitelistHit = true
+			alert.WhitelistRuleID = &ruleID
+		}
 		if err := s.alertRepo.CreateContainerReverseShellAlert(ctx, alert); err != nil {
 			log.Errorf("[Transfer]      容器反弹Shell告警写入失败: %v", err)
 		}
@@ -1056,8 +1101,12 @@ func (s *TransferServer) processContainerSensitiveFile(ctx context.Context, fiel
 
 	alert := mapper.MapContainerSensitiveFileAlert(fields, agentCtx)
 	if alert.ContainerID != "" && alert.FilePath != "" {
+		if hit, ruleID := s.WlChecker.Check("container_alert", fields, agentCtx.AgentID); hit {
+			alert.WhitelistHit = true
+			alert.WhitelistRuleID = &ruleID
+		}
 		if err := s.alertRepo.CreateContainerSensitiveFileAlert(ctx, alert); err != nil {
-			log.Errorf("[Transfer]      容器核心文件告警写入失败: %v", err)
+			log.Errorf("[Transfer]      容器核心��件告警写入失败: %v", err)
 		}
 	}
 }
@@ -1068,6 +1117,10 @@ func (s *TransferServer) processMalwareDetect(ctx context.Context, fields map[st
 
 	alert := mapper.MapMalwareScanAlert(fields, agentCtx)
 	if alert.FilePath != "" && alert.ThreatType != "" {
+		if hit, ruleID := s.WlChecker.Check("malware_scan", fields, agentCtx.AgentID); hit {
+			alert.WhitelistHit = true
+			alert.WhitelistRuleID = &ruleID
+		}
 		if err := s.alertRepo.CreateMalwareScanAlert(ctx, alert); err != nil {
 			log.Errorf("[Transfer]      恶意文件告警写入失败: %v", err)
 		}

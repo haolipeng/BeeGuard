@@ -128,6 +128,10 @@ database:
   database: soc
 ```
 
+> **注意**：如果 `server.yaml` 已被之前的测试或部署修改过，请完整检查当前配置与文档一致，特别注意以下字段：
+> - `whitelist` 是否已清空（参见 §2.6）
+> - scanner task 的扫描路径是否为 `/root/scanner_test`（参见 §8.1）
+
 ### 2.5 测试前清理数据
 
 每次测试前清理历史数据，确保结果不受上次测试影响。
@@ -156,7 +160,7 @@ DB_HOST=192.168.1.100 DB_PASS=mypass bash scripts/clean-test-db.sh
 
 SSH/FTP 暴力破解检测和 SSH 异常登录检测受白名单影响，**默认配置中 `127.0.0.1` 在白名单内**，本地测试需移除。
 
-**集成测试模式（远程 server）**：编辑 `/opt/cloudsec/server/conf/server.yaml`，找到 `object_name: ssh` 和 `object_name: ftp` 对应的 task，将 `data` 字段中的 `"whitelist":["127.0.0.1","::1"]` 改为 `"whitelist":[]`，然后重启 server 和 Agent。
+**集成测试模式（远程 server）**：编辑 `/opt/cloudsec/server/conf/server.yaml`，找到 `object_name: ssh` 和 `object_name: ftp` 对应的 task，将 `data` 字段中的 `"whitelist":["127.0.0.1","::1"]` 改为 `"whitelist":[]`，然后重启 server 和 Agent。如 `whitelist` 已为空数组 `[]`，可跳过此步骤。
 
 **Standalone 模式**：编辑 Agent 本地配置文件中 detector 插件的 `ssh_brute_force.yaml` 和 `ftp_brute_force.yaml`，将 `whitelist` 改为空数组 `[]`。
 
@@ -173,10 +177,15 @@ NIDS 测试需要 80 端口有 HTTP 服务，确保 Nginx 已启动：
 ```bash
 sudo systemctl start nginx
 
-# 验证
+# 验证端口已监听（推荐方式）
+ss -tlnp | grep :80
+
+# 或通过 HTTP 请求验证
 curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1/
-# 应返回 200 或 304
+# 返回任意 HTTP 状态码即可（200、403、404 均正常），只要不是 connection refused
 ```
+
+> **注意**：启动 Nginx 后建议等待 2-3 秒再运行 NIDS 测试脚本。如果 `test-nids.sh` 报告"Nginx 未在 80 端口运行"，请先用 `ss -tlnp | grep :80` 确认端口已监听，然后重新运行脚本。
 
 ### 3.2 启动 server Server
 
@@ -272,7 +281,7 @@ sudo bash scripts/trigger_intrusion_alert/test-scanner.sh prepare
 1. eBPF 类（无外部依赖要求最少）：dangerous-commands → privilege-escalation → reverse-shell → malicious-requests → file-integrity
 2. Detector 类（需白名单配置）：ssh-bruteforce → ftp-bruteforce → ssh-anomaly-login
 3. NIDS（需 Nginx，§3.1 已启动）：nids
-4. Scanner（需在 Agent 启动前准备）：scanner prepare → 重启 Agent → 等待扫描
+4. Scanner（需在 Agent 启动前准备）：先停止 Agent → 执行 `test-scanner.sh prepare` 创建测试文件 → 重启 Agent → 等待约 30 秒 → 查询数据库验证
 
 > **提示**：Detector 检测有 1-2 分钟延迟，建议在 SSH/FTP 暴力破解脚本执行后先运行其他测试，最后再查询数据库验证 Detector 结果。
 
@@ -326,7 +335,7 @@ ORDER BY created_at DESC LIMIT 10;
 - `command` 分别包含 `rm -rf`、`cat /etc/passwd`、`chmod 777`、`insmod`
 - `created_at` 为脚本执行时间
 
-> **已知问题**：脚本使用 `set -e`，第 4 步 `insmod /tmp/nonexistent.ko` 会因命令失败导致脚本提前退出（exit code 1）。eBPF 仍能捕获该 exec 事件，数据库中 4 条记录均可写入。如需避免脚本中断，可将脚本中 `; true` 改为 `|| true`。
+> **已知问题（重要）**：脚本使用 `set -e`，第 4 步 `insmod /tmp/nonexistent.ko` 会因命令失败导致脚本提前退出（exit code 1）。**这是预期行为，不代表测试失败。** eBPF 在 exec 阶段已捕获该事件，数据库中 4 条记录均可正常写入。如需避免脚本中断，可将脚本中 `; true` 改为 `|| true`。
 >
 > **噪声说明**：系统 modprobe 调用（如 systemd 加载内核模块）也会产生告警记录，实际记录数可能远超 4 条。可通过 `command NOT LIKE '%modprobe%'` 过滤系统噪声。
 
@@ -688,6 +697,8 @@ ORDER BY created_at DESC LIMIT 5;
 - `login_user` 为 `root`
 - `risk_level` 为 `critical`
 
+> **注意**：脚本可能输出警告"未在日志中找到规则加载记录，检测器可能未生效"。如果数据库中确有告警记录，可忽略此警告——这是脚本日志匹配模式与实际检测器日志格式不完全一致所致，不影响检测功能。
+
 ---
 
 ## 七、NIDS 告警测试（nids 插件）
@@ -774,6 +785,8 @@ ORDER BY created_at DESC LIMIT 15;
 **特殊流程**：Scanner 测试与其他测试不同，需要**先创建测试文件，再启动 Agent**。因为 Agent 连接 server 后会自动下发目录扫描任务，测试文件必须在扫描前就位。
 
 > **说明**：默认扫描路径为 `/root/scanner_test`（由 server.yaml 中 scanner task 的 `data: '{"exe":"/root/scanner_test"}'` 控制）。脚本会自动在该目录下创建 EICAR 测试文件。
+>
+> **重要**：请务必检查 `/opt/cloudsec/server/conf/server.yaml` 中 scanner task 的 `data` 字段，确认路径为 `{"exe":"/root/scanner_test"}` 而非 `{"exe":"/root"}`。如果路径为 `/root`，会扫描整个 home 目录，耗时可能长达数十分钟。
 
 **前置条件**：
 - ClamAV 已安装：`sudo apt install clamav libclamav-dev clamav-freshclam`

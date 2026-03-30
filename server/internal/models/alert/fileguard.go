@@ -25,6 +25,8 @@ type FileIntegrity struct {
 	OperatorProcess *string         `json:"operator_process,omitempty"`                  // 操作进程
 	AlertDescription *string        `json:"alert_description,omitempty"`                 // 告警描述
 	Status          int16           `json:"status" gorm:"not null;default:0;index:idx_alert_fi_status"` // 状态: 0-待处理 1-已处理 2-已忽略
+	WhitelistHit    bool            `json:"whitelist_hit" gorm:"column:whitelist_hit;default:false"`
+	WhitelistRuleID *int64          `json:"whitelist_rule_id,omitempty" gorm:"column:whitelist_rule_id"`
 	AlertTime       common.DateTime `json:"alert_time" gorm:"not null;index:idx_alert_fi_alert_time"` // 告警时间
 	CreatedAt       common.DateTime `json:"created_at"`                                  // 创建时间
 	UpdatedAt       common.DateTime `json:"updated_at"`                                  // 更新时间

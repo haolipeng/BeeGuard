@@ -4,9 +4,12 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io/fs"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -23,6 +26,9 @@ import (
 	"github.com/haolipeng/BeeGuard/server/internal/router"
 	"github.com/haolipeng/BeeGuard/server/internal/vuln"
 	"github.com/haolipeng/BeeGuard/server/proto"
+	"github.com/haolipeng/BeeGuard/server/web_console"
+
+	"github.com/gin-gonic/gin"
 )
 
 var (
@@ -133,6 +139,24 @@ func main() {
 
 	// 设置 HTTP 路由（包含业务路由和 gRPC 管理路由）
 	httpRouter := router.SetupRouter(transferServer)
+
+	// 前端静态文件服务 (Go embed)
+	staticFS, err := fs.Sub(web_console.StaticFS, "dist")
+	if err != nil {
+		log.Warnf("[HTTP] 前端静态文件加载失败: %v", err)
+	} else {
+		httpRouter.StaticFS("/ui", http.FS(staticFS))
+		// SPA fallback：非 API 路径返回 index.html
+		httpRouter.NoRoute(func(c *gin.Context) {
+			if !strings.HasPrefix(c.Request.URL.Path, "/api1/") &&
+				!strings.HasPrefix(c.Request.URL.Path, "/health") &&
+				!strings.HasPrefix(c.Request.URL.Path, "/install.sh") {
+				c.FileFromFS("index.html", http.FS(staticFS))
+				return
+			}
+			c.JSON(404, gin.H{"error": "not found"})
+		})
+	}
 
 	// 启动 HTTP API 服务（使用配置文件中的端口）
 	httpAddr := fmt.Sprintf(":%d", cfg.Server.HttpPort)

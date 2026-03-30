@@ -67,6 +67,34 @@ func SetupAssetsRouter(r *gin.RouterGroup) {
 		systemGroup.GET("/systems", systemHandler.ListSystems) // 获取系统服务资产列表(支持分页和搜索)
 	}
 
+	// 软件资产管理相关路由
+	softwareGroup := r.Group("/software")
+	{
+		softwareHandler := &host.SoftwareHandler{DB: db.GetDB()}
+		softwareGroup.GET("/list", softwareHandler.ListSoftware) // 获取软件资产列表(支持分页和搜索)
+	}
+
+	// 内核模块资产管理相关路由
+	kmodGroup := r.Group("/kmod")
+	{
+		kmodHandler := &host.KmodHandler{DB: db.GetDB()}
+		kmodGroup.GET("/list", kmodHandler.ListKmods) // 获取内核模块列表(支持分页和搜索)
+	}
+
+	// 可疑环境变量管理相关路由
+	envGroup := r.Group("/env")
+	{
+		envHandler := &host.EnvHandler{DB: db.GetDB()}
+		envGroup.GET("/list", envHandler.ListEnvs) // 获取可疑环境变量列表(支持分页和搜索)
+	}
+
+	// 网络连接事件相关路由
+	connectGroup := r.Group("/connect")
+	{
+		connectHandler := &host.ConnectHandler{DB: db.GetDB()}
+		connectGroup.GET("/list", connectHandler.ListConnects) // 获取网络连接列表(支持分页和搜索)
+	}
+
 	// 容器资产管理相关路由
 	containerGroup := r.Group("/container")
 	{

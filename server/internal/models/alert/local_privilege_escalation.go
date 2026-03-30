@@ -17,6 +17,8 @@ type PrivilegeEscalation struct {
 	ProcessID         *int32          `json:"process_id,omitempty" gorm:"column:process_id"`
 	ProcessPath       *string         `json:"process_path,omitempty" gorm:"column:process_path"`
 	Status            int16           `json:"status" gorm:"column:status;not null;default:0"`
+	WhitelistHit      bool            `json:"whitelist_hit" gorm:"column:whitelist_hit;default:false"`
+	WhitelistRuleID   *int64          `json:"whitelist_rule_id,omitempty" gorm:"column:whitelist_rule_id"`
 	DiscoverTime      common.DateTime `json:"discover_time" gorm:"column:discover_time;not null"`
 	CreatedAt         common.DateTime `json:"created_at" gorm:"column:created_at;autoCreateTime"`
 	UpdatedAt         common.DateTime `json:"updated_at" gorm:"column:updated_at;autoUpdateTime"`

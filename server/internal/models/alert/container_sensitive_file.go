@@ -25,6 +25,8 @@ type ContainerSensitiveFile struct {
 	OperatorUser    *string         `json:"operator_user,omitempty" gorm:"column:operator_user"`
 	OperatorProcess *string         `json:"operator_process,omitempty" gorm:"column:operator_process"`
 	Status          int16           `json:"status" gorm:"column:status;not null;default:0"` // 0-待处理 1-已处理 2-已忽略
+	WhitelistHit    bool            `json:"whitelist_hit" gorm:"column:whitelist_hit;default:false"`
+	WhitelistRuleID *int64          `json:"whitelist_rule_id,omitempty" gorm:"column:whitelist_rule_id"`
 	AlertTime       common.DateTime `json:"alert_time" gorm:"column:alert_time;not null"`
 	CreatedAt       common.DateTime `json:"created_at" gorm:"column:created_at;autoCreateTime"`
 	UpdatedAt       common.DateTime `json:"updated_at" gorm:"column:updated_at;autoUpdateTime"`

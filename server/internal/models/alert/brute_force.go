@@ -22,6 +22,8 @@ type BruteForce struct {
 	AttackTime      common.DateTime  `json:"attack_time" gorm:"column:attack_time;not null"`
 	FirstAttackTime *common.DateTime `json:"first_attack_time,omitempty" gorm:"column:first_attack_time"`
 	Status          int16            `json:"status" gorm:"column:status;not null;default:0"`
+	WhitelistHit    bool             `json:"whitelist_hit" gorm:"column:whitelist_hit;default:false"`
+	WhitelistRuleID *int64           `json:"whitelist_rule_id,omitempty" gorm:"column:whitelist_rule_id"`
 	IsBlocked       *int16           `json:"is_blocked,omitempty" gorm:"column:is_blocked;default:0"`
 	ProcessTime     *common.DateTime `json:"process_time,omitempty" gorm:"column:process_time"`
 	Processor       *string          `json:"processor,omitempty" gorm:"column:processor"`

@@ -23,10 +23,12 @@ type ContainerReverseShell struct {
 	ShellType     *string         `json:"shell_type,omitempty" gorm:"column:shell_type;index"`
 	RemoteIP      string          `json:"remote_ip" gorm:"column:remote_ip;not null;index"`
 	RemotePort    int32           `json:"remote_port" gorm:"column:remote_port;not null"`
-	Status        int16           `json:"status" gorm:"column:status;not null;default:0;index"` // 0-待处理 1-已处理 2-已忽略
-	EventTime     common.DateTime `json:"event_time" gorm:"column:event_time;not null;index"`
-	CreatedAt     common.DateTime `json:"created_at" gorm:"column:created_at;autoCreateTime"`
-	UpdatedAt     common.DateTime `json:"updated_at" gorm:"column:updated_at;autoUpdateTime"`
+	Status          int16           `json:"status" gorm:"column:status;not null;default:0;index"` // 0-待处理 1-已处理 2-已忽略
+	WhitelistHit    bool            `json:"whitelist_hit" gorm:"column:whitelist_hit;default:false"`
+	WhitelistRuleID *int64          `json:"whitelist_rule_id,omitempty" gorm:"column:whitelist_rule_id"`
+	EventTime       common.DateTime `json:"event_time" gorm:"column:event_time;not null;index"`
+	CreatedAt       common.DateTime `json:"created_at" gorm:"column:created_at;autoCreateTime"`
+	UpdatedAt       common.DateTime `json:"updated_at" gorm:"column:updated_at;autoUpdateTime"`
 }
 
 // TableName 指定表名为 alert_container_reverse_shell

@@ -16,3 +16,7 @@ conf/server.yaml
 main
 main
 /machine-id
+
+# Frontend
+web_console/frontend/node_modules/
+web_console/dist/

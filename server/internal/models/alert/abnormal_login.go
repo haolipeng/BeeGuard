@@ -17,10 +17,12 @@ type AbnormalLogin struct {
 	LoginTime      common.DateTime `json:"login_time" gorm:"column:login_time;not null"`
 	RiskLevel      string          `json:"risk_level" gorm:"column:risk_level;not null"`
 	AbnormalType   *string         `json:"abnormal_type,omitempty" gorm:"column:abnormal_type"`
-	Status         int16           `json:"status" gorm:"column:status;not null;default:0"`
-	IsWhitelist    *int16          `json:"is_whitelist,omitempty" gorm:"column:is_whitelist;default:0"`
-	CreatedAt      common.DateTime `json:"created_at" gorm:"column:created_at;autoCreateTime"`
-	UpdatedAt      common.DateTime `json:"updated_at" gorm:"column:updated_at;autoUpdateTime"`
+	Status          int16           `json:"status" gorm:"column:status;not null;default:0"`
+	WhitelistHit    bool            `json:"whitelist_hit" gorm:"column:whitelist_hit;default:false"`
+	WhitelistRuleID *int64          `json:"whitelist_rule_id,omitempty" gorm:"column:whitelist_rule_id"`
+	IsWhitelist     *int16          `json:"is_whitelist,omitempty" gorm:"column:is_whitelist;default:0"`
+	CreatedAt       common.DateTime `json:"created_at" gorm:"column:created_at;autoCreateTime"`
+	UpdatedAt       common.DateTime `json:"updated_at" gorm:"column:updated_at;autoUpdateTime"`
 }
 
 // TableName 指定表名为 alert_abnormal_login

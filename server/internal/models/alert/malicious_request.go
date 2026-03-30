@@ -20,6 +20,8 @@ type MaliciousRequest struct {
 	LastRequestTime  *common.DateTime `json:"last_request_time,omitempty" gorm:"column:last_request_time"`
 	RiskDescription  *string          `json:"risk_description,omitempty" gorm:"column:risk_description"`
 	Status           int16            `json:"status" gorm:"column:status;not null;default:0"`
+	WhitelistHit     bool             `json:"whitelist_hit" gorm:"column:whitelist_hit;default:false"`
+	WhitelistRuleID  *int64           `json:"whitelist_rule_id,omitempty" gorm:"column:whitelist_rule_id"`
 	CreatedAt        common.DateTime  `json:"created_at" gorm:"column:created_at;autoCreateTime"`
 	UpdatedAt        common.DateTime  `json:"updated_at" gorm:"column:updated_at;autoUpdateTime"`
 }

@@ -15,10 +15,12 @@ type ReverseShell struct {
 	ShellType   *string         `json:"shell_type,omitempty" gorm:"column:shell_type"`
 	TargetHost  string          `json:"target_host" gorm:"column:target_host;not null"`
 	TargetPort  int32           `json:"target_port" gorm:"column:target_port;not null"`
-	Status      int16           `json:"status" gorm:"column:status;not null;default:0"`
-	EventTime   common.DateTime `json:"event_time" gorm:"column:event_time;not null"`
-	CreatedAt   common.DateTime `json:"created_at" gorm:"column:created_at;autoCreateTime"`
-	UpdatedAt   common.DateTime `json:"updated_at" gorm:"column:updated_at;autoUpdateTime"`
+	Status          int16           `json:"status" gorm:"column:status;not null;default:0"`
+	WhitelistHit    bool            `json:"whitelist_hit" gorm:"column:whitelist_hit;default:false"`
+	WhitelistRuleID *int64          `json:"whitelist_rule_id,omitempty" gorm:"column:whitelist_rule_id"`
+	EventTime       common.DateTime `json:"event_time" gorm:"column:event_time;not null"`
+	CreatedAt       common.DateTime `json:"created_at" gorm:"column:created_at;autoCreateTime"`
+	UpdatedAt       common.DateTime `json:"updated_at" gorm:"column:updated_at;autoUpdateTime"`
 }
 
 // TableName 指定表名为 alert_reverse_shell

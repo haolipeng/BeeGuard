@@ -97,7 +97,7 @@ func SetupRouter(transferServer ...*handler.TransferServer) *gin.Engine {
 			analysisGroup.POST("/trigger", analysisCtrl.TriggerAnalysis)
 			// 按主机 IP 分析，针对指定主机的所有告警进行 AI 关联分析
 			analysisGroup.POST("/host", analysisCtrl.AnalyzeHost)
-			// 按攻击源 IP 分析，针对指定攻击源的所有告警进行 AI 关联分析
+			// 按攻击源 IP 分析，针对指��攻击源的所有告警进行 AI 关联分析
 			analysisGroup.POST("/source", analysisCtrl.AnalyzeSourceIP)
 			// 直接分析提交的告警数据，通过 JSON 传入告警列表进行实时 AI 分析
 			analysisGroup.POST("/alerts", analysisCtrl.AnalyzeAlerts)
@@ -115,6 +115,20 @@ func SetupRouter(transferServer ...*handler.TransferServer) *gin.Engine {
 			analysisGroup.GET("/db_reports/:id", analysisCtrl.GetReportFromDB)
 			// 从数据库删除指定的分析报告，根据报告 ID 执行删除操作
 			analysisGroup.DELETE("/db_reports/:id", analysisCtrl.DeleteReportFromDB)
+		}
+
+		// 白名单管理路由（需要 transferServer 中的 WlChecker）
+		if len(transferServer) > 0 && transferServer[0] != nil {
+			whitelistGroup := apiGroup.Group("/whitelist")
+			SetupWhitelistRouter(whitelistGroup, transferServer[0].WlChecker)
+
+			// Agent 任务管理路由
+			taskGroup := apiGroup.Group("/tasks")
+			SetupTaskRouter(taskGroup, transferServer[0])
+
+			// 服务状态路由
+			statusGroup := apiGroup.Group("/status")
+			SetupStatusRouter(statusGroup, transferServer[0])
 		}
 	}
 

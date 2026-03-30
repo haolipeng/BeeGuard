@@ -23,6 +23,8 @@ type NetworkAttack struct {
 	LastAttackTime    common.DateTime  `json:"last_attack_time" gorm:"column:last_attack_time;not null"`
 	AttackPayload     *string          `json:"attack_payload,omitempty" gorm:"column:attack_payload"`
 	Status            int16            `json:"status" gorm:"column:status;not null;default:0"`
+	WhitelistHit      bool             `json:"whitelist_hit" gorm:"column:whitelist_hit;default:false"`
+	WhitelistRuleID   *int64           `json:"whitelist_rule_id,omitempty" gorm:"column:whitelist_rule_id"`
 	CreatedAt         common.DateTime  `json:"created_at" gorm:"column:created_at;autoCreateTime"`
 	UpdatedAt         common.DateTime  `json:"updated_at" gorm:"column:updated_at;autoUpdateTime"`
 }
